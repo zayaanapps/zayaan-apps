@@ -546,7 +546,7 @@ class StoreViewModel(
                     releaseNotes = resolved.releaseNotes.ifBlank { app.releaseNotes }
                 )
                 _statusBannerMessage.value = "Found latest GitHub Release v${updatedApp.versionName} (${resolved.assetName}). Downloading APK..."
-                startApkDownload(updatedApp, autoPromptInstallContext = context)
+                startApkDownload(updatedApp, autoPromptInstallContext = context, forceRedownload = true)
             } else {
                 // Fallback: try direct download from app.apkDownloadUrl, or open GitHub Releases page in browser
                 val fallbackReleasesPage = if (repoCandidate.contains("github.com/", ignoreCase = true)) {
@@ -557,23 +557,27 @@ class StoreViewModel(
                 }
                 if (app.apkDownloadUrl.endsWith(".apk", ignoreCase = true)) {
                     _statusBannerMessage.value = "Downloading latest APK from configured release URL..."
-                    startApkDownload(app, autoPromptInstallContext = context)
+                    startApkDownload(app, autoPromptInstallContext = context, forceRedownload = true)
                 } else if (context != null) {
                     _statusBannerMessage.value = "Opening GitHub Releases page ($fallbackReleasesPage)..."
                     packageController.openDownloadUrlInBrowser(context, fallbackReleasesPage)
                 } else {
-                    startApkDownload(app)
+                    startApkDownload(app, forceRedownload = true)
                 }
             }
         }
     }
 
-    fun startApkDownload(app: StoreApp, autoPromptInstallContext: Context? = null) {
+    fun startApkDownload(
+        app: StoreApp,
+        autoPromptInstallContext: Context? = null,
+        forceRedownload: Boolean = false
+    ) {
         val key = app.appId.ifBlank { app.docId }
         recordDownloadedAppId(key)
         viewModelScope.launch {
             repository.incrementDownloadCount(app.docId.ifBlank { app.appId }, app.downloadCount)
-            packageController.downloadApkWithProgress(app).collect { state ->
+            packageController.downloadApkWithProgress(app, forceRedownload = forceRedownload).collect { state ->
                 _downloadStates.value = _downloadStates.value + (key to state)
                 if (state is DownloadState.ReadyToInstall) {
                     refreshCachedApks()

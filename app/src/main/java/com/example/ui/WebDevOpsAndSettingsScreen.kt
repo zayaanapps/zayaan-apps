@@ -52,6 +52,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.BuildConfig
 
 @Composable
 fun WebDevOpsAndSettingsScreen(
@@ -116,6 +117,14 @@ fun WebDevOpsAndSettingsScreen(
                     }
 
                     Spacer(modifier = Modifier.height(10.dp))
+
+                    Text(
+                        text = "Installed Store Build: v${BuildConfig.VERSION_NAME} (versionCode ${BuildConfig.VERSION_CODE}) • ${BuildConfig.APPLICATION_ID}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
 
                     Text(
                         text = "Both your Android APK and responsive Flutter Web store share the exact same Cloud Firestore 'apps' collection. All Flutter/Dart files (flutter_zayaan_apps/) and GitHub Actions workflows (.github/workflows/deploy.yml) are generated in this workspace.",
@@ -384,12 +393,12 @@ ZAYAAN APPS — DUAL-PRODUCT ARCHITECTURE SUMMARY
 """.trimIndent()
 
 private val DEPLOY_YML_PREVIEW_TEXT = """
-# File: .github/workflows/deploy.yml (Also generated in workspace root)
-name: Zayaan Apps — Build Android APK & Deploy Flutter Web
+# File: .github/workflows/deploy.yml (Native Android Kotlin APK + Flutter Web)
+name: Zayaan Apps — Automated Android APK Release & GitHub Pages Web Deployment
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, master ]
   workflow_dispatch:
 
 permissions:
@@ -398,63 +407,51 @@ permissions:
   id-token: write
 
 jobs:
-  build-android-and-web:
+  build-android-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+      - name: Compile Native Jetpack Compose APK
+        run: gradle :app:assembleDebug --no-daemon
+      - name: Publish Native Android APK to GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.0.${'$'}{{ steps.version_info.outputs.build_code }}
+          make_latest: true
+          files: |
+            release_assets/zayaan-apps-release.apk
+            release_assets/zayaan-apps.apk
+            release_assets/app-release.apk
+
+  build-and-deploy-web:
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: flutter_zayaan_apps
     steps:
-      - name: Checkout zayaanapps/zayaan-apps
-        uses: actions/checkout@v4
-
-      - name: Set up Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-
-      - name: Install Flutter SDK
-        uses: subosito/flutter-action@v2
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
           cache: true
-
-      - name: Resolve Dependencies & Run Static Analysis
-        run: |
+      - run: |
           flutter pub get
-          flutter analyze
-
-      - name: Build Android Release APK
-        run: flutter build apk --release
-
-      - name: Publish Release APK to GitHub Releases (Non-Destructive Tag)
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v1.0.${'$'}{{ github.run_number }}
-          name: "Zayaan Apps Store v1.0.${'$'}{{ github.run_number }}"
-          files: flutter_zayaan_apps/build/app/outputs/flutter-apk/app-release.apk
-          generate_release_notes: true
-
-      - name: Build Responsive Flutter Website for GitHub Pages
-        run: |
           flutter build web --release --base-href "/zayaan-apps/"
           cp build/web/index.html build/web/404.html
-
-      - name: Upload GitHub Pages Artifact
-        uses: actions/upload-pages-artifact@v3
+          touch build/web/.nojekyll
+      - uses: actions/upload-pages-artifact@v3
         with:
           path: flutter_zayaan_apps/build/web
-
-  deploy-website:
-    needs: build-android-and-web
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${'$'}{{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to https://zayaanapps.github.io/zayaan-apps/
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - uses: actions/deploy-pages@v4
 """.trimIndent()
 
 private val FLUTTER_MAIN_PREVIEW_TEXT = """

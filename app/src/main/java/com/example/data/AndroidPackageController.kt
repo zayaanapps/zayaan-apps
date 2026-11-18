@@ -373,14 +373,21 @@ class AndroidPackageController(private val context: Context) {
         manager.notify(1001, notification)
     }
 
-    fun downloadApkWithProgress(app: StoreApp, allowResume: Boolean = true): Flow<DownloadState> =
-        downloadApk(app, allowResume)
+    fun downloadApkWithProgress(
+        app: StoreApp,
+        allowResume: Boolean = true,
+        forceRedownload: Boolean = false
+    ): Flow<DownloadState> = downloadApk(app, allowResume, forceRedownload)
 
     /**
      * Downloads an APK file from GitHub Releases with HTTP Range resume support,
      * cancellation support, duplicate detection, and SHA-256 checksum verification.
      */
-    fun downloadApk(app: StoreApp, allowResume: Boolean = true): Flow<DownloadState> = flow {
+    fun downloadApk(
+        app: StoreApp,
+        allowResume: Boolean = true,
+        forceRedownload: Boolean = false
+    ): Flow<DownloadState> = flow {
         val appId = app.appId.ifBlank { app.docId }
         cancelledDownloads[appId] = false
 
@@ -397,8 +404,14 @@ class AndroidPackageController(private val context: Context) {
         val targetFile = File(apkDir, safeFileName)
         val partFile = File(apkDir, "$safeFileName.part")
 
+        val shouldBypassCache = forceRedownload || url.contains("/releases/latest/", ignoreCase = true)
+        if (shouldBypassCache) {
+            if (targetFile.exists()) targetFile.delete()
+            if (partFile.exists()) partFile.delete()
+        }
+
         // Duplicate download detection: if verified APK already exists on disk, skip re-downloading
-        if (targetFile.exists() && targetFile.length() > 1024L) {
+        if (!shouldBypassCache && targetFile.exists() && targetFile.length() > 1024L) {
             val archiveVer = inspectApkArchiveInfo(targetFile)
             val expectedSha = app.sha256Checksum.trim().lowercase()
             val verified = expectedSha.isEmpty() || expectedSha == archiveVer.sha256Checksum.lowercase()
@@ -433,6 +446,7 @@ class AndroidPackageController(private val context: Context) {
                 val builder = Request.Builder()
                     .url(targetUrl)
                     .header("User-Agent", "ZayaanAppsStore-Android/1.0.0.2")
+                    .header("Cache-Control", "no-cache")
                 if (rangeStart > 0L) {
                     builder.header("Range", "bytes=$rangeStart-")
                 }
@@ -636,6 +650,7 @@ class AndroidPackageController(private val context: Context) {
             val request = Request.Builder()
                 .url(apiUrl)
                 .header("Accept", "application/vnd.github+json")
+                .header("Cache-Control", "no-cache")
                 .header("User-Agent", "ZayaanAppsStore-Android/1.0.0.2")
                 .build()
 
