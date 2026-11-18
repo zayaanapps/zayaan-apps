@@ -808,7 +808,8 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
                 return SizedBox(
                   width: 300,
                   child: Card(
-                    shape: RoundedCornerShape(20),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20)),
                     child: InkWell(
                       borderRadius: BorderRadius.circular(20),
                       onTap: () => _openAppDetail(app),
@@ -907,7 +908,8 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
                 return SizedBox(
                   width: 250,
                   child: Card(
-                    shape: RoundedCornerShape(18),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18)),
                     child: InkWell(
                       borderRadius: BorderRadius.circular(18),
                       onTap: () => _openAppDetail(app),
@@ -960,7 +962,8 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
         ...(filteredApps.isEmpty ? trendingApps : filteredApps).map(
           (app) => Card(
             margin: const EdgeInsets.only(bottom: 12),
-            shape: RoundedCornerShape(18),
+            shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18)),
             child: ListTile(
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -1044,7 +1047,8 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
         ),
         const SizedBox(height: 16),
         Card(
-          shape: RoundedCornerShape(18),
+          shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18)),
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -1095,7 +1099,8 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
         const SizedBox(height: 8),
         if (comparedApps.isEmpty)
           Card(
-            shape: RoundedCornerShape(16),
+            shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16)),
             child: const Padding(
               padding: EdgeInsets.all(16),
               child: Text(
@@ -1111,7 +1116,8 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
                   .map(
                     (app) => Card(
                       margin: const EdgeInsets.only(right: 12),
-                      shape: RoundedCornerShape(16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16)),
                       child: Container(
                         width: 230,
                         padding: const EdgeInsets.all(14),
@@ -1189,7 +1195,8 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
       padding: const EdgeInsets.all(16),
       children: [
         Card(
-          shape: RoundedCornerShape(24),
+          shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(24)),
           child: Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
@@ -1243,7 +1250,8 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
         ..._catalog.map(
           (app) => Card(
             margin: const EdgeInsets.only(bottom: 10),
-            shape: RoundedCornerShape(18),
+            shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18)),
             child: ListTile(
               title: Text(
                 '${app.appName} (v${app.versionName} • code ${app.versionCode})',
@@ -1268,7 +1276,8 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
       padding: const EdgeInsets.all(16),
       children: [
         Card(
-          shape: RoundedCornerShape(24),
+          shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(24)),
           child: Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
@@ -1326,7 +1335,8 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
         ),
         const SizedBox(height: 16),
         Card(
-          shape: RoundedCornerShape(20),
+          shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20)),
           child: Padding(
             padding: const EdgeInsets.all(18),
             child: Column(
@@ -1428,7 +1438,8 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
         ),
         const SizedBox(height: 20),
         Card(
-          shape: RoundedCornerShape(18),
+          shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18)),
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -1445,7 +1456,8 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
         ),
         const SizedBox(height: 12),
         Card(
-          shape: RoundedCornerShape(18),
+          shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18)),
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -1462,7 +1474,8 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
         ),
         const SizedBox(height: 12),
         Card(
-          shape: RoundedCornerShape(18),
+          shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18)),
           child: ListTile(
             leading: const Icon(Icons.verified_user_outlined),
             title: const Text('APK Integrity & Technical Specifications'),

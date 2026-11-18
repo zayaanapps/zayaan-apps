@@ -30,11 +30,14 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up JDK 17
+      - name: Set up JDK 21 (Required by AGP 9.1.1)
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17'
+          java-version: '21'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
 
       - name: Setup Gradle & Android Build Cache
         uses: gradle/actions/setup-gradle@v4
@@ -107,7 +110,7 @@ jobs:
         with:
           tag_name: ${{ steps.version_info.outputs.tag_name }}
           name: "Zayaan Apps Store ${{ steps.version_info.outputs.tag_name }}"
-          make_latest: true
+          make_latest: 'true'
           body: |
             ### Zayaan Apps Official Store Release (${{ steps.version_info.outputs.tag_name }})
             - **Package Name:** `com.zayaanapps.store`
@@ -149,16 +152,12 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Ensure Web Runner Files Exist Preserving Custom Code
+      - name: Ensure Web Runner Files Exist
         run: |
           mkdir -p assets
-          cp -r lib /tmp/zayaan_lib_backup
-          cp -r web /tmp/zayaan_web_backup
-          cp pubspec.yaml /tmp/zayaan_pubspec_backup
-          flutter create . --project-name zayaan_apps --org com.zayaanapps --platforms=web
-          cp -r /tmp/zayaan_lib_backup/* lib/
-          cp -r /tmp/zayaan_web_backup/* web/
-          cp /tmp/zayaan_pubspec_backup pubspec.yaml
+          if [ ! -f "web/index.html" ]; then
+            flutter create . --project-name zayaan_apps --org com.zayaanapps --platforms=web
+          fi
 
       - name: Resolve Dependencies
         run: flutter pub get
