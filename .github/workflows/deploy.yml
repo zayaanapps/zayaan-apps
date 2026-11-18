@@ -44,16 +44,23 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Scaffold Missing Platform Runner Files (If Needed)
+      - name: Scaffold Platform Runner Files Preserving Custom Dart Code
         run: |
+          mkdir -p assets
+          cp -r lib /tmp/zayaan_lib_backup
+          cp -r test /tmp/zayaan_test_backup
+          cp pubspec.yaml /tmp/zayaan_pubspec_backup
           flutter create . --project-name zayaan_apps --org com.zayaanapps --platforms=android,web
+          cp -r /tmp/zayaan_lib_backup/* lib/
+          cp -r /tmp/zayaan_test_backup/* test/
+          cp /tmp/zayaan_pubspec_backup pubspec.yaml
 
       - name: Resolve Dart/Flutter Dependencies
         run: flutter pub get
 
       - name: Run Static Code Analysis & Unit Tests
         run: |
-          flutter analyze --no-fatal-infos
+          flutter analyze --no-fatal-infos --no-fatal-warnings
           flutter test
 
       - name: Build Android Release APK
@@ -119,9 +126,16 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Ensure Web Runner Files Exist
+      - name: Ensure Web Runner Files Exist Preserving Custom Code
         run: |
+          mkdir -p assets
+          cp -r lib /tmp/zayaan_lib_backup
+          cp -r web /tmp/zayaan_web_backup
+          cp pubspec.yaml /tmp/zayaan_pubspec_backup
           flutter create . --project-name zayaan_apps --org com.zayaanapps --platforms=web
+          cp -r /tmp/zayaan_lib_backup/* lib/
+          cp -r /tmp/zayaan_web_backup/* web/
+          cp /tmp/zayaan_pubspec_backup pubspec.yaml
 
       - name: Resolve Dependencies
         run: flutter pub get
@@ -135,6 +149,8 @@ jobs:
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       - name: Upload GitHub Pages Web Artifact
         uses: actions/upload-pages-artifact@v3

@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'models/store_app.dart';
-import 'services/firestore_service.dart';
 import 'services/installer_service.dart';
 
 void main() async {
