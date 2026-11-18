@@ -515,6 +515,59 @@ class StoreViewModel(
         }
     }
 
+    /**
+     * Queries the GitHub Releases API (`releases/latest`) for the application's repository,
+     * discovers the exact `.apk` asset URL, version tag, and file size, and immediately downloads it.
+     */
+    fun downloadLatestGitHubReleaseApk(
+        app: StoreApp,
+        context: Context? = null
+    ) {
+        val key = app.appId.ifBlank { app.docId }
+        viewModelScope.launch {
+            _statusBannerMessage.value = "Checking GitHub Releases for latest ${app.appName} APK..."
+            val repoCandidate = app.githubRepoUrl.ifBlank {
+                if (app.apkDownloadUrl.contains("github.com/", ignoreCase = true)) {
+                    app.apkDownloadUrl
+                } else {
+                    "https://github.com/zayaanapps/zayaan-apps"
+                }
+            }
+            val resolved = packageController.resolveLatestGitHubReleaseAsset(repoCandidate)
+                ?: packageController.resolveLatestGitHubReleaseAsset(app.apkDownloadUrl)
+                ?: packageController.resolveLatestGitHubReleaseAsset("https://github.com/zayaanapps/zayaan-apps")
+
+            if (resolved != null) {
+                val updatedApp = app.copy(
+                    versionName = resolved.tagName.ifBlank { app.versionName },
+                    versionCode = maxOf(app.versionCode, resolved.versionCode),
+                    apkDownloadUrl = resolved.browserDownloadUrl,
+                    apkFileSize = resolved.fileSizeFormatted.ifBlank { app.apkFileSize },
+                    releaseNotes = resolved.releaseNotes.ifBlank { app.releaseNotes }
+                )
+                _statusBannerMessage.value = "Found latest GitHub Release v${updatedApp.versionName} (${resolved.assetName}). Downloading APK..."
+                startApkDownload(updatedApp, autoPromptInstallContext = context)
+            } else {
+                // Fallback: try direct download from app.apkDownloadUrl, or open GitHub Releases page in browser
+                val fallbackReleasesPage = if (repoCandidate.contains("github.com/", ignoreCase = true)) {
+                    val match = Regex("""https?://github\.com/[^/]+/[^/]+""", RegexOption.IGNORE_CASE).find(repoCandidate)
+                    if (match != null) "${match.value.removeSuffix(".git")}/releases/latest" else app.apkDownloadUrl
+                } else {
+                    "https://github.com/zayaanapps/zayaan-apps/releases/latest"
+                }
+                if (app.apkDownloadUrl.endsWith(".apk", ignoreCase = true)) {
+                    _statusBannerMessage.value = "Downloading latest APK from configured release URL..."
+                    startApkDownload(app, autoPromptInstallContext = context)
+                } else if (context != null) {
+                    _statusBannerMessage.value = "Opening GitHub Releases page ($fallbackReleasesPage)..."
+                    packageController.openDownloadUrlInBrowser(context, fallbackReleasesPage)
+                } else {
+                    startApkDownload(app)
+                }
+            }
+        }
+    }
+
     fun startApkDownload(app: StoreApp, autoPromptInstallContext: Context? = null) {
         val key = app.appId.ifBlank { app.docId }
         recordDownloadedAppId(key)

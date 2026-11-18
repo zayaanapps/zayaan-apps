@@ -255,6 +255,18 @@ data class ApkArchiveVerificationInfo(
     val signatureMatchesInstalled: Boolean
 )
 
+data class ResolvedGitHubReleaseAsset(
+    val owner: String,
+    val repo: String,
+    val tagName: String,
+    val versionCode: Long,
+    val assetName: String,
+    val browserDownloadUrl: String,
+    val fileSizeFormatted: String,
+    val releaseNotes: String,
+    val releaseHtmlUrl: String
+)
+
 data class InstalledAppStatus(
     val packageName: String,
     val installed: Boolean,

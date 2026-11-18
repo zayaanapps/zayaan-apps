@@ -409,6 +409,9 @@ fun AuthenticatedStoreShell(
                                     onDeleteReview = { viewModel.deleteReview(it) },
                                     onReportApp = { reason, details ->
                                         viewModel.submitReport(appId, "APP", reason, details)
+                                    },
+                                    onDownloadLatestGitHubRelease = { ctx, app ->
+                                        viewModel.downloadLatestGitHubReleaseApk(app, ctx)
                                     }
                                 )
                             } else {

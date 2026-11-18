@@ -131,6 +131,37 @@ fun WebDevOpsAndSettingsScreen(
                     ) {
                         Button(
                             onClick = {
+                                onOpenUrl(context, "https://github.com/zayaanapps/zayaan-apps/releases/latest/download/zayaan-apps-release.apk")
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("direct_latest_release_apk_button")
+                        ) {
+                            Icon(imageVector = Icons.Default.RocketLaunch, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Latest Release APK")
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                onOpenUrl(context, "https://github.com/zayaanapps/zayaan-apps/releases/latest")
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(imageVector = Icons.Default.Code, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("GitHub Releases")
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        FilledTonalButton(
+                            onClick = {
                                 onOpenUrl(context, "https://zayaanapps.github.io/zayaan-apps/")
                             },
                             modifier = Modifier.weight(1f)

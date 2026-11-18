@@ -109,7 +109,8 @@ fun AppDetailScreen(
     onFlagReview: (AppReview, Boolean) -> Unit = { _, _ -> },
     onAdminReplyReview: (AppReview, String) -> Unit = { _, _ -> },
     onDeleteReview: (AppReview) -> Unit = {},
-    onReportApp: (String, String) -> Unit = { _, _ -> }
+    onReportApp: (String, String) -> Unit = { _, _ -> },
+    onDownloadLatestGitHubRelease: (Context, StoreApp) -> Unit = { _, target -> onStartDownload(target) }
 ) {
     val context = LocalContext.current
     val appId = app.appId.ifBlank { app.docId }
@@ -477,14 +478,14 @@ fun AppDetailScreen(
                                     )
                                 }
                                 Button(
-                                    onClick = { onStartDownload(app) },
+                                    onClick = { onDownloadLatestGitHubRelease(context, app) },
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .testTag("retry_apk_button")
                                 ) {
                                     Icon(imageVector = Icons.Default.Refresh, contentDescription = null)
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Retry Download (${app.apkFileSize})")
+                                    Text("Auto-Resolve & Download Latest Release APK")
                                 }
                             }
                         }
@@ -521,10 +522,10 @@ fun AppDetailScreen(
                                     )
                                 }
                                 OutlinedButton(
-                                    onClick = { onStartDownload(app) },
+                                    onClick = { onDownloadLatestGitHubRelease(context, app) },
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Text("Re-Download APK")
+                                    Text("Fetch Latest Release APK from GitHub")
                                 }
                             }
                         }
@@ -568,6 +569,23 @@ fun AppDetailScreen(
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
+
+                    FilledTonalButton(
+                        onClick = { onDownloadLatestGitHubRelease(context, app) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("fetch_latest_github_release_apk_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.SystemUpdate,
+                            contentDescription = "Fetch Latest APK from GitHub Releases",
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Download Latest Version from GitHub Releases")
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),

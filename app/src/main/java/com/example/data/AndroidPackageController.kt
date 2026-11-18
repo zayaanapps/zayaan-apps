@@ -419,19 +419,48 @@ class AndroidPackageController(private val context: Context) {
         emit(DownloadState.Downloading(appId, 0, existingBytes, 0L))
 
         try {
-            val requestBuilder = Request.Builder()
-                .url(url)
-                .header("User-Agent", "ZayaanAppsStore-Android/1.0.0.2")
-            if (existingBytes > 0L) {
-                requestBuilder.header("Range", "bytes=$existingBytes-")
+            var resolvedDownloadUrl = url
+            // If URL is a GitHub repository root or /releases/latest page without a direct .apk filename, resolve via GitHub Releases API first
+            if (url.contains("github.com/", ignoreCase = true) && !url.endsWith(".apk", ignoreCase = true)) {
+                val resolvedAsset = resolveLatestGitHubReleaseAsset(url)
+                    ?: resolveLatestGitHubReleaseAsset(app.githubRepoUrl)
+                if (resolvedAsset != null) {
+                    resolvedDownloadUrl = resolvedAsset.browserDownloadUrl
+                }
             }
 
-            httpClient.newCall(requestBuilder.build()).execute().use { response ->
+            fun buildDownloadRequest(targetUrl: String, rangeStart: Long): Request {
+                val builder = Request.Builder()
+                    .url(targetUrl)
+                    .header("User-Agent", "ZayaanAppsStore-Android/1.0.0.2")
+                if (rangeStart > 0L) {
+                    builder.header("Range", "bytes=$rangeStart-")
+                }
+                return builder.build()
+            }
+
+            var initialCall = httpClient.newCall(buildDownloadRequest(resolvedDownloadUrl, existingBytes)).execute()
+
+            // Automatic GitHub Releases Asset Discovery Fallback if the hardcoded filename returned 404
+            if (!initialCall.isSuccessful && initialCall.code != 206 &&
+                (resolvedDownloadUrl.contains("github.com/", ignoreCase = true) || app.githubRepoUrl.contains("github.com/", ignoreCase = true))
+            ) {
+                initialCall.close()
+                val discovered = resolveLatestGitHubReleaseAsset(resolvedDownloadUrl)
+                    ?: resolveLatestGitHubReleaseAsset(app.githubRepoUrl)
+                    ?: resolveLatestGitHubReleaseAsset("https://github.com/zayaanapps/zayaan-apps")
+                if (discovered != null && discovered.browserDownloadUrl != resolvedDownloadUrl) {
+                    resolvedDownloadUrl = discovered.browserDownloadUrl
+                    initialCall = httpClient.newCall(buildDownloadRequest(resolvedDownloadUrl, existingBytes)).execute()
+                }
+            }
+
+            initialCall.use { response ->
                 if (!response.isSuccessful && response.code != 206) {
                     emit(
                         DownloadState.Failed(
                             appId,
-                            "GitHub Release returned HTTP ${response.code}. Verify the release asset URL exists or open in browser."
+                            "GitHub Release returned HTTP ${response.code}. Tap 'Fetch Latest Release APK' or 'Download via Browser' to open GitHub Releases."
                         )
                     )
                     return@flow
@@ -592,13 +621,20 @@ class AndroidPackageController(private val context: Context) {
     }
 
     /**
-     * Queries https://api.github.com/repos/zayaanapps/zayaan-apps/releases/latest
-     * to check if a newer 1.0.0.X release tag of Zayaan Apps Store itself was built on GitHub Actions.
+     * Resolves the latest `.apk` asset download URL, version tag, file size, and release notes
+     * from any GitHub repository URL or GitHub Releases URL (`https://github.com/<owner>/<repo>...`).
      */
-    suspend fun fetchLatestGitHubStoreRelease(): StoreApp? = withContext(Dispatchers.IO) {
+    suspend fun resolveLatestGitHubReleaseAsset(repoOrReleaseUrl: String): ResolvedGitHubReleaseAsset? = withContext(Dispatchers.IO) {
         try {
+            val regex = Regex("""github\.com/([^/]+)/([^/]+)""", RegexOption.IGNORE_CASE)
+            val match = regex.find(repoOrReleaseUrl) ?: return@withContext null
+            val owner = match.groupValues[1].trim()
+            val repo = match.groupValues[2].removeSuffix(".git").trim()
+            if (owner.isBlank() || repo.isBlank()) return@withContext null
+
+            val apiUrl = "https://api.github.com/repos/$owner/$repo/releases/latest"
             val request = Request.Builder()
-                .url("https://api.github.com/repos/zayaanapps/zayaan-apps/releases/latest")
+                .url(apiUrl)
                 .header("Accept", "application/vnd.github+json")
                 .header("User-Agent", "ZayaanAppsStore-Android/1.0.0.2")
                 .build()
@@ -608,45 +644,81 @@ class AndroidPackageController(private val context: Context) {
                 val jsonStr = response.body?.string() ?: return@withContext null
                 val json = JSONObject(jsonStr)
                 val tagName = json.optString("tag_name", "").removePrefix("v").trim()
-                if (tagName.isEmpty()) return@withContext null
-
-                val lastSegment = tagName.substringAfterLast('.', "").toLongOrNull() ?: 1L
-                val releaseNotes = json.optString("body", "Automated GitHub Actions release v$tagName")
-
-                var downloadUrl = "https://github.com/zayaanapps/zayaan-apps/releases/latest/download/zayaan-apps-release.apk"
+                val htmlUrl = json.optString("html_url", "https://github.com/$owner/$repo/releases/latest")
+                val releaseNotes = json.optString("body", "Official GitHub Release v$tagName")
                 val assets = json.optJSONArray("assets")
+
+                var apkUrl = ""
+                var apkName = ""
+                var sizeBytes = 0L
+
                 if (assets != null && assets.length() > 0) {
                     for (i in 0 until assets.length()) {
                         val asset = assets.optJSONObject(i) ?: continue
-                        val assetUrl = asset.optString("browser_download_url", "")
-                        if (assetUrl.endsWith(".apk")) {
-                            downloadUrl = assetUrl
-                            break
+                        val name = asset.optString("name", "")
+                        val browserUrl = asset.optString("browser_download_url", "")
+                        if (name.endsWith(".apk", ignoreCase = true) || browserUrl.endsWith(".apk", ignoreCase = true)) {
+                            apkUrl = browserUrl
+                            apkName = name
+                            sizeBytes = asset.optLong("size", 0L)
+                            if (name.contains("release", ignoreCase = true)) break
                         }
                     }
                 }
 
-                StoreApp(
-                    appId = "zayaan-apps-store",
-                    appName = "Zayaan Apps Store",
-                    packageName = "com.zayaanapps.store",
-                    category = "Tools",
-                    developerName = "Zayaan Apps Official",
-                    description = "Official Zayaan Apps Store self-update package from GitHub Releases.",
-                    shortDescription = "Official Zayaan Apps Store self-updater.",
-                    versionName = tagName,
-                    versionCode = lastSegment,
-                    apkDownloadUrl = downloadUrl,
-                    apkFileSize = "16.8 MB",
+                if (apkUrl.isBlank()) return@withContext null
+
+                val lastSegment = tagName.substringAfterLast('.', "").filter { it.isDigit() }.toLongOrNull()
+                    ?: tagName.filter { it.isDigit() }.toLongOrNull()
+                    ?: 1L
+                val formattedSize = if (sizeBytes > 0L) {
+                    "%.1f MB".format(sizeBytes.toDouble() / (1024.0 * 1024.0))
+                } else {
+                    "16.8 MB"
+                }
+
+                ResolvedGitHubReleaseAsset(
+                    owner = owner,
+                    repo = repo,
+                    tagName = tagName.ifBlank { "1.0.0.1" },
+                    versionCode = lastSegment.coerceAtLeast(1L),
+                    assetName = apkName,
+                    browserDownloadUrl = apkUrl,
+                    fileSizeFormatted = formattedSize,
                     releaseNotes = releaseNotes,
-                    featured = true,
-                    editorsChoice = true,
-                    essential = true,
-                    published = true
+                    releaseHtmlUrl = htmlUrl
                 )
             }
         } catch (_: Exception) {
             null
         }
+    }
+
+    /**
+     * Queries https://api.github.com/repos/zayaanapps/zayaan-apps/releases/latest
+     * to check if a newer 1.0.0.X release tag of Zayaan Apps Store itself was built on GitHub Actions.
+     */
+    suspend fun fetchLatestGitHubStoreRelease(): StoreApp? = withContext(Dispatchers.IO) {
+        val resolved = resolveLatestGitHubReleaseAsset("https://github.com/zayaanapps/zayaan-apps")
+            ?: return@withContext null
+        StoreApp(
+            appId = "zayaan-apps-store",
+            appName = "Zayaan Apps Store",
+            packageName = "com.zayaanapps.store",
+            category = "Tools",
+            developerName = "Zayaan Apps Official",
+            description = "Official Zayaan Apps Store self-update package from GitHub Releases.",
+            shortDescription = "Official Zayaan Apps Store self-updater (${resolved.assetName}).",
+            versionName = resolved.tagName,
+            versionCode = resolved.versionCode,
+            apkDownloadUrl = resolved.browserDownloadUrl,
+            apkFileSize = resolved.fileSizeFormatted,
+            releaseNotes = resolved.releaseNotes,
+            githubRepoUrl = "https://github.com/${resolved.owner}/${resolved.repo}",
+            featured = true,
+            editorsChoice = true,
+            essential = true,
+            published = true
+        )
     }
 }
