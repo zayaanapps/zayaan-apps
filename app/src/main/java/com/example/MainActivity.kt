@@ -309,7 +309,7 @@ fun AuthenticatedStoreShell(
                                     androidx.compose.material3.Button(
                                         onClick = {
                                             selectedAppIdForDetail = selfUpdate.appId.ifBlank { "zayaan-apps-store" }
-                                            viewModel.startApkDownload(selfUpdate)
+                                            viewModel.downloadLatestGitHubReleaseApk(selfUpdate, context)
                                         },
                                         modifier = Modifier.testTag("store_self_update_button")
                                     ) {
