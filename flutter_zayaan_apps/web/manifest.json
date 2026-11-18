@@ -1,0 +1,11 @@
+{
+  "name": "Zayaan Apps",
+  "short_name": "Zayaan Apps",
+  "start_url": "/zayaan-apps/",
+  "display": "standalone",
+  "background_color": "#0A192F",
+  "theme_color": "#00C98D",
+  "description": "Zayaan Apps Digital Application Store for Android APKs and Web.",
+  "orientation": "portrait-primary",
+  "prefer_related_applications": false
+}

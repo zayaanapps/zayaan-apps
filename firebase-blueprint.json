@@ -1,0 +1,253 @@
+{
+  "entities": {
+    "StoreApp": {
+      "title": "StoreApp",
+      "description": "An application entry published in the Zayaan Apps store catalog.",
+      "type": "object",
+      "properties": {
+        "appId": {
+          "type": "string",
+          "description": "Unique identifier for the application (e.g., zayaan-calculator)."
+        },
+        "appName": {
+          "type": "string",
+          "description": "Display name of the application."
+        },
+        "packageName": {
+          "type": "string",
+          "description": "Android reverse-DNS package identifier (e.g., com.zayaanapps.calculator)."
+        },
+        "category": {
+          "type": "string",
+          "description": "Store category of the application.",
+          "enum": [
+            "Games",
+            "Tools",
+            "AI Apps",
+            "Entertainment",
+            "Productivity",
+            "Education",
+            "Utilities",
+            "Other"
+          ]
+        },
+        "developerName": {
+          "type": "string",
+          "description": "Name of the developer or studio."
+        },
+        "description": {
+          "type": "string",
+          "description": "Detailed description of the application features."
+        },
+        "iconUrl": {
+          "type": "string",
+          "description": "URL to the application icon image."
+        },
+        "screenshots": {
+          "type": "array",
+          "description": "List of screenshot image URLs (up to 10)."
+        },
+        "versionName": {
+          "type": "string",
+          "description": "Human-readable semantic version string (e.g., 1.2.0)."
+        },
+        "versionCode": {
+          "type": "integer",
+          "description": "Monotonically increasing integer version code for Android update comparison."
+        },
+        "apkDownloadUrl": {
+          "type": "string",
+          "description": "Direct HTTPS URL to the GitHub Releases APK asset."
+        },
+        "apkFileSize": {
+          "type": "string",
+          "description": "Formatted file size of the APK (e.g., 18.4 MB)."
+        },
+        "releaseNotes": {
+          "type": "string",
+          "description": "What's new in the latest release."
+        },
+        "featured": {
+          "type": "boolean",
+          "description": "Whether the application is highlighted in the Featured carousel."
+        },
+        "published": {
+          "type": "boolean",
+          "description": "Whether the application is publicly visible in the store catalog."
+        },
+        "downloadCount": {
+          "type": "integer",
+          "description": "Total number of APK downloads initiated across Android and Web."
+        },
+        "authorUid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the administrator who created/registered the app."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the application was first added (clients must write FieldValue.serverTimestamp())."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the application metadata or release was last updated (clients must write FieldValue.serverTimestamp())."
+        }
+      },
+      "required": [
+        "appId",
+        "appName",
+        "packageName",
+        "category",
+        "developerName",
+        "description",
+        "iconUrl",
+        "screenshots",
+        "versionName",
+        "versionCode",
+        "apkDownloadUrl",
+        "apkFileSize",
+        "releaseNotes",
+        "featured",
+        "published",
+        "downloadCount",
+        "authorUid",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "StoreCategory": {
+      "title": "StoreCategory",
+      "description": "A store category managed by administrators.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Category display name."
+        },
+        "description": {
+          "type": "string",
+          "description": "Brief description of apps in this category."
+        },
+        "displayOrder": {
+          "type": "integer",
+          "description": "Numeric sort order."
+        },
+        "authorUid": {
+          "type": "string",
+          "description": "UID of the admin who created the category."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of creation (FieldValue.serverTimestamp())."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last update (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": [
+        "name",
+        "description",
+        "displayOrder",
+        "authorUid",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "UserPreference": {
+      "title": "UserPreference",
+      "description": "Per-user settings and bookmarked apps.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID."
+        },
+        "darkMode": {
+          "type": "boolean",
+          "description": "Whether dark mode is preferred."
+        },
+        "notifyUpdates": {
+          "type": "boolean",
+          "description": "Whether update notifications are enabled."
+        },
+        "bookmarkedAppIds": {
+          "type": "array",
+          "description": "Bounded list of bookmarked appIds (max 50)."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation server timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Update server timestamp."
+        }
+      },
+      "required": [
+        "userId",
+        "darkMode",
+        "notifyUpdates",
+        "bookmarkedAppIds",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "AdminRecord": {
+      "title": "AdminRecord",
+      "description": "Trusted administrator membership record.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Admin UID."
+        },
+        "role": {
+          "type": "string",
+          "description": "Admin role identifier."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation server timestamp."
+        }
+      },
+      "required": [
+        "userId",
+        "role",
+        "createdAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/apps/{appId}": {
+      "schema": {
+        "$ref": "#/entities/StoreApp"
+      },
+      "description": "Central Zayaan Apps catalog collection storing application releases and APK metadata."
+    },
+    "/categories/{categoryId}": {
+      "schema": {
+        "$ref": "#/entities/StoreCategory"
+      },
+      "description": "Managed store categories."
+    },
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/UserPreference"
+      },
+      "description": "User-scoped preferences and bookmarked applications."
+    },
+    "/admins/{adminUid}": {
+      "schema": {
+        "$ref": "#/entities/AdminRecord"
+      },
+      "description": "Administrator registry for RBAC verification."
+    }
+  }
+}

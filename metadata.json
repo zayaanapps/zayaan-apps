@@ -1,0 +1,6 @@
+{
+  "name": "Zayaan Apps",
+  "description": "Digital application store and centralized distribution platform for Android APKs and Web.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,240 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 0. Global Default-Deny Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Primitive Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isBootstrappedAdmin() {
+      return isSignedIn() &&
+             'email' in request.auth.token &&
+             'email_verified' in request.auth.token &&
+             request.auth.token.email == 'zayaanapps@gmail.com' &&
+             request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        isBootstrappedAdmin() ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isValidCategoryName(cat) {
+      return cat is string && cat in [
+        'Games',
+        'Tools',
+        'AI Apps',
+        'Entertainment',
+        'Productivity',
+        'Education',
+        'Utilities',
+        'Other'
+      ];
+    }
+
+    // --- Entity Validation Blueprints ---
+
+    function isValidStoreApp(data) {
+      return data.appId is string && data.appId.size() >= 1 && data.appId.size() <= 100 &&
+             data.appName is string && data.appName.size() >= 1 && data.appName.size() <= 80 &&
+             data.packageName is string && data.packageName.size() >= 3 && data.packageName.size() <= 150 &&
+             isValidCategoryName(data.category) &&
+             data.developerName is string && data.developerName.size() >= 1 && data.developerName.size() <= 80 &&
+             data.description is string && data.description.size() >= 1 && data.description.size() <= 4000 &&
+             data.iconUrl is string && data.iconUrl.size() <= 1000 &&
+             data.screenshots is list && data.screenshots.size() <= 10 &&
+             (data.screenshots.size() == 0 || (data.screenshots[0] is string && data.screenshots[0].size() <= 1000)) &&
+             data.versionName is string && data.versionName.size() >= 1 && data.versionName.size() <= 40 &&
+             data.versionCode is int && data.versionCode >= 1 && data.versionCode <= 2000000000 &&
+             data.apkDownloadUrl is string && data.apkDownloadUrl.size() >= 1 && data.apkDownloadUrl.size() <= 1000 &&
+             data.apkFileSize is string && data.apkFileSize.size() >= 1 && data.apkFileSize.size() <= 40 &&
+             data.releaseNotes is string && data.releaseNotes.size() <= 2000 &&
+             data.featured is bool &&
+             data.published is bool &&
+             data.downloadCount is int && data.downloadCount >= 0 &&
+             data.authorUid is string && data.authorUid.size() >= 1 && data.authorUid.size() <= 128 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidStoreCategory(data) {
+      return data.name is string && data.name.size() >= 1 && data.name.size() <= 50 &&
+             data.description is string && data.description.size() >= 1 && data.description.size() <= 300 &&
+             data.displayOrder is int && data.displayOrder >= 0 && data.displayOrder <= 1000 &&
+             data.authorUid is string && data.authorUid.size() >= 1 && data.authorUid.size() <= 128 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidUserPreference(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.darkMode is bool &&
+             data.notifyUpdates is bool &&
+             data.bookmarkedAppIds is list && data.bookmarkedAppIds.size() <= 50 &&
+             (data.bookmarkedAppIds.size() == 0 || (data.bookmarkedAppIds[0] is string && data.bookmarkedAppIds[0].size() <= 100)) &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidAdminRecord(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.role is string && data.role in ['admin', 'superadmin'] &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    // --- Collection Rules ---
+
+    // 1. Central Store Catalog: /apps/{appId}
+    match /apps/{appId} {
+      allow get: if isSignedIn() && isValidId(appId) && (existing().published == true || existing().authorUid == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().published == true || existing().authorUid == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn() &&
+                       isValidId(appId) &&
+                       incoming().appId == appId &&
+                       incoming().authorUid == request.auth.uid &&
+                       incoming().keys().hasAll([
+                         'appId', 'appName', 'packageName', 'category', 'developerName',
+                         'description', 'iconUrl', 'screenshots', 'versionName', 'versionCode',
+                         'apkDownloadUrl', 'apkFileSize', 'releaseNotes', 'featured', 'published',
+                         'downloadCount', 'authorUid', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'appId', 'appName', 'packageName', 'category', 'developerName',
+                         'description', 'iconUrl', 'screenshots', 'versionName', 'versionCode',
+                         'apkDownloadUrl', 'apkFileSize', 'releaseNotes', 'featured', 'published',
+                         'downloadCount', 'authorUid', 'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidStoreApp(incoming()) &&
+                       (isAdmin() || incoming().authorUid == request.auth.uid);
+
+      allow update: if isSignedIn() &&
+                       isValidId(appId) &&
+                       isValidStoreApp(incoming()) &&
+                       incoming().appId == existing().appId &&
+                       incoming().authorUid == existing().authorUid &&
+                       incoming().createdAt == existing().createdAt && (
+                         // Action 1: Admin or Author full metadata/version update
+                         ((isAdmin() || existing().authorUid == request.auth.uid) &&
+                           incoming().diff(existing()).affectedKeys().hasOnly([
+                             'appName', 'packageName', 'category', 'developerName',
+                             'description', 'iconUrl', 'screenshots', 'versionName', 'versionCode',
+                             'apkDownloadUrl', 'apkFileSize', 'releaseNotes', 'featured', 'published',
+                             'downloadCount', 'updatedAt'
+                           ])
+                         ) ||
+                         // Action 2: Authenticated user download counter increment (+1 on published app)
+                         (existing().published == true &&
+                           incoming().diff(existing()).affectedKeys().hasOnly(['downloadCount', 'updatedAt']) &&
+                           incoming().downloadCount == existing().downloadCount + 1
+                         )
+                       );
+
+      allow delete: if isSignedIn() && isValidId(appId) && (isAdmin() || existing().authorUid == request.auth.uid);
+    }
+
+    // 2. Managed Store Categories: /categories/{categoryId}
+    match /categories/{categoryId} {
+      allow get: if isSignedIn() && isValidId(categoryId) && (existing().displayOrder >= 0 || existing().authorUid == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().displayOrder >= 0 || existing().authorUid == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn() &&
+                       isValidId(categoryId) &&
+                       incoming().authorUid == request.auth.uid &&
+                       incoming().keys().hasAll([
+                         'name', 'description', 'displayOrder', 'authorUid', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'name', 'description', 'displayOrder', 'authorUid', 'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidStoreCategory(incoming()) &&
+                       (isAdmin() || incoming().authorUid == request.auth.uid);
+
+      allow update: if isSignedIn() &&
+                       isValidId(categoryId) &&
+                       isValidStoreCategory(incoming()) &&
+                       incoming().authorUid == existing().authorUid &&
+                       incoming().createdAt == existing().createdAt &&
+                       (isAdmin() || existing().authorUid == request.auth.uid) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'name', 'description', 'displayOrder', 'updatedAt'
+                       ]);
+
+      allow delete: if isSignedIn() && isValidId(categoryId) && (isAdmin() || existing().authorUid == request.auth.uid);
+    }
+
+    // 3. User Preferences & Bookmarks: /users/{userId}
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+      allow list: if isSignedIn() && request.auth.uid == userId;
+
+      allow create: if isSignedIn() &&
+                       isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().keys().hasAll([
+                         'userId', 'darkMode', 'notifyUpdates', 'bookmarkedAppIds', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'darkMode', 'notifyUpdates', 'bookmarkedAppIds', 'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidUserPreference(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(userId) &&
+                       isValidUserPreference(incoming()) &&
+                       request.auth.uid == userId &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'darkMode', 'notifyUpdates', 'bookmarkedAppIds', 'updatedAt'
+                       ]);
+
+      allow delete: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+    }
+
+    // 4. Trusted Administrators Registry: /admins/{adminUid}
+    match /admins/{adminUid} {
+      allow get: if isSignedIn() && isValidId(adminUid) && (request.auth.uid == adminUid || isAdmin());
+      allow list: if isSignedIn() && isAdmin();
+
+      allow create: if isSignedIn() &&
+                       isValidId(adminUid) &&
+                       isAdmin() &&
+                       incoming().userId == adminUid &&
+                       incoming().keys().hasAll(['userId', 'role', 'createdAt']) &&
+                       incoming().keys().hasOnly(['userId', 'role', 'createdAt']) &&
+                       isValidAdminRecord(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(adminUid) &&
+                       isValidAdminRecord(incoming()) &&
+                       isAdmin() &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['role']);
+
+      allow delete: if isSignedIn() && isValidId(adminUid) && isAdmin();
+    }
+  }
+}
