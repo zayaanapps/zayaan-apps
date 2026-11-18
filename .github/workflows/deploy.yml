@@ -37,22 +37,20 @@ jobs:
           java-version: '21'
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
 
       - name: Setup Gradle & Android Build Cache
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.3.1'
 
-      - name: Accept Android SDK Licenses (for compileSdk 36)
+      - name: Accept Android SDK Licenses & Install Platform 36.1
         run: |
           SDK_DIR="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
-          if [ -n "$SDK_DIR" ] && [ -d "$SDK_DIR/cmdline-tools" ]; then
-            SDKMANAGER=$(find "$SDK_DIR/cmdline-tools" -name sdkmanager | head -n 1)
-            if [ -n "$SDKMANAGER" ]; then
-              yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
-            fi
-          fi
+          echo "ANDROID_HOME=$SDK_DIR"
+          mkdir -p "$SDK_DIR/licenses"
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          yes | sdkmanager "platform-tools" "platforms;android-36.1" "build-tools;36.0.0" || yes | sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
 
       - name: Compute Monotonic Release Version & Restore Debug Signing Keystore
         id: version_info
@@ -90,7 +88,7 @@ jobs:
 
       - name: Compile Native Jetpack Compose APK (Exact AI Studio Preview)
         run: |
-          gradle :app:assembleDebug --no-daemon
+          gradle :app:assembleDebug --no-daemon --stacktrace
 
       - name: Package Release Assets & Compute SHA-256 Checksum
         id: apk_assets
@@ -107,6 +105,8 @@ jobs:
 
       - name: Publish Native Android APK to GitHub Releases (Always Mark Latest)
         uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ steps.version_info.outputs.tag_name }}
           name: "Zayaan Apps Store ${{ steps.version_info.outputs.tag_name }}"
