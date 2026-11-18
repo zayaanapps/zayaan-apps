@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.width
@@ -73,6 +74,7 @@ import com.example.ui.WebDevOpsAndSettingsScreen
 import com.example.ui.signOutFromZayaanStore
 import com.example.ui.theme.ZayaanAppsTheme
 import com.google.firebase.Firebase
+import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.auth
@@ -107,8 +109,19 @@ enum class ZayaanTab(val label: String, val icon: ImageVector, val testTag: Stri
 }
 
 @Composable
-fun ZayaanStoreRoot(auth: FirebaseAuth = Firebase.auth) {
-    val currentUser by auth.authStateFlow().collectAsStateWithLifecycle(initialValue = auth.currentUser)
+fun ZayaanStoreRoot(auth: FirebaseAuth? = null) {
+    val context = LocalContext.current
+    val isFirebaseInitialized = remember { FirebaseApp.getApps(context).isNotEmpty() }
+
+    if (!isFirebaseInitialized && auth == null) {
+        ZayaanAppsTheme(darkTheme = true) {
+            MissingFirebaseConfigScreen()
+        }
+        return
+    }
+
+    val resolvedAuth = auth ?: Firebase.auth
+    val currentUser by resolvedAuth.authStateFlow().collectAsStateWithLifecycle(initialValue = resolvedAuth.currentUser)
     val user = currentUser
 
     if (user == null) {
@@ -121,6 +134,32 @@ fun ZayaanStoreRoot(auth: FirebaseAuth = Firebase.auth) {
                 currentUserId = user.uid,
                 currentUserEmail = user.email
             )
+        }
+    }
+}
+
+@Composable
+private fun MissingFirebaseConfigScreen() {
+    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = "Zayaan Apps Store",
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(
+                    text = "This APK was compiled without app/google-services.json. Add GOOGLE_SERVICES_JSON to GitHub Repository Secrets (or include app/google-services.json in your private repo) and re-run the release workflow to enable Google Sign-In & Cloud Firestore.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }
