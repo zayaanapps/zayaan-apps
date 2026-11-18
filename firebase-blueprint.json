@@ -28,6 +28,8 @@
             "Productivity",
             "Education",
             "Utilities",
+            "Business",
+            "Social & Communication",
             "Other"
           ]
         },
@@ -39,6 +41,10 @@
           "type": "string",
           "description": "Detailed description of the application features."
         },
+        "shortDescription": {
+          "type": "string",
+          "description": "Optional brief summary shown on cards and details header."
+        },
         "iconUrl": {
           "type": "string",
           "description": "URL to the application icon image."
@@ -49,7 +55,7 @@
         },
         "versionName": {
           "type": "string",
-          "description": "Human-readable semantic version string (e.g., 1.2.0)."
+          "description": "Human-readable semantic version string (e.g., 1.0.0.2)."
         },
         "versionCode": {
           "type": "integer",
@@ -71,13 +77,73 @@
           "type": "boolean",
           "description": "Whether the application is highlighted in the Featured carousel."
         },
+        "editorsChoice": {
+          "type": "boolean",
+          "description": "Optional flag for Editor's Choice curation."
+        },
+        "essential": {
+          "type": "boolean",
+          "description": "Optional flag for Essential Apps collection."
+        },
         "published": {
           "type": "boolean",
           "description": "Whether the application is publicly visible in the store catalog."
         },
         "downloadCount": {
           "type": "integer",
-          "description": "Total number of APK downloads initiated across Android and Web."
+          "description": "Total number of verified APK downloads initiated across Android and Web."
+        },
+        "ratingSum": {
+          "type": "integer",
+          "description": "Optional sum of all 1-5 star ratings."
+        },
+        "reviewCount": {
+          "type": "integer",
+          "description": "Optional count of verified community reviews."
+        },
+        "sha256Checksum": {
+          "type": "string",
+          "description": "Optional SHA-256 hex digest of the APK for pre-installation integrity verification."
+        },
+        "minAndroidSdk": {
+          "type": "integer",
+          "description": "Optional minimum Android API level required."
+        },
+        "targetAndroidSdk": {
+          "type": "integer",
+          "description": "Optional target Android API level."
+        },
+        "architecture": {
+          "type": "string",
+          "description": "Optional CPU architecture support (e.g., arm64-v8a, armeabi-v7a, universal)."
+        },
+        "permissionsList": {
+          "type": "array",
+          "description": "Optional list of Android permissions requested by the APK (up to 15)."
+        },
+        "privacyPolicyUrl": {
+          "type": "string",
+          "description": "Optional link to the app privacy policy."
+        },
+        "websiteUrl": {
+          "type": "string",
+          "description": "Optional link to the official website."
+        },
+        "supportEmail": {
+          "type": "string",
+          "description": "Optional developer support email."
+        },
+        "githubRepoUrl": {
+          "type": "string",
+          "description": "Optional link to the source/release GitHub repository."
+        },
+        "promoVideoUrl": {
+          "type": "string",
+          "description": "Optional promotional video URL."
+        },
+        "offlineCapable": {
+          "type": "boolean",
+          "description": "Optional indicator whether the application works offline."
         },
         "authorUid": {
           "type": "string",
@@ -159,7 +225,7 @@
     },
     "UserPreference": {
       "title": "UserPreference",
-      "description": "Per-user settings and bookmarked apps.",
+      "description": "Per-user settings, wishlist, favorites, search history, and download history.",
       "type": "object",
       "properties": {
         "userId": {
@@ -176,7 +242,23 @@
         },
         "bookmarkedAppIds": {
           "type": "array",
-          "description": "Bounded list of bookmarked appIds (max 50)."
+          "description": "Bounded list of wishlist/bookmarked appIds (max 50)."
+        },
+        "favoriteAppIds": {
+          "type": "array",
+          "description": "Optional bounded list of favorite appIds (max 50)."
+        },
+        "recentlyViewedAppIds": {
+          "type": "array",
+          "description": "Optional bounded list of recently viewed appIds (max 30)."
+        },
+        "downloadedAppIds": {
+          "type": "array",
+          "description": "Optional bounded list of downloaded appIds (max 50)."
+        },
+        "searchHistory": {
+          "type": "array",
+          "description": "Optional bounded list of recent search queries (max 20)."
         },
         "createdAt": {
           "type": "string",
@@ -196,6 +278,407 @@
         "bookmarkedAppIds",
         "createdAt",
         "updatedAt"
+      ]
+    },
+    "AppReview": {
+      "title": "AppReview",
+      "description": "A user review and 5-star rating for an application (one per user per app, keyed by appId_userId).",
+      "type": "object",
+      "properties": {
+        "appId": {
+          "type": "string",
+          "description": "Target application ID."
+        },
+        "appName": {
+          "type": "string",
+          "description": "Target application display name."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reviewer Firebase Auth UID."
+        },
+        "userName": {
+          "type": "string",
+          "description": "Reviewer display name."
+        },
+        "rating": {
+          "type": "integer",
+          "description": "Star rating from 1 to 5."
+        },
+        "comment": {
+          "type": "string",
+          "description": "Written review text."
+        },
+        "verifiedInstall": {
+          "type": "boolean",
+          "description": "True only when PackageManager confirmed package installation on device."
+        },
+        "helpfulCount": {
+          "type": "integer",
+          "description": "Number of helpful votes."
+        },
+        "developerReply": {
+          "type": "string",
+          "description": "Optional response from developer/administrator."
+        },
+        "flagged": {
+          "type": "boolean",
+          "description": "Whether the review was reported for moderation."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation server timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Update server timestamp."
+        }
+      },
+      "required": [
+        "appId",
+        "appName",
+        "userId",
+        "userName",
+        "rating",
+        "comment",
+        "verifiedInstall",
+        "helpfulCount",
+        "developerReply",
+        "flagged",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "AppCollection": {
+      "title": "AppCollection",
+      "description": "A curated or user-created collection of applications.",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "Collection title."
+        },
+        "subtitle": {
+          "type": "string",
+          "description": "Collection subtitle or theme."
+        },
+        "appIds": {
+          "type": "array",
+          "description": "Bounded list of appIds in this collection (max 30)."
+        },
+        "authorUid": {
+          "type": "string",
+          "description": "Creator UID."
+        },
+        "isPublic": {
+          "type": "boolean",
+          "description": "Whether the collection is publicly visible."
+        },
+        "featured": {
+          "type": "boolean",
+          "description": "Whether the collection is featured on the store home screen."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation server timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Update server timestamp."
+        }
+      },
+      "required": [
+        "title",
+        "subtitle",
+        "appIds",
+        "authorUid",
+        "isPublic",
+        "featured",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "DeveloperSubmission": {
+      "title": "DeveloperSubmission",
+      "description": "Developer Portal application submission awaiting administrator approval.",
+      "type": "object",
+      "properties": {
+        "appId": {
+          "type": "string",
+          "description": "Proposed appId slug."
+        },
+        "appName": {
+          "type": "string",
+          "description": "Application display name."
+        },
+        "packageName": {
+          "type": "string",
+          "description": "Android package name."
+        },
+        "category": {
+          "type": "string",
+          "description": "Application category."
+        },
+        "developerName": {
+          "type": "string",
+          "description": "Developer or studio display name."
+        },
+        "description": {
+          "type": "string",
+          "description": "Detailed description."
+        },
+        "versionName": {
+          "type": "string",
+          "description": "Version string (e.g., 1.0.0.1)."
+        },
+        "versionCode": {
+          "type": "integer",
+          "description": "Integer version code."
+        },
+        "apkDownloadUrl": {
+          "type": "string",
+          "description": "GitHub Releases APK download URL."
+        },
+        "apkFileSize": {
+          "type": "string",
+          "description": "APK file size."
+        },
+        "sha256Checksum": {
+          "type": "string",
+          "description": "SHA-256 checksum of the APK."
+        },
+        "releaseNotes": {
+          "type": "string",
+          "description": "Changelog / release notes."
+        },
+        "privacyPolicyUrl": {
+          "type": "string",
+          "description": "Privacy policy URL."
+        },
+        "supportEmail": {
+          "type": "string",
+          "description": "Developer contact email."
+        },
+        "status": {
+          "type": "string",
+          "description": "Approval workflow status.",
+          "enum": [
+            "PENDING",
+            "APPROVED",
+            "REJECTED"
+          ]
+        },
+        "reviewNote": {
+          "type": "string",
+          "description": "Admin review feedback note."
+        },
+        "submitterUid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the submitting developer."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Submission timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last status update timestamp."
+        }
+      },
+      "required": [
+        "appId",
+        "appName",
+        "packageName",
+        "category",
+        "developerName",
+        "description",
+        "versionName",
+        "versionCode",
+        "apkDownloadUrl",
+        "apkFileSize",
+        "sha256Checksum",
+        "releaseNotes",
+        "privacyPolicyUrl",
+        "supportEmail",
+        "status",
+        "reviewNote",
+        "submitterUid",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "StoreNotification": {
+      "title": "StoreNotification",
+      "description": "In-app and Android notification announcement for new releases, updates, or security advisories.",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "Notification headline."
+        },
+        "body": {
+          "type": "string",
+          "description": "Notification message body."
+        },
+        "category": {
+          "type": "string",
+          "description": "Notification category.",
+          "enum": [
+            "NEW_RELEASE",
+            "APP_UPDATE",
+            "SECURITY",
+            "FEATURED",
+            "COLLECTION",
+            "ANNOUNCEMENT"
+          ]
+        },
+        "targetAppId": {
+          "type": "string",
+          "description": "Optional related appId."
+        },
+        "published": {
+          "type": "boolean",
+          "description": "Whether the notification is active and visible."
+        },
+        "authorUid": {
+          "type": "string",
+          "description": "Admin UID."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation server timestamp."
+        }
+      },
+      "required": [
+        "title",
+        "body",
+        "category",
+        "targetAppId",
+        "published",
+        "authorUid",
+        "createdAt"
+      ]
+    },
+    "AppReport": {
+      "title": "AppReport",
+      "description": "User-submitted security, broken-link, or review moderation report.",
+      "type": "object",
+      "properties": {
+        "targetId": {
+          "type": "string",
+          "description": "Reported appId or reviewId."
+        },
+        "targetType": {
+          "type": "string",
+          "description": "APP or REVIEW.",
+          "enum": [
+            "APP",
+            "REVIEW"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "description": "Reason for report."
+        },
+        "details": {
+          "type": "string",
+          "description": "Additional context from reporter."
+        },
+        "reporterUid": {
+          "type": "string",
+          "description": "UID of the reporting user."
+        },
+        "status": {
+          "type": "string",
+          "description": "OPEN, RESOLVED, or DISMISSED.",
+          "enum": [
+            "OPEN",
+            "RESOLVED",
+            "DISMISSED"
+          ]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Report server timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last moderation update timestamp."
+        }
+      },
+      "required": [
+        "targetId",
+        "targetType",
+        "reason",
+        "details",
+        "reporterUid",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "AppVersionRecord": {
+      "title": "AppVersionRecord",
+      "description": "Historical version entry for an application.",
+      "type": "object",
+      "properties": {
+        "appId": {
+          "type": "string",
+          "description": "Parent appId."
+        },
+        "versionName": {
+          "type": "string",
+          "description": "Version string (e.g., 1.0.0.1)."
+        },
+        "versionCode": {
+          "type": "integer",
+          "description": "Integer version code."
+        },
+        "apkDownloadUrl": {
+          "type": "string",
+          "description": "GitHub Releases download link for this version."
+        },
+        "apkFileSize": {
+          "type": "string",
+          "description": "Formatted file size."
+        },
+        "sha256Checksum": {
+          "type": "string",
+          "description": "SHA-256 checksum."
+        },
+        "changelog": {
+          "type": "string",
+          "description": "Release notes for this version."
+        },
+        "authorUid": {
+          "type": "string",
+          "description": "Publisher UID."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Release server timestamp."
+        }
+      },
+      "required": [
+        "appId",
+        "versionName",
+        "versionCode",
+        "apkDownloadUrl",
+        "apkFileSize",
+        "sha256Checksum",
+        "changelog",
+        "authorUid",
+        "createdAt"
       ]
     },
     "AdminRecord": {
@@ -222,6 +705,51 @@
         "role",
         "createdAt"
       ]
+    },
+    "AuditLogRecord": {
+      "title": "AuditLogRecord",
+      "description": "Immutable administrator and developer portal audit log entry.",
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "description": "Action identifier (e.g., APP_CREATED, APP_UPDATED, SUBMISSION_APPROVED, REVIEW_MODERATED)."
+        },
+        "targetType": {
+          "type": "string",
+          "description": "Entity type affected (APP, SUBMISSION, CATEGORY, COLLECTION, REVIEW, REPORT, NOTIFICATION, ADMIN, CATALOG)."
+        },
+        "targetId": {
+          "type": "string",
+          "description": "ID of the affected resource."
+        },
+        "summary": {
+          "type": "string",
+          "description": "Human-readable description of the administrative change."
+        },
+        "actorUid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the actor."
+        },
+        "actorEmail": {
+          "type": "string",
+          "description": "Email address of the actor."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the action occurred."
+        }
+      },
+      "required": [
+        "action",
+        "targetType",
+        "targetId",
+        "summary",
+        "actorUid",
+        "actorEmail",
+        "createdAt"
+      ]
     }
   },
   "firestore": {
@@ -241,13 +769,55 @@
       "schema": {
         "$ref": "#/entities/UserPreference"
       },
-      "description": "User-scoped preferences and bookmarked applications."
+      "description": "User-scoped preferences, wishlist, favorites, search history, and download history."
+    },
+    "/reviews/{reviewId}": {
+      "schema": {
+        "$ref": "#/entities/AppReview"
+      },
+      "description": "Community ratings and written reviews (document ID format: {appId}_{userId} to prevent duplicate reviews)."
+    },
+    "/collections/{collectionId}": {
+      "schema": {
+        "$ref": "#/entities/AppCollection"
+      },
+      "description": "Curated and user-saved application collections."
+    },
+    "/submissions/{submissionId}": {
+      "schema": {
+        "$ref": "#/entities/DeveloperSubmission"
+      },
+      "description": "Developer portal application submissions and approval workflow."
+    },
+    "/notifications/{notificationId}": {
+      "schema": {
+        "$ref": "#/entities/StoreNotification"
+      },
+      "description": "Store announcements, new release alerts, and security notifications."
+    },
+    "/reports/{reportId}": {
+      "schema": {
+        "$ref": "#/entities/AppReport"
+      },
+      "description": "User reports for suspicious applications or inappropriate reviews."
+    },
+    "/version_history/{versionId}": {
+      "schema": {
+        "$ref": "#/entities/AppVersionRecord"
+      },
+      "description": "Complete multi-version history for catalog applications."
     },
     "/admins/{adminUid}": {
       "schema": {
         "$ref": "#/entities/AdminRecord"
       },
       "description": "Administrator registry for RBAC verification."
+    },
+    "/audit_logs/{logId}": {
+      "schema": {
+        "$ref": "#/entities/AuditLogRecord"
+      },
+      "description": "Immutable audit trail of administrative and marketplace management actions."
     }
   }
 }

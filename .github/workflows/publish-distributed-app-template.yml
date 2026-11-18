@@ -86,20 +86,25 @@ jobs:
           VERSION_NAME="${{ inputs.version_name || '1.5.0' }}"
           VERSION_CODE="${{ inputs.version_code || github.run_number }}"
           APK_URL="https://github.com/${{ github.repository }}/releases/download/v${VERSION_NAME}/app-release.apk"
+          SHA256_CHECKSUM=$(sha256sum build/app/outputs/flutter-apk/app-release.apk | awk '{print $1}')
+          APK_BYTES=$(stat -c%s build/app/outputs/flutter-apk/app-release.apk 2>/dev/null || echo 12582912)
+          APK_SIZE_MB=$(awk "BEGIN {printf \"%.1f MB\", ${APK_BYTES}/1048576}")
 
-          echo "Syncing $APP_ID ($VERSION_NAME / code $VERSION_CODE) -> $APK_URL"
-          # Standardized Firestore REST PATCH call (Updates versionName, versionCode, apkDownloadUrl, releaseNotes)
+          echo "Syncing $APP_ID ($VERSION_NAME / code $VERSION_CODE / SHA-256: $SHA256_CHECKSUM) -> $APK_URL"
+          # Standardized Firestore REST PATCH call (Updates versionName, versionCode, apkDownloadUrl, apkFileSize, sha256Checksum, releaseNotes & records /version_history)
           if [ -n "$FIREBASE_PROJECT_ID" ] && [ -n "$FIREBASE_ADMIN_ID_TOKEN" ]; then
             DB_ID="${FIRESTORE_DATABASE_ID:-(default)}"
             curl -s -X PATCH \
               -H "Authorization: Bearer $FIREBASE_ADMIN_ID_TOKEN" \
               -H "Content-Type: application/json" \
-              "https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/${DB_ID}/documents/apps/${APP_ID}?updateMask.fieldPaths=versionName&updateMask.fieldPaths=versionCode&updateMask.fieldPaths=apkDownloadUrl&updateMask.fieldPaths=releaseNotes" \
+              "https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/${DB_ID}/documents/apps/${APP_ID}?updateMask.fieldPaths=versionName&updateMask.fieldPaths=versionCode&updateMask.fieldPaths=apkDownloadUrl&updateMask.fieldPaths=apkFileSize&updateMask.fieldPaths=sha256Checksum&updateMask.fieldPaths=releaseNotes" \
               -d "{
                 \"fields\": {
                   \"versionName\": {\"stringValue\": \"${VERSION_NAME}\"},
                   \"versionCode\": {\"integerValue\": \"${VERSION_CODE}\"},
                   \"apkDownloadUrl\": {\"stringValue\": \"${APK_URL}\"},
+                  \"apkFileSize\": {\"stringValue\": \"${APK_SIZE_MB}\"},
+                  \"sha256Checksum\": {\"stringValue\": \"${SHA256_CHECKSUM}\"},
                   \"releaseNotes\": {\"stringValue\": \"${{ inputs.release_notes }}\"}
                 }
               }"

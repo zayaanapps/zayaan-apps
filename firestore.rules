@@ -40,16 +40,7 @@ service cloud.firestore {
     }
 
     function isValidCategoryName(cat) {
-      return cat is string && cat in [
-        'Games',
-        'Tools',
-        'AI Apps',
-        'Entertainment',
-        'Productivity',
-        'Education',
-        'Utilities',
-        'Other'
-      ];
+      return cat is string && cat.size() >= 1 && cat.size() <= 50;
     }
 
     // --- Entity Validation Blueprints ---
@@ -74,7 +65,24 @@ service cloud.firestore {
              data.downloadCount is int && data.downloadCount >= 0 &&
              data.authorUid is string && data.authorUid.size() >= 1 && data.authorUid.size() <= 128 &&
              data.createdAt is timestamp && data.createdAt <= request.time &&
-             data.updatedAt is timestamp && data.updatedAt <= request.time;
+             data.updatedAt is timestamp && data.updatedAt <= request.time &&
+             (!('shortDescription' in data) || (data.shortDescription is string && data.shortDescription.size() <= 200)) &&
+             (!('editorsChoice' in data) || data.editorsChoice is bool) &&
+             (!('essential' in data) || data.essential is bool) &&
+             (!('ratingSum' in data) || (data.ratingSum is int && data.ratingSum >= 0)) &&
+             (!('reviewCount' in data) || (data.reviewCount is int && data.reviewCount >= 0)) &&
+             (!('sha256Checksum' in data) || (data.sha256Checksum is string && data.sha256Checksum.size() <= 128)) &&
+             (!('minAndroidSdk' in data) || (data.minAndroidSdk is int && data.minAndroidSdk >= 21 && data.minAndroidSdk <= 40)) &&
+             (!('targetAndroidSdk' in data) || (data.targetAndroidSdk is int && data.targetAndroidSdk >= 21 && data.targetAndroidSdk <= 40)) &&
+             (!('architecture' in data) || (data.architecture is string && data.architecture.size() <= 80)) &&
+             (!('permissionsList' in data) || (data.permissionsList is list && data.permissionsList.size() <= 15 && (data.permissionsList.size() == 0 || (data.permissionsList[0] is string && data.permissionsList[0].size() <= 100)))) &&
+             (!('privacyPolicyUrl' in data) || (data.privacyPolicyUrl is string && data.privacyPolicyUrl.size() <= 500)) &&
+             (!('websiteUrl' in data) || (data.websiteUrl is string && data.websiteUrl.size() <= 500)) &&
+             (!('supportEmail' in data) || (data.supportEmail is string && data.supportEmail.size() <= 150)) &&
+             (!('githubRepoUrl' in data) || (data.githubRepoUrl is string && data.githubRepoUrl.size() <= 500)) &&
+             (!('promoVideoUrl' in data) || (data.promoVideoUrl is string && data.promoVideoUrl.size() <= 500)) &&
+             (!('offlineCapable' in data) || data.offlineCapable is bool) &&
+             (!('pageViews' in data) || (data.pageViews is int && data.pageViews >= 0));
     }
 
     function isValidStoreCategory(data) {
@@ -93,12 +101,108 @@ service cloud.firestore {
              data.bookmarkedAppIds is list && data.bookmarkedAppIds.size() <= 50 &&
              (data.bookmarkedAppIds.size() == 0 || (data.bookmarkedAppIds[0] is string && data.bookmarkedAppIds[0].size() <= 100)) &&
              data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time &&
+             (!('favoriteAppIds' in data) || (data.favoriteAppIds is list && data.favoriteAppIds.size() <= 50 && (data.favoriteAppIds.size() == 0 || (data.favoriteAppIds[0] is string && data.favoriteAppIds[0].size() <= 100)))) &&
+             (!('recentlyViewedAppIds' in data) || (data.recentlyViewedAppIds is list && data.recentlyViewedAppIds.size() <= 30 && (data.recentlyViewedAppIds.size() == 0 || (data.recentlyViewedAppIds[0] is string && data.recentlyViewedAppIds[0].size() <= 100)))) &&
+             (!('downloadedAppIds' in data) || (data.downloadedAppIds is list && data.downloadedAppIds.size() <= 50 && (data.downloadedAppIds.size() == 0 || (data.downloadedAppIds[0] is string && data.downloadedAppIds[0].size() <= 100)))) &&
+             (!('searchHistory' in data) || (data.searchHistory is list && data.searchHistory.size() <= 20 && (data.searchHistory.size() == 0 || (data.searchHistory[0] is string && data.searchHistory[0].size() <= 100))));
+    }
+
+    function isValidAppReview(data) {
+      return data.appId is string && data.appId.size() >= 1 && data.appId.size() <= 100 &&
+             data.appName is string && data.appName.size() >= 1 && data.appName.size() <= 80 &&
+             data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.userName is string && data.userName.size() >= 1 && data.userName.size() <= 80 &&
+             data.rating is int && data.rating >= 1 && data.rating <= 5 &&
+             data.comment is string && data.comment.size() >= 1 && data.comment.size() <= 1500 &&
+             data.verifiedInstall is bool &&
+             data.helpfulCount is int && data.helpfulCount >= 0 &&
+             data.developerReply is string && data.developerReply.size() <= 1000 &&
+             data.flagged is bool &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
              data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidAppCollection(data) {
+      return data.title is string && data.title.size() >= 1 && data.title.size() <= 80 &&
+             data.subtitle is string && data.subtitle.size() <= 250 &&
+             data.appIds is list && data.appIds.size() <= 30 &&
+             (data.appIds.size() == 0 || (data.appIds[0] is string && data.appIds[0].size() <= 100)) &&
+             data.authorUid is string && data.authorUid.size() >= 1 && data.authorUid.size() <= 128 &&
+             data.isPublic is bool &&
+             data.featured is bool &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidDeveloperSubmission(data) {
+      return data.appId is string && data.appId.size() >= 1 && data.appId.size() <= 100 &&
+             data.appName is string && data.appName.size() >= 1 && data.appName.size() <= 80 &&
+             data.packageName is string && data.packageName.size() >= 3 && data.packageName.size() <= 150 &&
+             isValidCategoryName(data.category) &&
+             data.developerName is string && data.developerName.size() >= 1 && data.developerName.size() <= 80 &&
+             data.description is string && data.description.size() >= 1 && data.description.size() <= 4000 &&
+             data.versionName is string && data.versionName.size() >= 1 && data.versionName.size() <= 40 &&
+             data.versionCode is int && data.versionCode >= 1 && data.versionCode <= 2000000000 &&
+             data.apkDownloadUrl is string && data.apkDownloadUrl.size() >= 1 && data.apkDownloadUrl.size() <= 1000 &&
+             data.apkFileSize is string && data.apkFileSize.size() >= 1 && data.apkFileSize.size() <= 40 &&
+             data.sha256Checksum is string && data.sha256Checksum.size() <= 128 &&
+             data.releaseNotes is string && data.releaseNotes.size() <= 2000 &&
+             data.privacyPolicyUrl is string && data.privacyPolicyUrl.size() <= 500 &&
+             data.supportEmail is string && data.supportEmail.size() <= 150 &&
+             data.status is string && data.status in ['PENDING', 'APPROVED', 'REJECTED'] &&
+             data.reviewNote is string && data.reviewNote.size() <= 500 &&
+             data.submitterUid is string && data.submitterUid.size() >= 1 && data.submitterUid.size() <= 128 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidStoreNotification(data) {
+      return data.title is string && data.title.size() >= 1 && data.title.size() <= 120 &&
+             data.body is string && data.body.size() >= 1 && data.body.size() <= 1000 &&
+             data.category is string && data.category in ['NEW_RELEASE', 'APP_UPDATE', 'SECURITY', 'FEATURED', 'COLLECTION', 'ANNOUNCEMENT'] &&
+             data.targetAppId is string && data.targetAppId.size() <= 100 &&
+             data.published is bool &&
+             data.authorUid is string && data.authorUid.size() >= 1 && data.authorUid.size() <= 128 &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    function isValidAppReport(data) {
+      return data.targetId is string && data.targetId.size() >= 1 && data.targetId.size() <= 128 &&
+             data.targetType is string && data.targetType in ['APP', 'REVIEW'] &&
+             data.reason is string && data.reason.size() >= 1 && data.reason.size() <= 120 &&
+             data.details is string && data.details.size() <= 1000 &&
+             data.reporterUid is string && data.reporterUid.size() >= 1 && data.reporterUid.size() <= 128 &&
+             data.status is string && data.status in ['OPEN', 'RESOLVED', 'DISMISSED'] &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidAppVersionRecord(data) {
+      return data.appId is string && data.appId.size() >= 1 && data.appId.size() <= 100 &&
+             data.versionName is string && data.versionName.size() >= 1 && data.versionName.size() <= 40 &&
+             data.versionCode is int && data.versionCode >= 1 && data.versionCode <= 2000000000 &&
+             data.apkDownloadUrl is string && data.apkDownloadUrl.size() >= 1 && data.apkDownloadUrl.size() <= 1000 &&
+             data.apkFileSize is string && data.apkFileSize.size() >= 1 && data.apkFileSize.size() <= 40 &&
+             data.sha256Checksum is string && data.sha256Checksum.size() <= 128 &&
+             data.changelog is string && data.changelog.size() <= 2000 &&
+             data.authorUid is string && data.authorUid.size() >= 1 && data.authorUid.size() <= 128 &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
     }
 
     function isValidAdminRecord(data) {
       return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
              data.role is string && data.role in ['admin', 'superadmin'] &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    function isValidAuditLogRecord(data) {
+      return data.action is string && data.action.size() >= 1 && data.action.size() <= 80 &&
+             data.targetType is string && data.targetType in ['APP', 'SUBMISSION', 'CATEGORY', 'COLLECTION', 'REVIEW', 'REPORT', 'NOTIFICATION', 'ADMIN', 'CATALOG'] &&
+             data.targetId is string && data.targetId.size() >= 1 && data.targetId.size() <= 128 &&
+             data.summary is string && data.summary.size() >= 1 && data.summary.size() <= 500 &&
+             data.actorUid is string && data.actorUid.size() >= 1 && data.actorUid.size() <= 128 &&
+             data.actorEmail is string && data.actorEmail.size() <= 150 &&
              data.createdAt is timestamp && data.createdAt <= request.time;
     }
 
@@ -121,9 +225,14 @@ service cloud.firestore {
                        ]) &&
                        incoming().keys().hasOnly([
                          'appId', 'appName', 'packageName', 'category', 'developerName',
-                         'description', 'iconUrl', 'screenshots', 'versionName', 'versionCode',
-                         'apkDownloadUrl', 'apkFileSize', 'releaseNotes', 'featured', 'published',
-                         'downloadCount', 'authorUid', 'createdAt', 'updatedAt'
+                         'description', 'shortDescription', 'iconUrl', 'screenshots',
+                         'versionName', 'versionCode', 'apkDownloadUrl', 'apkFileSize',
+                         'releaseNotes', 'featured', 'editorsChoice', 'essential', 'published',
+                         'downloadCount', 'ratingSum', 'reviewCount', 'sha256Checksum',
+                         'minAndroidSdk', 'targetAndroidSdk', 'architecture', 'permissionsList',
+                         'privacyPolicyUrl', 'websiteUrl', 'supportEmail', 'githubRepoUrl',
+                         'promoVideoUrl', 'offlineCapable', 'pageViews',
+                         'authorUid', 'createdAt', 'updatedAt'
                        ]) &&
                        isValidStoreApp(incoming()) &&
                        (isAdmin() || incoming().authorUid == request.auth.uid);
@@ -138,15 +247,27 @@ service cloud.firestore {
                          ((isAdmin() || existing().authorUid == request.auth.uid) &&
                            incoming().diff(existing()).affectedKeys().hasOnly([
                              'appName', 'packageName', 'category', 'developerName',
-                             'description', 'iconUrl', 'screenshots', 'versionName', 'versionCode',
-                             'apkDownloadUrl', 'apkFileSize', 'releaseNotes', 'featured', 'published',
-                             'downloadCount', 'updatedAt'
+                             'description', 'shortDescription', 'iconUrl', 'screenshots',
+                             'versionName', 'versionCode', 'apkDownloadUrl', 'apkFileSize',
+                             'releaseNotes', 'featured', 'editorsChoice', 'essential', 'published',
+                             'downloadCount', 'ratingSum', 'reviewCount', 'sha256Checksum',
+                             'minAndroidSdk', 'targetAndroidSdk', 'architecture', 'permissionsList',
+                             'privacyPolicyUrl', 'websiteUrl', 'supportEmail', 'githubRepoUrl',
+                             'promoVideoUrl', 'offlineCapable', 'pageViews', 'updatedAt'
                            ])
                          ) ||
                          // Action 2: Authenticated user download counter increment (+1 on published app)
                          (existing().published == true &&
                            incoming().diff(existing()).affectedKeys().hasOnly(['downloadCount', 'updatedAt']) &&
                            incoming().downloadCount == existing().downloadCount + 1
+                         ) ||
+                         // Action 3: Authenticated user pageView counter increment (+1 on published app)
+                         (existing().published == true &&
+                           incoming().diff(existing()).affectedKeys().hasOnly(['pageViews', 'updatedAt'])
+                         ) ||
+                         // Action 4: Community rating aggregate update when submitting a 1..5 star review
+                         (existing().published == true &&
+                           incoming().diff(existing()).affectedKeys().hasOnly(['ratingSum', 'reviewCount', 'updatedAt'])
                          )
                        );
 
@@ -183,7 +304,7 @@ service cloud.firestore {
       allow delete: if isSignedIn() && isValidId(categoryId) && (isAdmin() || existing().authorUid == request.auth.uid);
     }
 
-    // 3. User Preferences & Bookmarks: /users/{userId}
+    // 3. User Preferences, Library & History: /users/{userId}
     match /users/{userId} {
       allow get: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
       allow list: if isSignedIn() && request.auth.uid == userId;
@@ -196,7 +317,9 @@ service cloud.firestore {
                          'userId', 'darkMode', 'notifyUpdates', 'bookmarkedAppIds', 'createdAt', 'updatedAt'
                        ]) &&
                        incoming().keys().hasOnly([
-                         'userId', 'darkMode', 'notifyUpdates', 'bookmarkedAppIds', 'createdAt', 'updatedAt'
+                         'userId', 'darkMode', 'notifyUpdates', 'bookmarkedAppIds',
+                         'favoriteAppIds', 'recentlyViewedAppIds', 'downloadedAppIds', 'searchHistory',
+                         'createdAt', 'updatedAt'
                        ]) &&
                        isValidUserPreference(incoming());
 
@@ -207,13 +330,201 @@ service cloud.firestore {
                        incoming().userId == existing().userId &&
                        incoming().createdAt == existing().createdAt &&
                        incoming().diff(existing()).affectedKeys().hasOnly([
-                         'darkMode', 'notifyUpdates', 'bookmarkedAppIds', 'updatedAt'
+                         'darkMode', 'notifyUpdates', 'bookmarkedAppIds',
+                         'favoriteAppIds', 'recentlyViewedAppIds', 'downloadedAppIds', 'searchHistory',
+                         'updatedAt'
                        ]);
 
       allow delete: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
     }
 
-    // 4. Trusted Administrators Registry: /admins/{adminUid}
+    // 4. Community Ratings & Reviews: /reviews/{reviewId}
+    match /reviews/{reviewId} {
+      allow get: if isSignedIn() && isValidId(reviewId) && (existing().rating >= 1 || existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().rating >= 1 || existing().userId == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn() &&
+                       isValidId(reviewId) &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().keys().hasAll([
+                         'appId', 'appName', 'userId', 'userName', 'rating', 'comment',
+                         'verifiedInstall', 'helpfulCount', 'developerReply', 'flagged',
+                         'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'appId', 'appName', 'userId', 'userName', 'rating', 'comment',
+                         'verifiedInstall', 'helpfulCount', 'developerReply', 'flagged',
+                         'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidAppReview(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(reviewId) &&
+                       isValidAppReview(incoming()) &&
+                       incoming().appId == existing().appId &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt && (
+                         // Action 1: Reviewer edits their own rating/comment
+                         (existing().userId == request.auth.uid &&
+                           incoming().diff(existing()).affectedKeys().hasOnly([
+                             'rating', 'comment', 'userName', 'verifiedInstall', 'updatedAt'
+                           ])
+                         ) ||
+                         // Action 2: Community helpful vote (+1) or flag for moderation
+                         (incoming().diff(existing()).affectedKeys().hasOnly(['helpfulCount', 'flagged', 'updatedAt'])) ||
+                         // Action 3: Admin/Developer moderation reply
+                         (isAdmin() &&
+                           incoming().diff(existing()).affectedKeys().hasOnly([
+                             'developerReply', 'flagged', 'updatedAt'
+                           ])
+                         )
+                       );
+
+      allow delete: if isSignedIn() && isValidId(reviewId) && (existing().userId == request.auth.uid || isAdmin());
+    }
+
+    // 5. Curated & User Collections: /collections/{collectionId}
+    match /collections/{collectionId} {
+      allow get: if isSignedIn() && isValidId(collectionId) && (existing().isPublic == true || existing().authorUid == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().isPublic == true || existing().authorUid == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn() &&
+                       isValidId(collectionId) &&
+                       incoming().authorUid == request.auth.uid &&
+                       incoming().keys().hasAll([
+                         'title', 'subtitle', 'appIds', 'authorUid', 'isPublic', 'featured', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'title', 'subtitle', 'appIds', 'authorUid', 'isPublic', 'featured', 'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidAppCollection(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(collectionId) &&
+                       isValidAppCollection(incoming()) &&
+                       incoming().authorUid == existing().authorUid &&
+                       incoming().createdAt == existing().createdAt &&
+                       (existing().authorUid == request.auth.uid || isAdmin()) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'title', 'subtitle', 'appIds', 'isPublic', 'featured', 'updatedAt'
+                       ]);
+
+      allow delete: if isSignedIn() && isValidId(collectionId) && (existing().authorUid == request.auth.uid || isAdmin());
+    }
+
+    // 6. Developer Portal Submissions: /submissions/{submissionId}
+    match /submissions/{submissionId} {
+      allow get: if isSignedIn() && isValidId(submissionId) && (existing().submitterUid == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().submitterUid == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn() &&
+                       isValidId(submissionId) &&
+                       incoming().submitterUid == request.auth.uid &&
+                       incoming().keys().hasAll([
+                         'appId', 'appName', 'packageName', 'category', 'developerName',
+                         'description', 'versionName', 'versionCode', 'apkDownloadUrl',
+                         'apkFileSize', 'sha256Checksum', 'releaseNotes', 'privacyPolicyUrl',
+                         'supportEmail', 'status', 'reviewNote', 'submitterUid',
+                         'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'appId', 'appName', 'packageName', 'category', 'developerName',
+                         'description', 'versionName', 'versionCode', 'apkDownloadUrl',
+                         'apkFileSize', 'sha256Checksum', 'releaseNotes', 'privacyPolicyUrl',
+                         'supportEmail', 'status', 'reviewNote', 'submitterUid',
+                         'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidDeveloperSubmission(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(submissionId) &&
+                       isValidDeveloperSubmission(incoming()) &&
+                       incoming().submitterUid == existing().submitterUid &&
+                       incoming().createdAt == existing().createdAt && (
+                         (isAdmin() &&
+                           incoming().diff(existing()).affectedKeys().hasOnly(['status', 'reviewNote', 'updatedAt'])
+                         ) ||
+                         (existing().submitterUid == request.auth.uid &&
+                           incoming().diff(existing()).affectedKeys().hasOnly([
+                             'appName', 'description', 'versionName', 'versionCode',
+                             'apkDownloadUrl', 'apkFileSize', 'sha256Checksum', 'releaseNotes',
+                             'privacyPolicyUrl', 'supportEmail', 'updatedAt'
+                           ])
+                         )
+                       );
+
+      allow delete: if isSignedIn() && isValidId(submissionId) && (existing().submitterUid == request.auth.uid || isAdmin());
+    }
+
+    // 7. Store Notifications & Announcements: /notifications/{notificationId}
+    match /notifications/{notificationId} {
+      allow get: if isSignedIn() && isValidId(notificationId) && (existing().published == true || isAdmin());
+      allow list: if isSignedIn() && (existing().published == true || isAdmin());
+
+      allow create: if isSignedIn() &&
+                       isValidId(notificationId) &&
+                       incoming().authorUid == request.auth.uid &&
+                       incoming().keys().hasAll([
+                         'title', 'body', 'category', 'targetAppId', 'published', 'authorUid', 'createdAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'title', 'body', 'category', 'targetAppId', 'published', 'authorUid', 'createdAt'
+                       ]) &&
+                       isValidStoreNotification(incoming()) &&
+                       (isAdmin() || incoming().authorUid == request.auth.uid);
+
+      allow delete: if isSignedIn() && isValidId(notificationId) && (isAdmin() || existing().authorUid == request.auth.uid);
+    }
+
+    // 8. Security & Moderation Reports: /reports/{reportId}
+    match /reports/{reportId} {
+      allow get: if isSignedIn() && isValidId(reportId) && (existing().reporterUid == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().reporterUid == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn() &&
+                       isValidId(reportId) &&
+                       incoming().reporterUid == request.auth.uid &&
+                       incoming().keys().hasAll([
+                         'targetId', 'targetType', 'reason', 'details', 'reporterUid', 'status', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'targetId', 'targetType', 'reason', 'details', 'reporterUid', 'status', 'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidAppReport(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(reportId) &&
+                       isValidAppReport(incoming()) &&
+                       incoming().reporterUid == existing().reporterUid &&
+                       incoming().createdAt == existing().createdAt &&
+                       isAdmin() &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']);
+
+      allow delete: if isSignedIn() && isValidId(reportId) && isAdmin();
+    }
+
+    // 9. Application Version History: /version_history/{versionId}
+    match /version_history/{versionId} {
+      allow get: if isSignedIn() && isValidId(versionId) && (existing().versionCode >= 1 || isAdmin());
+      allow list: if isSignedIn() && (existing().versionCode >= 1 || isAdmin());
+
+      allow create: if isSignedIn() &&
+                       isValidId(versionId) &&
+                       incoming().authorUid == request.auth.uid &&
+                       incoming().keys().hasAll([
+                         'appId', 'versionName', 'versionCode', 'apkDownloadUrl',
+                         'apkFileSize', 'sha256Checksum', 'changelog', 'authorUid', 'createdAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'appId', 'versionName', 'versionCode', 'apkDownloadUrl',
+                         'apkFileSize', 'sha256Checksum', 'changelog', 'authorUid', 'createdAt'
+                       ]) &&
+                       isValidAppVersionRecord(incoming());
+
+      allow delete: if isSignedIn() && isValidId(versionId) && (isAdmin() || existing().authorUid == request.auth.uid);
+    }
+
+    // 10. Trusted Administrators Registry: /admins/{adminUid}
     match /admins/{adminUid} {
       allow get: if isSignedIn() && isValidId(adminUid) && (request.auth.uid == adminUid || isAdmin());
       allow list: if isSignedIn() && isAdmin();
@@ -235,6 +546,26 @@ service cloud.firestore {
                        incoming().diff(existing()).affectedKeys().hasOnly(['role']);
 
       allow delete: if isSignedIn() && isValidId(adminUid) && isAdmin();
+    }
+
+    // 11. Immutable Audit Logs: /audit_logs/{logId}
+    match /audit_logs/{logId} {
+      allow get: if isSignedIn() && isValidId(logId) && (isAdmin() || existing().actorUid == request.auth.uid);
+      allow list: if isSignedIn() && (isAdmin() || existing().actorUid == request.auth.uid);
+
+      allow create: if isSignedIn() &&
+                       isValidId(logId) &&
+                       incoming().actorUid == request.auth.uid &&
+                       incoming().keys().hasAll([
+                         'action', 'targetType', 'targetId', 'summary', 'actorUid', 'actorEmail', 'createdAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'action', 'targetType', 'targetId', 'summary', 'actorUid', 'actorEmail', 'createdAt'
+                       ]) &&
+                       isValidAuditLogRecord(incoming());
+
+      allow update: if false;
+      allow delete: if isSignedIn() && isValidId(logId) && isAdmin();
     }
   }
 }

@@ -4,24 +4,29 @@ import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.AdminRecord
 import com.example.data.AndroidPackageController
+import com.example.data.ApkArchiveVerificationInfo
+import com.example.data.AppCollection
+import com.example.data.AppReport
+import com.example.data.AppReview
+import com.example.data.AppVersionRecord
+import com.example.data.AuditLogRecord
+import com.example.data.DeveloperSubmission
 import com.example.data.DownloadState
-import com.example.data.InstalledAppStatus
+import com.example.data.InstalledPackageStatus
+import com.example.data.SortOption
 import com.example.data.StoreApp
 import com.example.data.StoreCategory
+import com.example.data.StoreNotification
 import com.example.data.StoreRepository
 import com.example.data.UserPreference
-import com.google.firebase.firestore.FirebaseFirestoreException
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.io.File
 
 sealed interface UiState<out T> {
     data object Loading : UiState<Nothing>
@@ -32,9 +37,51 @@ sealed interface UiState<out T> {
 class StoreViewModel(
     private val repository: StoreRepository,
     private val packageController: AndroidPackageController,
-    val currentUserId: String,
-    val currentUserEmail: String?
+    private val currentUserId: String,
+    private val currentUserEmail: String?
 ) : ViewModel() {
+
+    private val isBootstrappedAdmin: Boolean =
+        currentUserEmail?.equals("zayaanapps@gmail.com", ignoreCase = true) == true
+
+    private val _publishedAppsState = MutableStateFlow<UiState<List<StoreApp>>>(UiState.Loading)
+    val publishedAppsState: StateFlow<UiState<List<StoreApp>>> = _publishedAppsState.asStateFlow()
+
+    private val _adminAppsState = MutableStateFlow<UiState<List<StoreApp>>>(UiState.Loading)
+    val adminAppsState: StateFlow<UiState<List<StoreApp>>> = _adminAppsState.asStateFlow()
+
+    private val _categoriesState = MutableStateFlow<UiState<List<StoreCategory>>>(UiState.Loading)
+    val categoriesState: StateFlow<UiState<List<StoreCategory>>> = _categoriesState.asStateFlow()
+
+    private val _allReviewsState = MutableStateFlow<List<AppReview>>(emptyList())
+    val allReviewsState: StateFlow<List<AppReview>> = _allReviewsState.asStateFlow()
+
+    private val _notificationsState = MutableStateFlow<List<StoreNotification>>(emptyList())
+    val notificationsState: StateFlow<List<StoreNotification>> = _notificationsState.asStateFlow()
+
+    private val _collectionsState = MutableStateFlow<List<AppCollection>>(emptyList())
+    val collectionsState: StateFlow<List<AppCollection>> = _collectionsState.asStateFlow()
+
+    private val _submissionsState = MutableStateFlow<List<DeveloperSubmission>>(emptyList())
+    val submissionsState: StateFlow<List<DeveloperSubmission>> = _submissionsState.asStateFlow()
+
+    private val _reportsState = MutableStateFlow<List<AppReport>>(emptyList())
+    val reportsState: StateFlow<List<AppReport>> = _reportsState.asStateFlow()
+
+    private val _versionHistoryState = MutableStateFlow<List<AppVersionRecord>>(emptyList())
+    val versionHistoryState: StateFlow<List<AppVersionRecord>> = _versionHistoryState.asStateFlow()
+
+    private val _adminRecordsState = MutableStateFlow<List<AdminRecord>>(emptyList())
+    val adminRecordsState: StateFlow<List<AdminRecord>> = _adminRecordsState.asStateFlow()
+
+    private val _auditLogsState = MutableStateFlow<List<AuditLogRecord>>(emptyList())
+    val auditLogsState: StateFlow<List<AuditLogRecord>> = _auditLogsState.asStateFlow()
+
+    private val _isTrustedAdmin = MutableStateFlow(isBootstrappedAdmin)
+    val isTrustedAdmin: StateFlow<Boolean> = _isTrustedAdmin.asStateFlow()
+
+    private val _userPreferencesState = MutableStateFlow<UserPreference?>(null)
+    val userPreferencesState: StateFlow<UserPreference?> = _userPreferencesState.asStateFlow()
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
@@ -42,11 +89,26 @@ class StoreViewModel(
     private val _selectedCategory = MutableStateFlow("All")
     val selectedCategory: StateFlow<String> = _selectedCategory.asStateFlow()
 
+    private val _selectedSubcategory = MutableStateFlow("All")
+    val selectedSubcategory: StateFlow<String> = _selectedSubcategory.asStateFlow()
+
+    private val _selectedSortOption = MutableStateFlow(SortOption.RELEVANCE)
+    val selectedSortOption: StateFlow<SortOption> = _selectedSortOption.asStateFlow()
+
+    private val _installedStatuses = MutableStateFlow<Map<String, InstalledPackageStatus>>(emptyMap())
+    val installedStatuses: StateFlow<Map<String, InstalledPackageStatus>> = _installedStatuses.asStateFlow()
+
     private val _downloadStates = MutableStateFlow<Map<String, DownloadState>>(emptyMap())
     val downloadStates: StateFlow<Map<String, DownloadState>> = _downloadStates.asStateFlow()
 
-    private val _installedStatuses = MutableStateFlow<Map<String, InstalledAppStatus>>(emptyMap())
-    val installedStatuses: StateFlow<Map<String, InstalledAppStatus>> = _installedStatuses.asStateFlow()
+    private val _downloadedApkFiles = MutableStateFlow<List<File>>(emptyList())
+    val downloadedApkFiles: StateFlow<List<File>> = _downloadedApkFiles.asStateFlow()
+
+    private val _cachedApkVerifications = MutableStateFlow<List<ApkArchiveVerificationInfo>>(emptyList())
+    val cachedApkVerifications: StateFlow<List<ApkArchiveVerificationInfo>> = _cachedApkVerifications.asStateFlow()
+
+    private val _comparisonAppIds = MutableStateFlow<List<String>>(emptyList())
+    val comparisonAppIds: StateFlow<List<String>> = _comparisonAppIds.asStateFlow()
 
     private val _statusBannerMessage = MutableStateFlow<String?>(null)
     val statusBannerMessage: StateFlow<String?> = _statusBannerMessage.asStateFlow()
@@ -54,128 +116,348 @@ class StoreViewModel(
     private val _storeSelfUpdateApp = MutableStateFlow<StoreApp?>(null)
     val storeSelfUpdateApp: StateFlow<StoreApp?> = _storeSelfUpdateApp.asStateFlow()
 
-    private var hasSeededCatalogInSession = false
+    private var hasAutoSeededEmptyStore = false
+    private var notifiedUpdatePackages = mutableSetOf<String>()
+    private var notifiedAnnouncementIds = mutableSetOf<String>()
 
     init {
-        checkStoreSelfUpdateFromGitHub()
+        observeStoreStreams()
+        checkGitHubSelfUpdate()
+        refreshCachedApks()
     }
 
-    fun checkStoreSelfUpdateFromGitHub() {
+    private fun observeStoreStreams() {
         viewModelScope.launch {
-            val githubRelease = packageController.fetchLatestGitHubStoreRelease()
-            if (githubRelease != null) {
-                val localSelfStatus = packageController.getInstalledStatus(
-                    "com.zayaanapps.store",
-                    githubRelease.versionCode
-                )
-                if (localSelfStatus.updateAvailable) {
-                    _storeSelfUpdateApp.value = githubRelease
+            repository.observePublishedApps()
+                .catch { e ->
+                    Log.e("StoreViewModel", "Error observing published apps", e)
+                    _publishedAppsState.value = UiState.Error(e.localizedMessage ?: "Failed to load catalog")
                 }
-            }
-        }
-    }
-
-    val publishedAppsState: StateFlow<UiState<List<StoreApp>>> = repository.observePublishedApps()
-        .map<List<StoreApp>, UiState<List<StoreApp>>> { apps ->
-            // Scan installed statuses whenever catalog updates
-            val statusMap = packageController.scanCatalogStatus(apps)
-            _installedStatuses.value = statusMap
-
-            // Check if Zayaan Apps Store (com.zayaanapps.store) has a newer version in Firestore
-            val storeCatalogEntry = apps.firstOrNull { it.packageName == "com.zayaanapps.store" }
-            if (storeCatalogEntry != null) {
-                val selfStatus = statusMap["com.zayaanapps.store"]
-                val currentCandidate = _storeSelfUpdateApp.value
-                if (selfStatus?.updateAvailable == true) {
-                    if (currentCandidate == null || storeCatalogEntry.versionCode >= currentCandidate.versionCode) {
-                        _storeSelfUpdateApp.value = storeCatalogEntry
+                .collect { result ->
+                    result.onSuccess { apps ->
+                        _publishedAppsState.value = UiState.Success(apps)
+                        refreshInstalledPackages(apps)
+                        if (apps.isEmpty() && !hasAutoSeededEmptyStore) {
+                            hasAutoSeededEmptyStore = true
+                            seedInitialCatalogIfEmpty()
+                        }
+                    }.onFailure { e ->
+                        _publishedAppsState.value = UiState.Error(e.localizedMessage ?: "Failed to load catalog")
                     }
                 }
-            }
+        }
 
-            if (apps.isEmpty() && !hasSeededCatalogInSession) {
-                hasSeededCatalogInSession = true
-                viewModelScope.launch {
-                    repository.seedOfficialZayaanCatalog()
+        viewModelScope.launch {
+            repository.observeAllAppsForAdmin()
+                .catch { e ->
+                    Log.e("StoreViewModel", "Error observing admin apps", e)
                 }
-            }
-            UiState.Success(apps)
+                .collect { result ->
+                    result.onSuccess { apps ->
+                        _adminAppsState.value = UiState.Success(apps)
+                    }.onFailure { e ->
+                        _adminAppsState.value = UiState.Error(e.localizedMessage ?: "Admin access restricted")
+                    }
+                }
         }
-        .catch { error ->
-            val firestoreError = generateSequence(error) { it.cause }
-                .filterIsInstance<FirebaseFirestoreException>()
-                .firstOrNull()
-            if (firestoreError == null && error is CancellationException) throw error
-            val rootError = firestoreError ?: error
-            Log.w("StoreVM", "Error observing published apps", rootError)
-            emit(UiState.Error(rootError.message ?: "Failed to load application catalog"))
-        }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000L),
-            initialValue = UiState.Loading
-        )
 
-    val adminAppsState: StateFlow<UiState<List<StoreApp>>> = combine(
-        repository.observePublishedApps(),
-        repository.observeMyAuthoredApps(currentUserId)
-    ) { published, authored ->
-        val merged = (published + authored)
-            .associateBy { it.appId.ifBlank { it.docId } }
-            .values
-            .sortedByDescending { it.updatedAt?.seconds ?: 0L }
-        UiState.Success(merged) as UiState<List<StoreApp>>
+        viewModelScope.launch {
+            repository.observeCategories()
+                .catch { e ->
+                    Log.e("StoreViewModel", "Error observing categories", e)
+                }
+                .collect { result ->
+                    result.onSuccess { cats ->
+                        _categoriesState.value = UiState.Success(cats)
+                    }
+                }
+        }
+
+        viewModelScope.launch {
+            repository.observeAllReviews()
+                .catch { e ->
+                    Log.e("StoreViewModel", "Error observing reviews", e)
+                }
+                .collect { result ->
+                    result.onSuccess { reviews ->
+                        _allReviewsState.value = reviews
+                    }
+                }
+        }
+
+        viewModelScope.launch {
+            repository.observeNotifications()
+                .catch { e ->
+                    Log.e("StoreViewModel", "Error observing notifications", e)
+                }
+                .collect { result ->
+                    result.onSuccess { notifications ->
+                        _notificationsState.value = notifications
+                        val notifyEnabled = _userPreferencesState.value?.notifyUpdates ?: true
+                        if (notifyEnabled) {
+                            notifications.take(2).forEach { notif ->
+                                if (notif.id.isNotBlank() && notif.id !in notifiedAnnouncementIds) {
+                                    notifiedAnnouncementIds.add(notif.id)
+                                    packageController.postStoreAnnouncementNotification(notif)
+                                }
+                            }
+                        }
+                    }
+                }
+        }
+
+        viewModelScope.launch {
+            repository.observeCollections(isAdmin = isBootstrappedAdmin)
+                .catch { e ->
+                    Log.e("StoreViewModel", "Error observing collections", e)
+                }
+                .collect { result ->
+                    result.onSuccess { cols ->
+                        _collectionsState.value = cols
+                    }
+                }
+        }
+
+        viewModelScope.launch {
+            repository.observeDeveloperSubmissions(currentUserId, isBootstrappedAdmin)
+                .catch { e ->
+                    Log.e("StoreViewModel", "Error observing submissions", e)
+                }
+                .collect { result ->
+                    result.onSuccess { subs ->
+                        _submissionsState.value = subs
+                    }
+                }
+        }
+
+        viewModelScope.launch {
+            repository.observeReports(currentUserId, isBootstrappedAdmin)
+                .catch { e ->
+                    Log.e("StoreViewModel", "Error observing reports", e)
+                }
+                .collect { result ->
+                    result.onSuccess { reps ->
+                        _reportsState.value = reps
+                    }
+                }
+        }
+
+        viewModelScope.launch {
+            repository.observeVersionHistory()
+                .catch { e ->
+                    Log.e("StoreViewModel", "Error observing version history", e)
+                }
+                .collect { result ->
+                    result.onSuccess { versions ->
+                        _versionHistoryState.value = versions
+                    }
+                }
+        }
+
+        viewModelScope.launch {
+            repository.observeAdminRecords(currentUserId, isBootstrappedAdmin)
+                .catch { e ->
+                    Log.e("StoreViewModel", "Error observing admin records", e)
+                }
+                .collect { result ->
+                    result.onSuccess { records ->
+                        _adminRecordsState.value = records
+                        _isTrustedAdmin.value = isBootstrappedAdmin || records.any { it.userId == currentUserId }
+                    }
+                }
+        }
+
+        viewModelScope.launch {
+            repository.observeAuditLogs(currentUserId, isBootstrappedAdmin)
+                .catch { e ->
+                    Log.e("StoreViewModel", "Error observing audit logs", e)
+                }
+                .collect { result ->
+                    result.onSuccess { logs ->
+                        _auditLogsState.value = logs
+                    }
+                }
+        }
+
+        viewModelScope.launch {
+            repository.observeUserPreferences(currentUserId)
+                .catch { e ->
+                    Log.e("StoreViewModel", "Error observing user prefs", e)
+                }
+                .collect { result ->
+                    result.onSuccess { pref ->
+                        _userPreferencesState.value = pref
+                    }
+                }
+        }
     }
-        .catch { error ->
-            val firestoreError = generateSequence(error) { it.cause }
-                .filterIsInstance<FirebaseFirestoreException>()
-                .firstOrNull()
-            if (firestoreError == null && error is CancellationException) throw error
-            val rootError = firestoreError ?: error
-            emit(UiState.Error(rootError.message ?: "Failed to load admin catalog"))
-        }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000L),
-            initialValue = UiState.Loading
-        )
 
-    val categoriesState: StateFlow<UiState<List<StoreCategory>>> = repository.observeCategories()
-        .map<List<StoreCategory>, UiState<List<StoreCategory>>> { UiState.Success(it) }
-        .catch { error ->
-            val firestoreError = generateSequence(error) { it.cause }
-                .filterIsInstance<FirebaseFirestoreException>()
-                .firstOrNull()
-            if (firestoreError == null && error is CancellationException) throw error
-            val rootError = firestoreError ?: error
-            emit(UiState.Error(rootError.message ?: "Failed to load categories"))
+    private fun logAudit(action: String, targetType: String, targetId: String, summary: String) {
+        viewModelScope.launch {
+            repository.recordAuditLog(
+                action = action,
+                targetType = targetType,
+                targetId = targetId,
+                summary = summary,
+                actorUid = currentUserId,
+                actorEmail = currentUserEmail ?: ""
+            )
         }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000L),
-            initialValue = UiState.Loading
-        )
+    }
 
-    val userPreferencesState: StateFlow<UserPreference?> = repository.observeUserPreferences(currentUserId)
-        .catch { error ->
-            val firestoreError = generateSequence(error) { it.cause }
-                .filterIsInstance<FirebaseFirestoreException>()
-                .firstOrNull()
-            if (firestoreError == null && error is CancellationException) throw error
-            emit(null)
+    private fun seedInitialCatalogIfEmpty() {
+        viewModelScope.launch {
+            repository.seedOfficialZayaanCatalog(currentUserId)
+                .onSuccess { count ->
+                    if (count > 0) {
+                        _statusBannerMessage.value = "Loaded $count official Zayaan Apps into the store."
+                        logAudit("CATALOG_SEEDED", "CATALOG", "starter-catalog", "Auto-seeded $count starter apps.")
+                    }
+                }
+                .onFailure { e ->
+                    Log.w("StoreViewModel", "Auto-seed skipped: ${e.message}")
+                }
         }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000L),
-            initialValue = null
-        )
+    }
+
+    fun refreshCachedApks() {
+        val files = packageController.listDownloadedApkFiles()
+        _downloadedApkFiles.value = files
+        _cachedApkVerifications.value = files.map { packageController.inspectApkArchiveInfo(it) }
+    }
+
+    fun deleteCachedApk(apkFilePath: String) {
+        if (packageController.deleteDownloadedApkFile(apkFilePath)) {
+            refreshCachedApks()
+            _statusBannerMessage.value = "Removed cached APK package from local storage."
+        }
+    }
+
+    fun cancelActiveDownload(appId: String) {
+        packageController.cancelDownload(appId)
+    }
+
+    private fun syncCurrentPreferences(updatedPref: UserPreference) {
+        _userPreferencesState.value = updatedPref
+        viewModelScope.launch {
+            repository.saveUserPreferences(
+                userId = currentUserId,
+                darkMode = updatedPref.darkMode,
+                notifyUpdates = updatedPref.notifyUpdates,
+                bookmarkedAppIds = updatedPref.bookmarkedAppIds,
+                favoriteAppIds = updatedPref.favoriteAppIds,
+                recentlyViewedAppIds = updatedPref.recentlyViewedAppIds,
+                downloadedAppIds = updatedPref.downloadedAppIds,
+                searchHistory = updatedPref.searchHistory
+            )
+        }
+    }
 
     fun updateSearchQuery(query: String) {
         _searchQuery.value = query
     }
 
+    fun submitSearchQuery(query: String) {
+        val trimmed = query.trim()
+        _searchQuery.value = trimmed
+        if (trimmed.length >= 2) {
+            recordSearchQuery(trimmed)
+        }
+    }
+
+    fun recordSearchQuery(query: String) {
+        val trimmed = query.trim().take(60)
+        if (trimmed.isBlank()) return
+        val currentPref = _userPreferencesState.value ?: UserPreference(userId = currentUserId)
+        val updatedHistory = (listOf(trimmed) + currentPref.searchHistory.filterNot {
+            it.equals(trimmed, ignoreCase = true)
+        }).take(20)
+        syncCurrentPreferences(currentPref.copy(searchHistory = updatedHistory))
+    }
+
+    fun clearSearchHistory() {
+        val currentPref = _userPreferencesState.value ?: UserPreference(userId = currentUserId)
+        syncCurrentPreferences(currentPref.copy(searchHistory = emptyList()))
+    }
+
+    fun recordRecentlyViewedApp(appId: String) {
+        if (appId.isBlank()) return
+        val currentPref = _userPreferencesState.value ?: UserPreference(userId = currentUserId)
+        val updatedRecent = (listOf(appId) + currentPref.recentlyViewedAppIds.filterNot { it == appId }).take(30)
+        syncCurrentPreferences(currentPref.copy(recentlyViewedAppIds = updatedRecent))
+
+        val published = (_publishedAppsState.value as? UiState.Success)?.data ?: emptyList()
+        val matchedApp = published.firstOrNull { (it.appId.ifBlank { it.docId }) == appId }
+        if (matchedApp != null && matchedApp.published) {
+            viewModelScope.launch {
+                repository.incrementPageViewCount(matchedApp.docId.ifBlank { matchedApp.appId }, matchedApp.pageViews)
+            }
+        }
+    }
+
+    private fun recordDownloadedAppId(appId: String) {
+        if (appId.isBlank()) return
+        val currentPref = _userPreferencesState.value ?: UserPreference(userId = currentUserId)
+        val updatedDownloaded = (listOf(appId) + currentPref.downloadedAppIds.filterNot { it == appId }).take(50)
+        syncCurrentPreferences(currentPref.copy(downloadedAppIds = updatedDownloaded))
+    }
+
+    fun toggleBookmark(appId: String) {
+        val currentPref = _userPreferencesState.value ?: UserPreference(userId = currentUserId)
+        val updatedBookmarks = if (appId in currentPref.bookmarkedAppIds) {
+            currentPref.bookmarkedAppIds - appId
+        } else {
+            (listOf(appId) + currentPref.bookmarkedAppIds).distinct().take(50)
+        }
+        syncCurrentPreferences(currentPref.copy(bookmarkedAppIds = updatedBookmarks))
+    }
+
+    fun toggleFavorite(appId: String) {
+        val currentPref = _userPreferencesState.value ?: UserPreference(userId = currentUserId)
+        val updatedFavorites = if (appId in currentPref.favoriteAppIds) {
+            currentPref.favoriteAppIds - appId
+        } else {
+            (listOf(appId) + currentPref.favoriteAppIds).distinct().take(50)
+        }
+        syncCurrentPreferences(currentPref.copy(favoriteAppIds = updatedFavorites))
+    }
+
+    fun toggleCompareApp(appId: String) {
+        if (appId.isBlank()) return
+        val current = _comparisonAppIds.value
+        _comparisonAppIds.value = if (appId in current) {
+            current - appId
+        } else {
+            if (current.size >= 4) {
+                _statusBannerMessage.value = "Comparing up to 4 applications side-by-side."
+                (current.drop(1) + appId).distinct()
+            } else {
+                (current + appId).distinct()
+            }
+        }
+    }
+
+    fun clearComparisonApps() {
+        _comparisonAppIds.value = emptyList()
+    }
+
     fun selectCategory(category: String) {
         _selectedCategory.value = category
+    }
+
+    fun selectSubcategory(subcategory: String) {
+        _selectedSubcategory.value = subcategory
+    }
+
+    fun selectSortOption(sortOption: SortOption) {
+        _selectedSortOption.value = sortOption
+    }
+
+    fun resetFilters() {
+        _searchQuery.value = ""
+        _selectedCategory.value = "All"
+        _selectedSubcategory.value = "All"
+        _selectedSortOption.value = SortOption.RELEVANCE
     }
 
     fun clearBannerMessage() {
@@ -183,214 +465,591 @@ class StoreViewModel(
     }
 
     fun refreshInstalledAppsStatus() {
-        val currentState = publishedAppsState.value
-        if (currentState is UiState.Success) {
-            val statusMap = packageController.scanCatalogStatus(currentState.data)
-            _installedStatuses.value = statusMap
-            val updatable = currentState.data.filter { app ->
-                statusMap[app.packageName]?.updateAvailable == true
+        val currentApps = (_publishedAppsState.value as? UiState.Success)?.data ?: emptyList()
+        refreshInstalledPackages(currentApps)
+        checkGitHubSelfUpdate()
+        refreshCachedApks()
+        _statusBannerMessage.value = "Scanned device packages & checked GitHub for store updates."
+    }
+
+    private fun checkGitHubSelfUpdate() {
+        viewModelScope.launch {
+            val remoteRelease = packageController.fetchLatestGitHubStoreRelease()
+            if (remoteRelease != null) {
+                val selfStatus = packageController.inspectPackage(
+                    packageName = remoteRelease.packageName,
+                    remoteVersionCode = remoteRelease.versionCode,
+                    remoteVersionName = remoteRelease.versionName
+                )
+                if (selfStatus.updateAvailable) {
+                    _storeSelfUpdateApp.value = remoteRelease
+                    if ("com.zayaanapps.store" !in notifiedUpdatePackages) {
+                        notifiedUpdatePackages.add("com.zayaanapps.store")
+                        packageController.postUpdateNotification(remoteRelease)
+                    }
+                }
             }
-            if (updatable.isNotEmpty() && (userPreferencesState.value?.notifyUpdates != false)) {
+        }
+    }
+
+    private fun refreshInstalledPackages(apps: List<StoreApp>) {
+        val statusMap = packageController.inspectCatalogPackages(apps)
+        _installedStatuses.value = statusMap
+
+        val selfApp = apps.firstOrNull { it.packageName == "com.zayaanapps.store" }
+        val selfStatus = statusMap["com.zayaanapps.store"]
+        if (selfApp != null && selfStatus?.updateAvailable == true) {
+            _storeSelfUpdateApp.value = selfApp
+        }
+
+        val notifyEnabled = _userPreferencesState.value?.notifyUpdates ?: true
+        if (notifyEnabled) {
+            val updatable = apps.filter { app ->
+                val status = statusMap[app.packageName]
+                status != null && status.updateAvailable && app.packageName !in notifiedUpdatePackages
+            }
+            if (updatable.isNotEmpty()) {
+                updatable.forEach { notifiedUpdatePackages.add(it.packageName) }
                 packageController.notifyAvailableUpdates(updatable)
             }
-            _statusBannerMessage.value = "Scanned ${currentState.data.size} catalog packages: ${updatable.size} update(s) available."
         }
     }
 
-    fun startApkDownload(app: StoreApp) {
-        val appId = app.appId.ifBlank { app.docId }
+    fun startApkDownload(app: StoreApp, autoPromptInstallContext: Context? = null) {
+        val key = app.appId.ifBlank { app.docId }
+        recordDownloadedAppId(key)
         viewModelScope.launch {
-            repository.incrementDownloadCount(appId)
-            packageController.downloadApk(app).collect { state ->
-                _downloadStates.value = _downloadStates.value.toMutableMap().apply {
-                    put(appId, state)
-                }
+            repository.incrementDownloadCount(app.docId.ifBlank { app.appId }, app.downloadCount)
+            packageController.downloadApkWithProgress(app).collect { state ->
+                _downloadStates.value = _downloadStates.value + (key to state)
                 if (state is DownloadState.ReadyToInstall) {
-                    _statusBannerMessage.value = "Downloaded ${app.appName} v${app.versionName}. Tap 'Install APK' to launch Android Package Installer."
-                } else if (state is DownloadState.Failed) {
-                    _statusBannerMessage.value = state.message
-                }
-            }
-        }
-    }
-
-    fun installDownloadedApk(activityContext: Context, apkFilePath: String) {
-        val res = packageController.launchApkInstaller(activityContext, apkFilePath)
-        if (res.isFailure) {
-            _statusBannerMessage.value = res.exceptionOrNull()?.localizedMessage
-                ?: "Unable to launch Android Package Installer."
-        }
-    }
-
-    fun openInstalledApp(activityContext: Context, packageName: String) {
-        val res = packageController.openInstalledApp(activityContext, packageName)
-        if (res.isFailure) {
-            _statusBannerMessage.value = "Could not open $packageName directly."
-        }
-    }
-
-    fun openExternalDownloadUrl(activityContext: Context, app: StoreApp) {
-        val appId = app.appId.ifBlank { app.docId }
-        viewModelScope.launch {
-            repository.incrementDownloadCount(appId)
-        }
-        val res = packageController.openDownloadUrlInBrowser(activityContext, app.apkDownloadUrl)
-        if (res.isFailure) {
-            _statusBannerMessage.value = "Unable to open browser for URL: ${app.apkDownloadUrl}"
-        }
-    }
-
-    fun createOrUpdateApp(app: StoreApp, isEdit: Boolean, onSuccess: () -> Unit = {}) {
-        viewModelScope.launch {
-            val result = if (isEdit) {
-                repository.updateApp(app)
-            } else {
-                repository.createApp(app).map { }
-            }
-            result.fold(
-                onSuccess = {
-                    _statusBannerMessage.value = if (isEdit) {
-                        "Updated '${app.appName}' (v${app.versionName}) in Cloud Firestore."
-                    } else {
-                        "Published '${app.appName}' to Zayaan Apps Store (Android & Web)."
+                    refreshCachedApks()
+                    val verifyNote = buildString {
+                        if (state.checksumVerified) append(" • SHA-256 Verified")
+                        if (state.signingCertSha256.isNotBlank() && state.signatureMatchesInstalled) {
+                            append(" • Cert Signature Verified")
+                        }
                     }
-                    onSuccess()
-                },
-                onFailure = { err ->
-                    _statusBannerMessage.value = "Save failed: ${err.localizedMessage ?: "Permission or validation error"}"
+                    _statusBannerMessage.value = "${app.appName} v${app.versionName} downloaded$verifyNote. Tap 'Install APK' to launch Android Package Installer."
+                    if (autoPromptInstallContext != null) {
+                        installDownloadedApk(autoPromptInstallContext, state.apkFilePath)
+                    }
+                } else if (state is DownloadState.Failed) {
+                    _statusBannerMessage.value = state.errorMessage
                 }
-            )
+            }
+        }
+    }
+
+    fun updateAllAvailableApps(context: Context, updatableApps: List<StoreApp>) {
+        if (updatableApps.isEmpty()) {
+            _statusBannerMessage.value = "All installed applications are already up to date."
+            return
+        }
+        viewModelScope.launch {
+            _statusBannerMessage.value = "Update All started for ${updatableApps.size} app(s)..."
+            for (app in updatableApps) {
+                val key = app.appId.ifBlank { app.docId }
+                recordDownloadedAppId(key)
+                repository.incrementDownloadCount(app.docId.ifBlank { app.appId }, app.downloadCount)
+                packageController.downloadApkWithProgress(app).collect { state ->
+                    _downloadStates.value = _downloadStates.value + (key to state)
+                    if (state is DownloadState.ReadyToInstall) {
+                        refreshCachedApks()
+                        installDownloadedApk(context, state.apkFilePath)
+                    } else if (state is DownloadState.Failed) {
+                        _statusBannerMessage.value = "Failed updating ${app.appName}: ${state.errorMessage}"
+                    }
+                }
+            }
+            _statusBannerMessage.value = "Downloaded ${updatableApps.size} update(s). Confirm installation in the Android system dialog."
+        }
+    }
+
+    fun installDownloadedApk(context: Context, apkFilePath: String) {
+        if (!packageController.canRequestPackageInstalls()) {
+            _statusBannerMessage.value = "Grant 'Install Unknown Apps' permission in Android Settings to install APK updates."
+            packageController.openManageUnknownAppSourcesSettings(context)
+            return
+        }
+        packageController.launchApkInstaller(context, apkFilePath)
+            .onFailure { e ->
+                _statusBannerMessage.value = "Installer error: ${e.localizedMessage}"
+            }
+    }
+
+    fun openInstalledApp(context: Context, packageName: String) {
+        packageController.openInstalledApp(context, packageName)
+            .onFailure {
+                _statusBannerMessage.value = "Could not launch $packageName on this device."
+            }
+    }
+
+    fun openExternalDownloadUrl(context: Context, app: StoreApp) {
+        val key = app.appId.ifBlank { app.docId }
+        if (key != "portal") {
+            recordDownloadedAppId(key)
+            viewModelScope.launch {
+                repository.incrementDownloadCount(app.docId.ifBlank { app.appId }, app.downloadCount)
+            }
+        }
+        packageController.openDownloadUrlInBrowser(context, app.apkDownloadUrl)
+            .onFailure { e ->
+                _statusBannerMessage.value = "Could not open URL: ${e.localizedMessage}"
+            }
+    }
+
+    fun shareApp(context: Context, app: StoreApp) {
+        packageController.shareApplicationLink(context, app)
+    }
+
+    fun updateDarkModePreference(enabled: Boolean) {
+        val currentPref = _userPreferencesState.value ?: UserPreference(userId = currentUserId)
+        syncCurrentPreferences(currentPref.copy(darkMode = enabled))
+    }
+
+    fun updateNotificationPreference(enabled: Boolean) {
+        val currentPref = _userPreferencesState.value ?: UserPreference(userId = currentUserId)
+        syncCurrentPreferences(currentPref.copy(notifyUpdates = enabled))
+    }
+
+    // Ratings, Reviews & Moderation
+    fun submitAppReview(app: StoreApp, rating: Long, comment: String) {
+        val isVerifiedInstall = _installedStatuses.value[app.packageName]?.isInstalled == true
+        val displayName = currentUserEmail?.substringBefore("@")?.replaceFirstChar { it.uppercase() }
+            ?: "Zayaan User"
+        viewModelScope.launch {
+            repository.submitOrUpdateReview(
+                app = app,
+                userId = currentUserId,
+                userName = displayName,
+                rating = rating,
+                comment = comment,
+                verifiedInstall = isVerifiedInstall
+            ).onSuccess {
+                _statusBannerMessage.value = "Published your $rating★ review for ${app.appName}."
+            }.onFailure { e ->
+                _statusBannerMessage.value = "Could not post review: ${e.localizedMessage}"
+            }
+        }
+    }
+
+    fun voteReviewHelpful(review: AppReview) {
+        viewModelScope.launch {
+            repository.voteReviewHelpful(review)
+                .onSuccess {
+                    _statusBannerMessage.value = "Marked ${review.userName}'s review as helpful (+1)."
+                }
+                .onFailure { e ->
+                    _statusBannerMessage.value = "Vote failed: ${e.localizedMessage}"
+                }
+        }
+    }
+
+    fun flagReviewForModeration(review: AppReview, flagged: Boolean = true) {
+        viewModelScope.launch {
+            repository.setReviewFlagged(review, flagged)
+                .onSuccess {
+                    _statusBannerMessage.value = if (flagged) {
+                        "Review flagged for moderator review."
+                    } else {
+                        "Cleared moderation flag on review."
+                    }
+                    if (!flagged) {
+                        logAudit("REVIEW_APPROVED", "REVIEW", review.id, "Cleared moderation flag on review by ${review.userName} for ${review.appName}.")
+                    }
+                }
+                .onFailure { e ->
+                    _statusBannerMessage.value = "Moderation action failed: ${e.localizedMessage}"
+                }
+        }
+    }
+
+    fun replyToReviewAsAdmin(review: AppReview, replyText: String) {
+        viewModelScope.launch {
+            repository.replyToReviewAsAdmin(review, replyText)
+                .onSuccess {
+                    _statusBannerMessage.value = "Posted developer reply to ${review.userName}."
+                    logAudit("REVIEW_REPLIED", "REVIEW", review.id, "Posted official developer reply on ${review.appName}.")
+                }
+                .onFailure { e ->
+                    _statusBannerMessage.value = "Reply failed: ${e.localizedMessage}"
+                }
+        }
+    }
+
+    fun deleteReview(review: AppReview) {
+        viewModelScope.launch {
+            repository.deleteReview(review.id)
+                .onSuccess {
+                    _statusBannerMessage.value = "Deleted review by ${review.userName}."
+                    logAudit("REVIEW_DELETED", "REVIEW", review.id, "Deleted review by ${review.userName} on ${review.appName}.")
+                }
+                .onFailure { e ->
+                    _statusBannerMessage.value = "Delete review failed: ${e.localizedMessage}"
+                }
+        }
+    }
+
+    // Store Release & Update Announcements
+    fun publishStoreAnnouncement(title: String, body: String, category: String, targetAppId: String) {
+        viewModelScope.launch {
+            repository.createStoreNotification(
+                title = title,
+                body = body,
+                category = category,
+                targetAppId = targetAppId,
+                authorUid = currentUserId
+            ).onSuccess {
+                _statusBannerMessage.value = "Broadcasted store notification: '$title'."
+                logAudit("NOTIFICATION_BROADCAST", "NOTIFICATION", targetAppId.ifBlank { "store" }, "Broadcasted [$category] '$title'.")
+            }.onFailure { e ->
+                _statusBannerMessage.value = "Failed to broadcast notification: ${e.localizedMessage}"
+            }
+        }
+    }
+
+    fun deleteStoreAnnouncement(notificationId: String) {
+        viewModelScope.launch {
+            repository.deleteStoreNotification(notificationId)
+                .onSuccess {
+                    _statusBannerMessage.value = "Removed announcement."
+                    logAudit("NOTIFICATION_DELETED", "NOTIFICATION", notificationId, "Deleted store notification $notificationId.")
+                }
+        }
+    }
+
+    // Curated Collections & Banners
+    fun saveCollection(
+        collectionId: String,
+        title: String,
+        subtitle: String,
+        appIds: List<String>,
+        isPublic: Boolean,
+        featured: Boolean
+    ) {
+        viewModelScope.launch {
+            repository.upsertCollection(
+                collectionId = collectionId,
+                title = title,
+                subtitle = subtitle,
+                appIds = appIds,
+                isPublic = isPublic,
+                featured = featured,
+                authorUid = currentUserId
+            ).onSuccess {
+                _statusBannerMessage.value = "Saved curated collection '$title'."
+                logAudit("COLLECTION_SAVED", "COLLECTION", title, "Saved collection '$title' (${appIds.size} apps).")
+            }.onFailure { e ->
+                _statusBannerMessage.value = "Failed to save collection: ${e.localizedMessage}"
+            }
+        }
+    }
+
+    fun deleteCollection(collectionId: String) {
+        viewModelScope.launch {
+            repository.deleteCollection(collectionId)
+                .onSuccess {
+                    _statusBannerMessage.value = "Deleted collection."
+                    logAudit("COLLECTION_DELETED", "COLLECTION", collectionId, "Deleted collection $collectionId.")
+                }
+                .onFailure { e ->
+                    _statusBannerMessage.value = "Failed to delete collection: ${e.localizedMessage}"
+                }
+        }
+    }
+
+    // Developer Submissions & Approval Workflow
+    fun submitDeveloperApplication(submission: DeveloperSubmission) {
+        viewModelScope.launch {
+            repository.createDeveloperSubmission(submission, currentUserId)
+                .onSuccess {
+                    _statusBannerMessage.value = "Submitted '${submission.appName}' (v${submission.versionName}) to the Zayaan Developer Portal for review."
+                    logAudit("SUBMISSION_CREATED", "SUBMISSION", submission.appId.ifBlank { submission.appName }, "Developer submitted '${submission.appName}' v${submission.versionName}.")
+                }
+                .onFailure { e ->
+                    _statusBannerMessage.value = "Submission failed: ${e.localizedMessage}"
+                }
+        }
+    }
+
+    fun reviewDeveloperSubmission(submission: DeveloperSubmission, newStatus: String, reviewNote: String) {
+        viewModelScope.launch {
+            repository.reviewDeveloperSubmission(submission, newStatus, reviewNote, currentUserId)
+                .onSuccess {
+                    _statusBannerMessage.value = if (newStatus == "APPROVED") {
+                        "Approved '${submission.appName}' (v${submission.versionName}) and published to Zayaan Apps catalog!"
+                    } else {
+                        "Marked submission '${submission.appName}' as $newStatus."
+                    }
+                    logAudit(
+                        action = "SUBMISSION_$newStatus",
+                        targetType = "SUBMISSION",
+                        targetId = submission.id,
+                        summary = "$newStatus submission '${submission.appName}' v${submission.versionName}. Note: $reviewNote"
+                    )
+                }
+                .onFailure { e ->
+                    _statusBannerMessage.value = "Review action failed: ${e.localizedMessage}"
+                }
+        }
+    }
+
+    fun deleteDeveloperSubmission(submissionId: String) {
+        viewModelScope.launch {
+            repository.deleteDeveloperSubmission(submissionId)
+                .onSuccess {
+                    _statusBannerMessage.value = "Removed submission entry."
+                    logAudit("SUBMISSION_DELETED", "SUBMISSION", submissionId, "Deleted submission $submissionId.")
+                }
+                .onFailure { e ->
+                    _statusBannerMessage.value = "Could not delete submission: ${e.localizedMessage}"
+                }
+        }
+    }
+
+    // Security & Content Reports
+    fun submitReport(targetId: String, targetType: String, reason: String, details: String) {
+        viewModelScope.launch {
+            repository.submitReport(targetId, targetType, reason, details, currentUserId)
+                .onSuccess {
+                    _statusBannerMessage.value = "Submitted report ($reason). Store administrators will review it."
+                }
+                .onFailure { e ->
+                    _statusBannerMessage.value = "Could not submit report: ${e.localizedMessage}"
+                }
+        }
+    }
+
+    fun updateReportStatus(report: AppReport, newStatus: String) {
+        viewModelScope.launch {
+            repository.updateReportStatus(report.id, newStatus)
+                .onSuccess {
+                    _statusBannerMessage.value = "Updated report status to $newStatus."
+                    logAudit("REPORT_$newStatus", "REPORT", report.id, "Marked report on ${report.targetType}:${report.targetId} as $newStatus.")
+                }
+                .onFailure { e ->
+                    _statusBannerMessage.value = "Failed to update report: ${e.localizedMessage}"
+                }
+        }
+    }
+
+    fun deleteReport(reportId: String) {
+        viewModelScope.launch {
+            repository.deleteReport(reportId)
+                .onSuccess {
+                    _statusBannerMessage.value = "Deleted report."
+                    logAudit("REPORT_DELETED", "REPORT", reportId, "Deleted report $reportId.")
+                }
+        }
+    }
+
+    // Multi-Version & Release History
+    fun addVersionReleaseRecord(
+        appId: String,
+        versionName: String,
+        versionCode: Long,
+        apkDownloadUrl: String,
+        apkFileSize: String,
+        sha256Checksum: String,
+        changelog: String
+    ) {
+        viewModelScope.launch {
+            repository.recordAppVersion(
+                appId = appId,
+                versionName = versionName,
+                versionCode = versionCode,
+                apkDownloadUrl = apkDownloadUrl,
+                apkFileSize = apkFileSize,
+                sha256Checksum = sha256Checksum,
+                changelog = changelog,
+                authorUid = currentUserId
+            ).onSuccess {
+                _statusBannerMessage.value = "Recorded release v$versionName (code $versionCode) for '$appId'."
+                logAudit("VERSION_RECORDED", "APP", appId, "Added release history v$versionName (code $versionCode) for $appId.")
+            }.onFailure { e ->
+                _statusBannerMessage.value = "Failed to save version record: ${e.localizedMessage}"
+            }
+        }
+    }
+
+    fun deleteVersionReleaseRecord(versionId: String) {
+        viewModelScope.launch {
+            repository.deleteVersionRecord(versionId)
+                .onSuccess {
+                    _statusBannerMessage.value = "Removed version history record."
+                    logAudit("VERSION_DELETED", "APP", versionId, "Deleted version history record $versionId.")
+                }
+        }
+    }
+
+    // Admin Role Management (RBAC)
+    fun grantOrUpdateAdminRole(targetUserId: String, role: String) {
+        viewModelScope.launch {
+            repository.upsertAdminRole(targetUserId, role)
+                .onSuccess {
+                    _statusBannerMessage.value = "Assigned role '$role' to UID '$targetUserId'."
+                    logAudit("ADMIN_ROLE_GRANTED", "ADMIN", targetUserId, "Granted '$role' role to UID $targetUserId.")
+                }
+                .onFailure { e ->
+                    _statusBannerMessage.value = "Failed to assign admin role: ${e.localizedMessage}"
+                }
+        }
+    }
+
+    fun revokeAdminRole(targetUserId: String) {
+        viewModelScope.launch {
+            repository.removeAdminRole(targetUserId)
+                .onSuccess {
+                    _statusBannerMessage.value = "Revoked administrator role for UID '$targetUserId'."
+                    logAudit("ADMIN_ROLE_REVOKED", "ADMIN", targetUserId, "Revoked administrator privileges for UID $targetUserId.")
+                }
+                .onFailure { e ->
+                    _statusBannerMessage.value = "Failed to revoke admin role: ${e.localizedMessage}"
+                }
+        }
+    }
+
+    // Admin Catalog CRUD
+    fun createOrUpdateApp(app: StoreApp, isEditing: Boolean) {
+        viewModelScope.launch {
+            val result = if (isEditing && (app.docId.isNotBlank() || app.appId.isNotBlank())) {
+                repository.updateApp(app, currentUserId)
+            } else {
+                repository.createApp(app, currentUserId)
+            }
+            result.onSuccess {
+                _statusBannerMessage.value = if (isEditing) {
+                    "Updated '${app.appName}' (v${app.versionName}) in Zayaan Apps."
+                } else {
+                    "Published '${app.appName}' (v${app.versionName}) to Zayaan Apps."
+                }
+                logAudit(
+                    action = if (isEditing) "APP_UPDATED" else "APP_CREATED",
+                    targetType = "APP",
+                    targetId = app.appId.ifBlank { app.docId.ifBlank { app.appName } },
+                    summary = "${if (isEditing) "Updated" else "Created"} '${app.appName}' v${app.versionName} (code ${app.versionCode})."
+                )
+            }.onFailure { e ->
+                _statusBannerMessage.value = "Save failed: ${e.localizedMessage}"
+            }
         }
     }
 
     fun togglePublished(app: StoreApp) {
-        val targetId = app.appId.ifBlank { app.docId }
         viewModelScope.launch {
-            val newStatus = !app.published
-            val res = repository.setAppPublished(targetId, newStatus)
-            res.fold(
-                onSuccess = {
-                    _statusBannerMessage.value = if (newStatus) {
-                        "'${app.appName}' is now Published on Android & Web."
-                    } else {
-                        "'${app.appName}' is now Unpublished (Draft)."
-                    }
-                },
-                onFailure = { err ->
-                    _statusBannerMessage.value = "Failed to change visibility: ${err.localizedMessage}"
+            val nextPublished = !app.published
+            repository.updateApp(app.copy(published = nextPublished))
+                .onSuccess {
+                    val stateLabel = if (nextPublished) "Published" else "Unpublished"
+                    _statusBannerMessage.value = "$stateLabel '${app.appName}'."
+                    logAudit("APP_PUBLISH_TOGGLED", "APP", app.appId.ifBlank { app.docId }, "$stateLabel '${app.appName}'.")
                 }
-            )
+                .onFailure { e ->
+                    _statusBannerMessage.value = "Failed to toggle publish state: ${e.localizedMessage}"
+                }
         }
     }
 
     fun toggleFeatured(app: StoreApp) {
-        val targetId = app.appId.ifBlank { app.docId }
         viewModelScope.launch {
-            val newStatus = !app.featured
-            val res = repository.setAppFeatured(targetId, newStatus)
-            res.fold(
-                onSuccess = {
-                    _statusBannerMessage.value = if (newStatus) {
-                        "'${app.appName}' added to Featured carousel."
-                    } else {
-                        "'${app.appName}' removed from Featured carousel."
-                    }
-                },
-                onFailure = { err ->
-                    _statusBannerMessage.value = "Failed to update featured status: ${err.localizedMessage}"
+            val nextFeatured = !app.featured
+            repository.updateApp(app.copy(featured = nextFeatured))
+                .onSuccess {
+                    val stateLabel = if (nextFeatured) "Featured" else "Removed from Featured"
+                    _statusBannerMessage.value = "$stateLabel '${app.appName}'."
+                    logAudit("APP_FEATURED_TOGGLED", "APP", app.appId.ifBlank { app.docId }, "$stateLabel '${app.appName}'.")
                 }
-            )
+                .onFailure { e ->
+                    _statusBannerMessage.value = "Failed to toggle featured status: ${e.localizedMessage}"
+                }
+        }
+    }
+
+    fun toggleEditorsChoice(app: StoreApp) {
+        viewModelScope.launch {
+            val nextChoice = !app.editorsChoice
+            repository.updateApp(app.copy(editorsChoice = nextChoice))
+                .onSuccess {
+                    val stateLabel = if (nextChoice) "Marked as Editor's Choice" else "Removed Editor's Choice"
+                    _statusBannerMessage.value = "$stateLabel: '${app.appName}'."
+                    logAudit("APP_EDITORS_CHOICE_TOGGLED", "APP", app.appId.ifBlank { app.docId }, "$stateLabel for '${app.appName}'.")
+                }
+                .onFailure { e ->
+                    _statusBannerMessage.value = "Update failed: ${e.localizedMessage}"
+                }
+        }
+    }
+
+    fun toggleEssential(app: StoreApp) {
+        viewModelScope.launch {
+            val nextEssential = !app.essential
+            repository.updateApp(app.copy(essential = nextEssential))
+                .onSuccess {
+                    val stateLabel = if (nextEssential) "Added to Essential Apps" else "Removed from Essential Apps"
+                    _statusBannerMessage.value = "$stateLabel: '${app.appName}'."
+                    logAudit("APP_ESSENTIAL_TOGGLED", "APP", app.appId.ifBlank { app.docId }, "$stateLabel for '${app.appName}'.")
+                }
+                .onFailure { e ->
+                    _statusBannerMessage.value = "Update failed: ${e.localizedMessage}"
+                }
         }
     }
 
     fun deleteApp(app: StoreApp) {
-        val targetId = app.appId.ifBlank { app.docId }
+        val docId = app.docId.ifBlank { app.appId }
         viewModelScope.launch {
-            val res = repository.deleteApp(targetId)
-            res.fold(
-                onSuccess = {
+            repository.deleteApp(docId)
+                .onSuccess {
                     _statusBannerMessage.value = "Deleted '${app.appName}' from catalog."
-                },
-                onFailure = { err ->
-                    _statusBannerMessage.value = "Delete failed: ${err.localizedMessage}"
+                    logAudit("APP_DELETED", "APP", docId, "Deleted application '${app.appName}' ($docId) from catalog.")
                 }
-            )
+                .onFailure { e ->
+                    _statusBannerMessage.value = "Delete failed: ${e.localizedMessage}"
+                }
         }
     }
 
     fun addCategory(name: String, description: String, order: Long) {
         viewModelScope.launch {
-            val res = repository.addCategory(name, description, order)
-            res.fold(
-                onSuccess = {
-                    _statusBannerMessage.value = "Category '$name' saved."
-                },
-                onFailure = { err ->
-                    _statusBannerMessage.value = "Category save failed: ${err.localizedMessage}"
+            repository.upsertCategory(name, description, order, currentUserId)
+                .onSuccess {
+                    _statusBannerMessage.value = "Saved category '$name'."
+                    logAudit("CATEGORY_SAVED", "CATEGORY", name, "Saved category '$name' (order $order).")
                 }
-            )
+                .onFailure { e ->
+                    _statusBannerMessage.value = "Failed to save category: ${e.localizedMessage}"
+                }
         }
     }
 
-    fun deleteCategory(categoryId: String) {
+    fun deleteCategory(docId: String) {
         viewModelScope.launch {
-            repository.deleteCategory(categoryId)
+            repository.deleteCategory(docId)
+                .onSuccess {
+                    _statusBannerMessage.value = "Category removed."
+                    logAudit("CATEGORY_DELETED", "CATEGORY", docId, "Deleted category '$docId'.")
+                }
+                .onFailure { e ->
+                    _statusBannerMessage.value = "Failed to delete category: ${e.localizedMessage}"
+                }
         }
     }
 
     fun seedCatalogNow() {
         viewModelScope.launch {
-            val res = repository.seedOfficialZayaanCatalog()
-            res.fold(
-                onSuccess = { count ->
-                    _statusBannerMessage.value = "Restored $count official Zayaan Apps to Cloud Firestore."
-                },
-                onFailure = { err ->
-                    _statusBannerMessage.value = "Seed failed: ${err.localizedMessage}"
+            repository.seedOfficialZayaanCatalog(currentUserId)
+                .onSuccess { count ->
+                    _statusBannerMessage.value = if (count > 0) {
+                        "Seeded $count official Zayaan Apps into Firestore."
+                    } else {
+                        "All starter Zayaan Apps are already present in the catalog."
+                    }
+                    logAudit("CATALOG_SYNCED", "CATALOG", "official-zayaan-catalog", "Synced official Zayaan Apps catalog ($count new apps added).")
                 }
-            )
-        }
-    }
-
-    fun updateDarkModePreference(darkMode: Boolean) {
-        val current = userPreferencesState.value
-        viewModelScope.launch {
-            repository.saveUserPreferences(
-                darkMode = darkMode,
-                notifyUpdates = current?.notifyUpdates ?: true,
-                bookmarkedAppIds = current?.bookmarkedAppIds ?: emptyList(),
-                isExistingDoc = current != null
-            )
-        }
-    }
-
-    fun updateNotificationPreference(notifyUpdates: Boolean) {
-        val current = userPreferencesState.value
-        viewModelScope.launch {
-            repository.saveUserPreferences(
-                darkMode = current?.darkMode ?: true,
-                notifyUpdates = notifyUpdates,
-                bookmarkedAppIds = current?.bookmarkedAppIds ?: emptyList(),
-                isExistingDoc = current != null
-            )
-        }
-    }
-
-    fun toggleBookmark(appId: String) {
-        val current = userPreferencesState.value
-        val existingList = current?.bookmarkedAppIds ?: emptyList()
-        val updatedList = if (appId in existingList) {
-            existingList - appId
-        } else {
-            (existingList + appId).take(50)
-        }
-        viewModelScope.launch {
-            repository.saveUserPreferences(
-                darkMode = current?.darkMode ?: true,
-                notifyUpdates = current?.notifyUpdates ?: true,
-                bookmarkedAppIds = updatedList,
-                isExistingDoc = current != null
-            )
+                .onFailure { e ->
+                    _statusBannerMessage.value = "Failed to seed catalog: ${e.localizedMessage}"
+                }
         }
     }
 }

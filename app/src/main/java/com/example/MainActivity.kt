@@ -152,11 +152,25 @@ fun AuthenticatedStoreShell(
     val publishedAppsState by viewModel.publishedAppsState.collectAsStateWithLifecycle()
     val adminAppsState by viewModel.adminAppsState.collectAsStateWithLifecycle()
     val categoriesState by viewModel.categoriesState.collectAsStateWithLifecycle()
+    val allReviews by viewModel.allReviewsState.collectAsStateWithLifecycle()
+    val notifications by viewModel.notificationsState.collectAsStateWithLifecycle()
+    val collections by viewModel.collectionsState.collectAsStateWithLifecycle()
+    val submissions by viewModel.submissionsState.collectAsStateWithLifecycle()
+    val reports by viewModel.reportsState.collectAsStateWithLifecycle()
+    val versionHistory by viewModel.versionHistoryState.collectAsStateWithLifecycle()
+    val adminRecords by viewModel.adminRecordsState.collectAsStateWithLifecycle()
+    val auditLogs by viewModel.auditLogsState.collectAsStateWithLifecycle()
+    val cachedApkVerifications by viewModel.cachedApkVerifications.collectAsStateWithLifecycle()
+    val isTrustedAdmin by viewModel.isTrustedAdmin.collectAsStateWithLifecycle()
     val userPrefs by viewModel.userPreferencesState.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val selectedCategory by viewModel.selectedCategory.collectAsStateWithLifecycle()
+    val selectedSubcategory by viewModel.selectedSubcategory.collectAsStateWithLifecycle()
+    val selectedSortOption by viewModel.selectedSortOption.collectAsStateWithLifecycle()
     val installedStatuses by viewModel.installedStatuses.collectAsStateWithLifecycle()
     val downloadStates by viewModel.downloadStates.collectAsStateWithLifecycle()
+    val downloadedApkFiles by viewModel.downloadedApkFiles.collectAsStateWithLifecycle()
+    val comparisonAppIds by viewModel.comparisonAppIds.collectAsStateWithLifecycle()
     val bannerMessage by viewModel.statusBannerMessage.collectAsStateWithLifecycle()
     val storeSelfUpdateApp by viewModel.storeSelfUpdateApp.collectAsStateWithLifecycle()
     var selfUpdateDismissed by remember { mutableStateOf(false) }
@@ -164,6 +178,11 @@ fun AuthenticatedStoreShell(
     val isDarkMode = userPrefs?.darkMode ?: true
     val notifyUpdates = userPrefs?.notifyUpdates ?: true
     val bookmarkedIds = userPrefs?.bookmarkedAppIds ?: emptyList()
+    val favoriteIds = userPrefs?.favoriteAppIds ?: emptyList()
+    val downloadedAppIds = userPrefs?.downloadedAppIds ?: emptyList()
+    val searchHistory = userPrefs?.searchHistory ?: emptyList()
+    val recentlyViewedIds = userPrefs?.recentlyViewedAppIds ?: emptyList()
+    val isAdminUser = isTrustedAdmin || currentUserEmail.equals("zayaanapps@gmail.com", ignoreCase = true)
 
     var currentTab by remember { mutableStateOf(ZayaanTab.STORE) }
     var selectedAppIdForDetail by remember { mutableStateOf<String?>(null) }
@@ -337,8 +356,9 @@ fun AuthenticatedStoreShell(
                         }
 
                         Box(modifier = Modifier.fillMaxSize()) {
+                            val publishedList = (publishedAppsState as? UiState.Success)?.data ?: emptyList()
                             val activeDetailApp: StoreApp? = if (selectedAppIdForDetail != null) {
-                                val allAvailable = ((publishedAppsState as? UiState.Success)?.data ?: emptyList()) +
+                                val allAvailable = publishedList +
                                     ((adminAppsState as? UiState.Success)?.data ?: emptyList())
                                 allAvailable.firstOrNull {
                                     (it.appId.ifBlank { it.docId }) == selectedAppIdForDetail
@@ -347,17 +367,49 @@ fun AuthenticatedStoreShell(
 
                             if (activeDetailApp != null) {
                                 val appId = activeDetailApp.appId.ifBlank { activeDetailApp.docId }
+                                val appReviews = allReviews.filter { it.appId == appId }
+                                val appVersions = versionHistory.filter { it.appId == appId }
                                 AppDetailScreen(
                                     app = activeDetailApp,
+                                    allApps = publishedList,
+                                    reviews = appReviews,
+                                    versionHistory = appVersions,
+                                    currentUserId = currentUserId,
+                                    isAdmin = isAdminUser,
                                     installedStatus = installedStatuses[activeDetailApp.packageName],
                                     downloadState = downloadStates[appId] ?: DownloadState.Idle,
                                     isBookmarked = appId in bookmarkedIds,
+                                    isFavorite = appId in favoriteIds,
+                                    isInComparison = appId in comparisonAppIds,
                                     onBack = { selectedAppIdForDetail = null },
                                     onStartDownload = { viewModel.startApkDownload(it) },
+                                    onCancelDownload = { viewModel.cancelActiveDownload(it) },
                                     onInstallApk = { ctx, path -> viewModel.installDownloadedApk(ctx, path) },
                                     onOpenInstalledApp = { ctx, pkg -> viewModel.openInstalledApp(ctx, pkg) },
                                     onOpenBrowserDownload = { ctx, app -> viewModel.openExternalDownloadUrl(ctx, app) },
-                                    onToggleBookmark = { viewModel.toggleBookmark(it) }
+                                    onToggleBookmark = { viewModel.toggleBookmark(it) },
+                                    onToggleFavorite = { viewModel.toggleFavorite(it) },
+                                    onToggleCompare = { viewModel.toggleCompareApp(it) },
+                                    onShareApp = { ctx, app -> viewModel.shareApp(ctx, app) },
+                                    onSelectRelatedApp = { related ->
+                                        val relId = related.appId.ifBlank { related.docId }
+                                        selectedAppIdForDetail = relId
+                                        viewModel.recordRecentlyViewedApp(relId)
+                                    },
+                                    onSubmitReview = { rating, comment ->
+                                        viewModel.submitAppReview(activeDetailApp, rating, comment)
+                                    },
+                                    onVoteReviewHelpful = { viewModel.voteReviewHelpful(it) },
+                                    onFlagReview = { rev, flagged ->
+                                        viewModel.flagReviewForModeration(rev, flagged)
+                                    },
+                                    onAdminReplyReview = { rev, replyText ->
+                                        viewModel.replyToReviewAsAdmin(rev, replyText)
+                                    },
+                                    onDeleteReview = { viewModel.deleteReview(it) },
+                                    onReportApp = { reason, details ->
+                                        viewModel.submitReport(appId, "APP", reason, details)
+                                    }
                                 )
                             } else {
                                 when (currentTab) {
@@ -366,11 +418,27 @@ fun AuthenticatedStoreShell(
                                             appsState = publishedAppsState,
                                             searchQuery = searchQuery,
                                             selectedCategory = selectedCategory,
+                                            selectedSubcategory = selectedSubcategory,
+                                            selectedSortOption = selectedSortOption,
+                                            searchHistory = searchHistory,
+                                            recentlyViewedAppIds = recentlyViewedIds,
+                                            favoriteAppIds = favoriteIds,
+                                            bookmarkedAppIds = bookmarkedIds,
+                                            downloadedAppIds = downloadedAppIds,
+                                            notifications = notifications,
+                                            customCollections = collections,
                                             installedStatuses = installedStatuses,
                                             onSearchQueryChange = { viewModel.updateSearchQuery(it) },
+                                            onSearchSubmit = { viewModel.submitSearchQuery(it) },
+                                            onClearSearchHistory = { viewModel.clearSearchHistory() },
                                             onCategorySelect = { viewModel.selectCategory(it) },
+                                            onSubcategorySelect = { viewModel.selectSubcategory(it) },
+                                            onSortOptionSelect = { viewModel.selectSortOption(it) },
+                                            onResetFilters = { viewModel.resetFilters() },
                                             onAppClick = { app ->
-                                                selectedAppIdForDetail = app.appId.ifBlank { app.docId }
+                                                val id = app.appId.ifBlank { app.docId }
+                                                selectedAppIdForDetail = id
+                                                viewModel.recordRecentlyViewedApp(id)
                                             },
                                             onSeedDefaultCatalog = { viewModel.seedCatalogNow() }
                                         )
@@ -380,7 +448,12 @@ fun AuthenticatedStoreShell(
                                         MyAppsScreen(
                                             appsState = publishedAppsState,
                                             installedStatuses = installedStatuses,
+                                            downloadStates = downloadStates,
+                                            downloadedApkFiles = downloadedApkFiles,
                                             bookmarkedIds = bookmarkedIds,
+                                            favoriteIds = favoriteIds,
+                                            downloadedAppIds = downloadedAppIds,
+                                            comparisonAppIds = comparisonAppIds,
                                             onRefreshScan = {
                                                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                                                     notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -388,11 +461,31 @@ fun AuthenticatedStoreShell(
                                                 viewModel.refreshInstalledAppsStatus()
                                             },
                                             onAppClick = { app ->
-                                                selectedAppIdForDetail = app.appId.ifBlank { app.docId }
+                                                val id = app.appId.ifBlank { app.docId }
+                                                selectedAppIdForDetail = id
+                                                viewModel.recordRecentlyViewedApp(id)
                                             },
                                             onUpdateOrDownloadClick = { app ->
                                                 selectedAppIdForDetail = app.appId.ifBlank { app.docId }
                                                 viewModel.startApkDownload(app)
+                                            },
+                                            onUpdateAllClick = { ctx, updatableList ->
+                                                viewModel.updateAllAvailableApps(ctx, updatableList)
+                                            },
+                                            onInstallCachedApk = { ctx, path ->
+                                                viewModel.installDownloadedApk(ctx, path)
+                                            },
+                                            onDeleteCachedApk = { path ->
+                                                viewModel.deleteCachedApk(path)
+                                            },
+                                            onCancelDownload = { id ->
+                                                viewModel.cancelActiveDownload(id)
+                                            },
+                                            onRemoveFromCompare = { id ->
+                                                viewModel.toggleCompareApp(id)
+                                            },
+                                            onClearComparison = {
+                                                viewModel.clearComparisonApps()
                                             },
                                             onOpenInstalledApp = { ctx, pkg ->
                                                 viewModel.openInstalledApp(ctx, pkg)
@@ -404,17 +497,81 @@ fun AuthenticatedStoreShell(
                                         AdminDashboardScreen(
                                             adminAppsState = adminAppsState,
                                             categoriesState = categoriesState,
+                                            allReviews = allReviews,
+                                            notifications = notifications,
+                                            collections = collections,
+                                            submissions = submissions,
+                                            reports = reports,
+                                            versionHistory = versionHistory,
+                                            adminRecords = adminRecords,
+                                            auditLogs = auditLogs,
+                                            cachedApkVerifications = cachedApkVerifications,
+                                            currentUserId = currentUserId,
                                             currentUserEmail = currentUserEmail,
+                                            isTrustedAdmin = isAdminUser,
                                             onSaveApp = { app, isEdit ->
                                                 viewModel.createOrUpdateApp(app, isEdit)
                                             },
                                             onTogglePublished = { viewModel.togglePublished(it) },
                                             onToggleFeatured = { viewModel.toggleFeatured(it) },
+                                            onToggleEditorsChoice = { viewModel.toggleEditorsChoice(it) },
+                                            onToggleEssential = { viewModel.toggleEssential(it) },
                                             onDeleteApp = { viewModel.deleteApp(it) },
                                             onAddCategory = { name, desc, order ->
                                                 viewModel.addCategory(name, desc, order)
                                             },
                                             onDeleteCategory = { viewModel.deleteCategory(it) },
+                                            onReplyToReview = { rev, replyText ->
+                                                viewModel.replyToReviewAsAdmin(rev, replyText)
+                                            },
+                                            onClearReviewFlag = { rev ->
+                                                viewModel.flagReviewForModeration(rev, false)
+                                            },
+                                            onDeleteReview = { rev ->
+                                                viewModel.deleteReview(rev)
+                                            },
+                                            onBroadcastNotification = { title, body, category, targetAppId ->
+                                                viewModel.publishStoreAnnouncement(title, body, category, targetAppId)
+                                            },
+                                            onDeleteNotification = { id ->
+                                                viewModel.deleteStoreAnnouncement(id)
+                                            },
+                                            onSaveCollection = { colId, title, subtitle, appIds, isPublic, featured ->
+                                                viewModel.saveCollection(colId, title, subtitle, appIds, isPublic, featured)
+                                            },
+                                            onDeleteCollection = { colId ->
+                                                viewModel.deleteCollection(colId)
+                                            },
+                                            onSubmitDeveloperApp = { sub ->
+                                                viewModel.submitDeveloperApplication(sub)
+                                            },
+                                            onReviewDeveloperSubmission = { sub, status, note ->
+                                                viewModel.reviewDeveloperSubmission(sub, status, note)
+                                            },
+                                            onDeleteDeveloperSubmission = { subId ->
+                                                viewModel.deleteDeveloperSubmission(subId)
+                                            },
+                                            onSubmitReport = { targetId, targetType, reason, details ->
+                                                viewModel.submitReport(targetId, targetType, reason, details)
+                                            },
+                                            onUpdateReportStatus = { rep, status ->
+                                                viewModel.updateReportStatus(rep, status)
+                                            },
+                                            onDeleteReport = { repId ->
+                                                viewModel.deleteReport(repId)
+                                            },
+                                            onAddVersionRecord = { appId, vName, vCode, url, size, sha, log ->
+                                                viewModel.addVersionReleaseRecord(appId, vName, vCode, url, size, sha, log)
+                                            },
+                                            onDeleteVersionRecord = { verId ->
+                                                viewModel.deleteVersionReleaseRecord(verId)
+                                            },
+                                            onGrantAdminRole = { uid, role ->
+                                                viewModel.grantOrUpdateAdminRole(uid, role)
+                                            },
+                                            onRevokeAdminRole = { uid ->
+                                                viewModel.revokeAdminRole(uid)
+                                            },
                                             onSeedOfficialCatalog = { viewModel.seedCatalogNow() }
                                         )
                                     }
@@ -438,7 +595,7 @@ fun AuthenticatedStoreShell(
                                             onSignOut = {
                                                 signOutFromZayaanStore(credentialManager, scope)
                                             },
-                                            onShowCopiedMessage = { msg ->
+                                            onShowCopiedMessage = { _ ->
                                                 viewModel.clearBannerMessage()
                                             }
                                         )
