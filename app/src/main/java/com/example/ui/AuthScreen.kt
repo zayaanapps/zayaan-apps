@@ -2,10 +2,11 @@ package com.example.ui
 
 import android.app.Activity
 import android.content.Context
+import android.content.ContextWrapper
+import android.content.MutableContextWrapper
 import android.util.Log
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,7 +21,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Security
@@ -33,9 +36,12 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -55,10 +61,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.credentials.ClearCredentialStateRequest
+import androidx.credentials.Credential
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.GetCredentialException
 import com.example.R
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
@@ -67,19 +75,46 @@ import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential.Co
 import com.google.firebase.Firebase
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.auth
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
+}
 
 private fun resolveDefaultWebClientId(context: Context): String? {
-    val resId = context.resources.getIdentifier("default_web_client_id", "string", context.packageName)
-    if (resId == 0) return null
+    val pkgResId = context.resources.getIdentifier("default_web_client_id", "string", context.packageName)
+    val fallbackResId = if (pkgResId != 0) pkgResId else context.resources.getIdentifier("default_web_client_id", "string", "com.example")
+    if (fallbackResId == 0) return null
     return try {
-        context.getString(resId).takeIf { it.isNotBlank() }
+        context.getString(fallbackResId).takeIf { it.isNotBlank() }
     } catch (_: Exception) {
         null
+    }
+}
+
+private suspend fun exchangeCredentialWithFirebase(
+    cred: Credential,
+    onAuthSuccess: () -> Unit,
+    onAuthError: (String) -> Unit
+) {
+    if (cred is CustomCredential && cred.type == TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
+        val token = GoogleIdTokenCredential.createFrom(cred.data).idToken
+        withTimeout(20_000L) {
+            Firebase.auth.signInWithCredential(GoogleAuthProvider.getCredential(token, null)).await()
+        }
+        onAuthSuccess()
+    } else {
+        onAuthError("Unexpected credential type returned")
     }
 }
 
@@ -89,14 +124,14 @@ fun attemptAutoSignIn(
     onAuthSuccess: () -> Unit,
     onUnauthenticated: () -> Unit,
     scope: CoroutineScope
-) {
+): Job {
     if (Firebase.auth.currentUser != null) {
         onAuthSuccess()
-        return
+        return Job().apply { complete() }
     }
     val clientId = resolveDefaultWebClientId(context) ?: run {
         onUnauthenticated()
-        return
+        return Job().apply { complete() }
     }
     val googleIdOption = GetGoogleIdOption.Builder()
         .setFilterByAuthorizedAccounts(true)
@@ -106,16 +141,26 @@ fun attemptAutoSignIn(
     val request = GetCredentialRequest.Builder()
         .addCredentialOption(googleIdOption)
         .build()
-    scope.launch {
+    val credentialContext = context.findActivity()?.let { MutableContextWrapper(it) } ?: context
+    return scope.launch {
         try {
-            val cred = credentialManager.getCredential(context, request).credential
+            val cred = withTimeout(12_000L) {
+                credentialManager.getCredential(credentialContext, request).credential
+            }
             if (cred is CustomCredential && cred.type == TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
                 val token = GoogleIdTokenCredential.createFrom(cred.data).idToken
-                Firebase.auth.signInWithCredential(GoogleAuthProvider.getCredential(token, null)).await()
+                withTimeout(15_000L) {
+                    Firebase.auth.signInWithCredential(GoogleAuthProvider.getCredential(token, null)).await()
+                }
                 onAuthSuccess()
             } else {
                 onUnauthenticated()
             }
+        } catch (e: TimeoutCancellationException) {
+            Log.w("Auth", "Auto sign-in timed out: ${e.message}")
+            onUnauthenticated()
+        } catch (e: CancellationException) {
+            throw e
         } catch (_: Exception) {
             onUnauthenticated()
         }
@@ -129,36 +174,98 @@ fun onGoogleSignInClicked(
     onAuthError: (String) -> Unit,
     scope: CoroutineScope,
     onAuthCancelled: () -> Unit = {}
-) {
+): Job {
     val clientId = resolveDefaultWebClientId(context) ?: run {
-        onAuthError("Google Sign-In configuration missing: add app/google-services.json (or GOOGLE_SERVICES_JSON secret in GitHub) and rebuild.")
-        return
+        onAuthError("Google Sign-In configuration missing: add app/google-services.json and rebuild.")
+        return Job().apply { complete() }
     }
+    val activity = context.findActivity() ?: run {
+        onAuthError("Activity context required for interactive Google Sign-In")
+        return Job().apply { complete() }
+    }
+    val mutableContext = MutableContextWrapper(activity)
     val signInOption = GetSignInWithGoogleOption.Builder(serverClientId = clientId).build()
-    val request = GetCredentialRequest.Builder()
+    val primaryRequest = GetCredentialRequest.Builder()
         .addCredentialOption(signInOption)
         .build()
-    scope.launch {
+
+    return scope.launch {
         try {
-            val activity = context as? Activity ?: run {
-                onAuthError("Activity context required for interactive Google Sign-In")
-                return@launch
+            val cred = withTimeout(45_000L) {
+                credentialManager.getCredential(mutableContext, primaryRequest).credential
             }
-            val cred = credentialManager.getCredential(activity, request).credential
-            if (cred is CustomCredential && cred.type == TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
-                val token = GoogleIdTokenCredential.createFrom(cred.data).idToken
-                Firebase.auth.signInWithCredential(GoogleAuthProvider.getCredential(token, null)).await()
-                onAuthSuccess()
-            } else {
-                onAuthError("Unexpected credential type returned")
-            }
+            exchangeCredentialWithFirebase(cred, onAuthSuccess, onAuthError)
         } catch (e: GetCredentialCancellationException) {
             Log.w("Auth", "Google Sign-In cancelled or dismissed: ${e.message}", e)
             onAuthCancelled()
+        } catch (e: TimeoutCancellationException) {
+            Log.w("Auth", "Primary Google Sign-In timed out, trying bottom-sheet fallback", e)
+            runBottomSheetFallback(mutableContext, credentialManager, clientId, onAuthSuccess, onAuthError, onAuthCancelled)
+        } catch (e: GetCredentialException) {
+            Log.w("Auth", "Primary Google Sign-In failed (${e.type}), trying bottom-sheet fallback", e)
+            runBottomSheetFallback(mutableContext, credentialManager, clientId, onAuthSuccess, onAuthError, onAuthCancelled)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e("Auth", "Google Sign-In failed", e)
             onAuthError(e.localizedMessage ?: "Sign in failed. Please try again.")
         }
+    }
+}
+
+fun onGoogleBottomSheetSignInClicked(
+    context: Context,
+    credentialManager: CredentialManager,
+    onAuthSuccess: () -> Unit,
+    onAuthError: (String) -> Unit,
+    scope: CoroutineScope,
+    onAuthCancelled: () -> Unit = {}
+): Job {
+    val clientId = resolveDefaultWebClientId(context) ?: run {
+        onAuthError("Google Sign-In configuration missing: add app/google-services.json and rebuild.")
+        return Job().apply { complete() }
+    }
+    val activity = context.findActivity() ?: run {
+        onAuthError("Activity context required for interactive Google Sign-In")
+        return Job().apply { complete() }
+    }
+    val mutableContext = MutableContextWrapper(activity)
+    return scope.launch {
+        runBottomSheetFallback(mutableContext, credentialManager, clientId, onAuthSuccess, onAuthError, onAuthCancelled)
+    }
+}
+
+private suspend fun runBottomSheetFallback(
+    mutableContext: MutableContextWrapper,
+    credentialManager: CredentialManager,
+    clientId: String,
+    onAuthSuccess: () -> Unit,
+    onAuthError: (String) -> Unit,
+    onAuthCancelled: () -> Unit
+) {
+    try {
+        val bottomSheetOption = GetGoogleIdOption.Builder()
+            .setFilterByAuthorizedAccounts(false)
+            .setServerClientId(clientId)
+            .build()
+        val fallbackRequest = GetCredentialRequest.Builder()
+            .addCredentialOption(bottomSheetOption)
+            .build()
+        val cred = withTimeout(45_000L) {
+            credentialManager.getCredential(mutableContext, fallbackRequest).credential
+        }
+        exchangeCredentialWithFirebase(cred, onAuthSuccess, onAuthError)
+    } catch (e: GetCredentialCancellationException) {
+        Log.w("Auth", "Google bottom-sheet Sign-In cancelled: ${e.message}", e)
+        onAuthCancelled()
+    } catch (e: TimeoutCancellationException) {
+        Log.e("Auth", "Google Sign-In timed out", e)
+        onAuthError("Google Sign-In timed out waiting for Play Services. Please check your network and try again.")
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Log.e("Auth", "Google bottom-sheet Sign-In failed", e)
+        onAuthError(e.localizedMessage ?: "Sign in failed. Please try again.")
     }
 }
 
@@ -185,12 +292,20 @@ fun signOutFromZayaanStore(
 fun AuthScreen(onAuthSuccess: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val credentialManager = remember { CredentialManager.create(context) }
+    val credentialManager = remember(context) { CredentialManager.create(context) }
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var activeAuthJob by remember { mutableStateOf<Job?>(null) }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            activeAuthJob?.cancel()
+        }
+    }
 
     LaunchedEffect(Unit) {
-        attemptAutoSignIn(
+        activeAuthJob?.cancel()
+        activeAuthJob = attemptAutoSignIn(
             context = context,
             credentialManager = credentialManager,
             onAuthSuccess = onAuthSuccess,
@@ -215,6 +330,7 @@ fun AuthScreen(onAuthSuccess: () -> Unit) {
                     )
                 )
                 .windowInsetsPadding(WindowInsets.safeDrawing)
+                .verticalScroll(rememberScrollState())
                 .padding(24.dp),
             contentAlignment = Alignment.Center
         ) {
@@ -352,9 +468,10 @@ fun AuthScreen(onAuthSuccess: () -> Unit) {
 
                     Button(
                         onClick = {
+                            activeAuthJob?.cancel()
                             errorMessage = null
                             isLoading = true
-                            onGoogleSignInClicked(
+                            activeAuthJob = onGoogleSignInClicked(
                                 context = context,
                                 credentialManager = credentialManager,
                                 onAuthSuccess = {
@@ -368,6 +485,7 @@ fun AuthScreen(onAuthSuccess: () -> Unit) {
                                 scope = scope,
                                 onAuthCancelled = {
                                     isLoading = false
+                                    errorMessage = "Google Sign-In was cancelled or dismissed before permission completed. Try Quick Sign-In below."
                                 }
                             )
                         },
@@ -393,6 +511,59 @@ fun AuthScreen(onAuthSuccess: () -> Unit) {
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    OutlinedButton(
+                        onClick = {
+                            activeAuthJob?.cancel()
+                            errorMessage = null
+                            isLoading = true
+                            activeAuthJob = onGoogleBottomSheetSignInClicked(
+                                context = context,
+                                credentialManager = credentialManager,
+                                onAuthSuccess = {
+                                    isLoading = false
+                                    onAuthSuccess()
+                                },
+                                onAuthError = { msg ->
+                                    isLoading = false
+                                    errorMessage = msg
+                                },
+                                scope = scope,
+                                onAuthCancelled = {
+                                    isLoading = false
+                                    errorMessage = "Google bottom-sheet sign-in was dismissed. Tap to try again."
+                                }
+                            )
+                        },
+                        enabled = !isLoading,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .testTag("google_quick_sheet_sign_in_button"),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Text(
+                            text = "Quick Sign-In (Google Bottom Sheet)",
+                            style = MaterialTheme.typography.labelLarge
+                        )
+                    }
+
+                    if (isLoading) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        TextButton(
+                            onClick = {
+                                activeAuthJob?.cancel()
+                                activeAuthJob = null
+                                isLoading = false
+                                errorMessage = "Sign-in cancelled. Tap Quick Sign-In (Google Bottom Sheet) if the consent screen got stuck."
+                            },
+                            modifier = Modifier.testTag("cancel_google_sign_in_button")
+                        ) {
+                            Text("Cancel & Reset")
                         }
                     }
                 }

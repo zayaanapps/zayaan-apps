@@ -41,6 +41,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -121,12 +122,19 @@ fun ZayaanStoreRoot(auth: FirebaseAuth? = null) {
     }
 
     val resolvedAuth = auth ?: Firebase.auth
-    val currentUser by resolvedAuth.authStateFlow().collectAsStateWithLifecycle(initialValue = resolvedAuth.currentUser)
+    var currentUser by remember(resolvedAuth) { mutableStateOf(resolvedAuth.currentUser) }
+    DisposableEffect(resolvedAuth) {
+        val listener = FirebaseAuth.AuthStateListener { firebaseAuth ->
+            currentUser = firebaseAuth.currentUser
+        }
+        resolvedAuth.addAuthStateListener(listener)
+        onDispose { resolvedAuth.removeAuthStateListener(listener) }
+    }
     val user = currentUser
 
     if (user == null) {
         ZayaanAppsTheme(darkTheme = true) {
-            AuthScreen(onAuthSuccess = {})
+            AuthScreen(onAuthSuccess = { currentUser = resolvedAuth.currentUser })
         }
     } else {
         key(user.uid) {
