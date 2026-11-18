@@ -281,4 +281,61 @@ class AndroidPackageController(private val context: Context) {
             Result.failure(e)
         }
     }
+
+    /**
+     * Queries https://api.github.com/repos/zayaanapps/zayaan-apps/releases/latest
+     * to check if a newer 1.0.0.X release tag of Zayaan Apps Store itself was built on GitHub Actions.
+     */
+    suspend fun fetchLatestGitHubStoreRelease(): StoreApp? = kotlinx.coroutines.withContext(Dispatchers.IO) {
+        try {
+            val request = Request.Builder()
+                .url("https://api.github.com/repos/zayaanapps/zayaan-apps/releases/latest")
+                .header("Accept", "application/vnd.github+json")
+                .header("User-Agent", "ZayaanAppsStore-Android/1.0.0.1")
+                .build()
+
+            httpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@withContext null
+                val jsonStr = response.body?.string() ?: return@withContext null
+                val json = org.json.JSONObject(jsonStr)
+                val tagName = json.optString("tag_name", "").removePrefix("v").trim()
+                if (tagName.isEmpty()) return@withContext null
+
+                // Extract build number from 4-part version 1.0.0.X (last segment)
+                val lastSegment = tagName.substringAfterLast('.', "").toLongOrNull() ?: 1L
+                val releaseNotes = json.optString("body", "Automated GitHub Actions release v$tagName")
+
+                var downloadUrl = "https://github.com/zayaanapps/zayaan-apps/releases/latest/download/zayaan-apps-release.apk"
+                val assets = json.optJSONArray("assets")
+                if (assets != null && assets.length() > 0) {
+                    for (i in 0 until assets.length()) {
+                        val asset = assets.optJSONObject(i) ?: continue
+                        val assetUrl = asset.optString("browser_download_url", "")
+                        if (assetUrl.endsWith(".apk")) {
+                            downloadUrl = assetUrl
+                            break
+                        }
+                    }
+                }
+
+                StoreApp(
+                    appId = "zayaan-apps-store",
+                    appName = "Zayaan Apps Store",
+                    packageName = "com.zayaanapps.store",
+                    category = "Tools",
+                    developerName = "Zayaan Apps Official",
+                    description = "Official Zayaan Apps Store self-update package from GitHub Releases.",
+                    versionName = tagName,
+                    versionCode = lastSegment,
+                    apkDownloadUrl = downloadUrl,
+                    apkFileSize = "16.8 MB",
+                    releaseNotes = releaseNotes,
+                    featured = true,
+                    published = true
+                )
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
 }

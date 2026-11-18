@@ -158,6 +158,8 @@ fun AuthenticatedStoreShell(
     val installedStatuses by viewModel.installedStatuses.collectAsStateWithLifecycle()
     val downloadStates by viewModel.downloadStates.collectAsStateWithLifecycle()
     val bannerMessage by viewModel.statusBannerMessage.collectAsStateWithLifecycle()
+    val storeSelfUpdateApp by viewModel.storeSelfUpdateApp.collectAsStateWithLifecycle()
+    var selfUpdateDismissed by remember { mutableStateOf(false) }
 
     val isDarkMode = userPrefs?.darkMode ?: true
     val notifyUpdates = userPrefs?.notifyUpdates ?: true
@@ -257,6 +259,53 @@ fun AuthenticatedStoreShell(
                     }
 
                     Column(modifier = Modifier.fillMaxSize()) {
+                        // Zayaan Apps Store Self-Update Prompt Banner
+                        val selfUpdate = storeSelfUpdateApp
+                        if (selfUpdate != null && !selfUpdateDismissed) {
+                            Surface(
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 6.dp)
+                                    .testTag("store_self_update_banner"),
+                                shape = MaterialTheme.shapes.medium
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "Zayaan Apps Store Update Available (v${selfUpdate.versionName})",
+                                            style = MaterialTheme.typography.labelLarge,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                                        )
+                                        Text(
+                                            text = "Tap Update to download & install the latest store APK (build ${selfUpdate.versionCode}).",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    androidx.compose.material3.Button(
+                                        onClick = {
+                                            selectedAppIdForDetail = selfUpdate.appId.ifBlank { "zayaan-apps-store" }
+                                            viewModel.startApkDownload(selfUpdate)
+                                        },
+                                        modifier = Modifier.testTag("store_self_update_button")
+                                    ) {
+                                        Text("Update")
+                                    }
+                                    IconButton(onClick = { selfUpdateDismissed = true }) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = "Dismiss self-update prompt"
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
                         // Dismissible Status Banner
                         if (bannerMessage != null) {
                             Surface(

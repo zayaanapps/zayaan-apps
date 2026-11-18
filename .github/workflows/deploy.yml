@@ -66,7 +66,7 @@ jobs:
       - name: Build Android Release APK
         run: |
           flutter build apk --release \
-            --build-name=1.0.${{ github.run_number }} \
+            --build-name=1.0.0.${{ github.run_number }} \
             --build-number=${{ github.run_number }}
 
       - name: Rename Release APK for Store Distribution
@@ -76,7 +76,7 @@ jobs:
       - name: Check if Release Tag Already Exists (Avoid Duplicate Tag Overwrites)
         id: check_tag
         run: |
-          TAG_NAME="v1.0.${{ github.run_number }}"
+          TAG_NAME="v1.0.0.${{ github.run_number }}"
           echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
           if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
             echo "exists=true" >> $GITHUB_OUTPUT
@@ -93,6 +93,7 @@ jobs:
           body: |
             ### Zayaan Apps Official Store Release (${{ steps.check_tag.outputs.tag_name }})
             - **Package Name:** `com.zayaanapps.store`
+            - **Version Name:** `1.0.0.${{ github.run_number }}`
             - **Version Code:** `${{ github.run_number }}`
             - **Responsive Web Portal:** https://zayaanapps.github.io/zayaan-apps/
             - **Direct APK Asset:** `zayaan-apps-release.apk`

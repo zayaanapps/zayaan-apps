@@ -81,7 +81,7 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
           'Official Zayaan Apps digital application marketplace for Android & Web.',
       iconUrl: '',
       screenshots: [],
-      versionName: '2.0.0',
+      versionName: '1.0.0.2',
       versionCode: 2,
       apkDownloadUrl:
           'https://github.com/zayaanapps/zayaan-apps/releases/latest/download/zayaan-apps-release.apk',

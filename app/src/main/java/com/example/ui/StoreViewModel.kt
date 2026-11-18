@@ -51,13 +51,48 @@ class StoreViewModel(
     private val _statusBannerMessage = MutableStateFlow<String?>(null)
     val statusBannerMessage: StateFlow<String?> = _statusBannerMessage.asStateFlow()
 
+    private val _storeSelfUpdateApp = MutableStateFlow<StoreApp?>(null)
+    val storeSelfUpdateApp: StateFlow<StoreApp?> = _storeSelfUpdateApp.asStateFlow()
+
     private var hasSeededCatalogInSession = false
+
+    init {
+        checkStoreSelfUpdateFromGitHub()
+    }
+
+    fun checkStoreSelfUpdateFromGitHub() {
+        viewModelScope.launch {
+            val githubRelease = packageController.fetchLatestGitHubStoreRelease()
+            if (githubRelease != null) {
+                val localSelfStatus = packageController.getInstalledStatus(
+                    "com.zayaanapps.store",
+                    githubRelease.versionCode
+                )
+                if (localSelfStatus.updateAvailable) {
+                    _storeSelfUpdateApp.value = githubRelease
+                }
+            }
+        }
+    }
 
     val publishedAppsState: StateFlow<UiState<List<StoreApp>>> = repository.observePublishedApps()
         .map<List<StoreApp>, UiState<List<StoreApp>>> { apps ->
             // Scan installed statuses whenever catalog updates
             val statusMap = packageController.scanCatalogStatus(apps)
             _installedStatuses.value = statusMap
+
+            // Check if Zayaan Apps Store (com.zayaanapps.store) has a newer version in Firestore
+            val storeCatalogEntry = apps.firstOrNull { it.packageName == "com.zayaanapps.store" }
+            if (storeCatalogEntry != null) {
+                val selfStatus = statusMap["com.zayaanapps.store"]
+                val currentCandidate = _storeSelfUpdateApp.value
+                if (selfStatus?.updateAvailable == true) {
+                    if (currentCandidate == null || storeCatalogEntry.versionCode >= currentCandidate.versionCode) {
+                        _storeSelfUpdateApp.value = storeCatalogEntry
+                    }
+                }
+            }
+
             if (apps.isEmpty() && !hasSeededCatalogInSession) {
                 hasSeededCatalogInSession = true
                 viewModelScope.launch {

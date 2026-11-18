@@ -436,11 +436,11 @@ class StoreRepository(
                         "https://zayaanapps.github.io/zayaan-apps/screenshots/store-home.png",
                         "https://zayaanapps.github.io/zayaan-apps/screenshots/store-admin.png"
                     ),
-                    versionName = "2.0.0",
-                    versionCode = 2L, // Set to 2 so current v1 (versionCode 1) shows an available update in My Apps!
+                    versionName = "1.0.0.2",
+                    versionCode = 2L, // Set to 2 so current v1.0.0.1 (versionCode 1) shows an available self-update!
                     apkDownloadUrl = "https://github.com/zayaanapps/zayaan-apps/releases/latest/download/zayaan-apps-release.apk",
                     apkFileSize = "16.8 MB",
-                    releaseNotes = "v2.0.0: Added centralized GitHub Releases webhook sync, Flutter Web GitHub Pages responsive portal, and one-tap APK updater.",
+                    releaseNotes = "v1.0.0.2: Added 4-part micro-versioning (1.0.0.X), self-update prompt card, and GitHub Releases auto-check.",
                     featured = true,
                     published = true,
                     downloadCount = 1280L
