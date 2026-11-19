@@ -1,7 +1,9 @@
 package com.example.ui
 
 import android.content.Context
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -31,15 +33,19 @@ import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.CompareArrows
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.InstallMobile
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.NewReleases
 import androidx.compose.material.icons.filled.OfflineBolt
 import androidx.compose.material.icons.filled.Policy
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.SdStorage
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.AssistChip
@@ -56,11 +62,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -69,6 +78,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.R
 import com.example.data.AppReview
@@ -233,9 +243,10 @@ fun AppDetailScreen(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(22.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.28f)),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
-                Column(modifier = Modifier.padding(20.dp)) {
+                Column(modifier = Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         val detailIconModel: Any = if (
                             app.packageName == "com.zayaanapps.store" &&
@@ -253,6 +264,11 @@ fun AppDetailScreen(
                             modifier = Modifier
                                 .size(76.dp)
                                 .clip(RoundedCornerShape(18.dp))
+                                .border(
+                                    width = 1.dp,
+                                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.28f),
+                                    shape = RoundedCornerShape(18.dp)
+                                )
                                 .background(MaterialTheme.colorScheme.surfaceVariant),
                             contentScale = ContentScale.Crop
                         )
@@ -290,7 +306,8 @@ fun AppDetailScreen(
                             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Surface(
                                     color = MaterialTheme.colorScheme.primaryContainer,
-                                    shape = RoundedCornerShape(6.dp)
+                                    shape = RoundedCornerShape(6.dp),
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f))
                                 ) {
                                     Text(
                                         text = app.category,
@@ -302,7 +319,8 @@ fun AppDetailScreen(
                                 if (app.editorsChoice) {
                                     Surface(
                                         color = MaterialTheme.colorScheme.tertiaryContainer,
-                                        shape = RoundedCornerShape(6.dp)
+                                        shape = RoundedCornerShape(6.dp),
+                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = 0.25f))
                                     ) {
                                         Text(
                                             text = "Editor's Choice",
@@ -315,7 +333,8 @@ fun AppDetailScreen(
                                 if (app.offlineCapable) {
                                     Surface(
                                         color = MaterialTheme.colorScheme.secondaryContainer,
-                                        shape = RoundedCornerShape(6.dp)
+                                        shape = RoundedCornerShape(6.dp),
+                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.25f))
                                     ) {
                                         Row(
                                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
@@ -349,36 +368,70 @@ fun AppDetailScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Telemetry Metric Pills Row (Google Play style)
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                    // Compact Single-Line Telemetry Strip (Version, Size, Downloads, Rating with Icons)
+                    val ratingSummaryText = if (reviews.isNotEmpty() || app.reviewCount > 0) {
+                        val avg = if (reviews.isNotEmpty()) reviews.map { it.rating }.average() else app.averageRating
+                        val count = maxOf(reviews.size.toLong(), app.reviewCount)
+                        "${String.format(Locale.US, "%.1f", avg)} ($count)"
+                    } else {
+                        "Verified"
+                    }
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.30f)),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        TelemetryStatBox(
-                            label = "VERSION",
-                            value = "v${app.versionName}"
-                        )
-                        TelemetryStatBox(
-                            label = "APK SIZE",
-                            value = app.apkFileSize
-                        )
-                        TelemetryStatBox(
-                            label = "DOWNLOADS",
-                            value = "${app.downloadCount}"
-                        )
-                        TelemetryStatBox(
-                            label = "RATING",
-                            value = if (reviews.isNotEmpty() || app.reviewCount > 0) {
-                                val avg = if (reviews.isNotEmpty()) reviews.map { it.rating }.average() else app.averageRating
-                                val count = maxOf(reviews.size.toLong(), app.reviewCount)
-                                "★ ${String.format(Locale.US, "%.1f", avg)} ($count)"
-                            } else {
-                                "Verified"
-                            }
-                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            CompactTelemetryItem(
+                                icon = Icons.Default.NewReleases,
+                                value = "v${app.versionName}",
+                                contentDescription = "Version",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            VerticalDivider(
+                                modifier = Modifier.height(14.dp),
+                                thickness = 1.dp,
+                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
+                            )
+                            CompactTelemetryItem(
+                                icon = Icons.Default.SdStorage,
+                                value = app.apkFileSize,
+                                contentDescription = "APK Size",
+                                tint = MaterialTheme.colorScheme.secondary
+                            )
+                            VerticalDivider(
+                                modifier = Modifier.height(14.dp),
+                                thickness = 1.dp,
+                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
+                            )
+                            CompactTelemetryItem(
+                                icon = Icons.Default.Download,
+                                value = "${app.downloadCount}",
+                                contentDescription = "Downloads",
+                                tint = MaterialTheme.colorScheme.tertiary
+                            )
+                            VerticalDivider(
+                                modifier = Modifier.height(14.dp),
+                                thickness = 1.dp,
+                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
+                            )
+                            CompactTelemetryItem(
+                                icon = Icons.Default.Star,
+                                value = ratingSummaryText,
+                                contentDescription = "Rating",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
                     }
 
-                    Spacer(modifier = Modifier.height(18.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
                     // Version Comparison Status Banner if Installed
                     if (installedStatus != null && installedStatus.isInstalled) {
@@ -389,6 +442,14 @@ fun AppDetailScreen(
                                 MaterialTheme.colorScheme.secondaryContainer
                             },
                             shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(
+                                width = 1.dp,
+                                color = if (installedStatus.updateAvailable) {
+                                    MaterialTheme.colorScheme.tertiary.copy(alpha = 0.35f)
+                                } else {
+                                    MaterialTheme.colorScheme.secondary.copy(alpha = 0.35f)
+                                }
+                            ),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Row(
@@ -763,7 +824,8 @@ fun AppDetailScreen(
                                 modifier = Modifier
                                     .width(248.dp)
                                     .height(152.dp),
-                                shape = RoundedCornerShape(16.dp)
+                                shape = RoundedCornerShape(16.dp),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.28f))
                             ) {
                                 AsyncImage(
                                     model = screenshotUrl,
@@ -784,6 +846,7 @@ fun AppDetailScreen(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(18.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.28f)),
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surfaceVariant
                     )
@@ -821,6 +884,7 @@ fun AppDetailScreen(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(18.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.28f)),
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surface
                     )
@@ -837,6 +901,7 @@ fun AppDetailScreen(
                             Surface(
                                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                                 shape = RoundedCornerShape(12.dp),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.22f)),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Column(modifier = Modifier.padding(12.dp)) {
@@ -894,6 +959,7 @@ fun AppDetailScreen(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(18.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.28f)),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -931,6 +997,7 @@ fun AppDetailScreen(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(18.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.28f)),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Column(
@@ -977,7 +1044,8 @@ fun AppDetailScreen(
                             app.permissionsList.forEach { perm ->
                                 Surface(
                                     color = MaterialTheme.colorScheme.surfaceVariant,
-                                    shape = RoundedCornerShape(8.dp)
+                                    shape = RoundedCornerShape(8.dp),
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.22f))
                                 ) {
                                     Text(
                                         text = perm,
@@ -998,6 +1066,7 @@ fun AppDetailScreen(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(18.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.28f)),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Column(
@@ -1221,6 +1290,7 @@ private fun RelatedAppMiniCard(
             .clickable(onClick = onClick)
             .testTag("related_app_card_${app.appId.ifBlank { app.docId }}"),
         shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
@@ -1240,6 +1310,11 @@ private fun RelatedAppMiniCard(
                 modifier = Modifier
                     .size(48.dp)
                     .clip(RoundedCornerShape(12.dp))
+                    .border(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.22f),
+                        shape = RoundedCornerShape(12.dp)
+                    )
                     .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentScale = ContentScale.Crop
             )
@@ -1294,27 +1369,31 @@ private fun SpecKeyValueRow(
 }
 
 @Composable
-private fun TelemetryStatBox(label: String, value: String) {
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        shape = RoundedCornerShape(12.dp)
+private fun CompactTelemetryItem(
+    icon: ImageVector,
+    value: String,
+    contentDescription: String,
+    tint: Color
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(3.dp)
     ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = value,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-        }
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = tint,
+            modifier = Modifier.size(13.dp)
+        )
+        Text(
+            text = value,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 

@@ -750,9 +750,20 @@ class StoreViewModel(
     }
 
     fun openInstalledApp(context: Context, packageName: String) {
-        packageController.openInstalledApp(context, packageName)
+        val targetPkg = packageName.trim()
+        if (targetPkg == context.packageName) {
+            android.widget.Toast.makeText(
+                context,
+                "Zayaan Apps Store is already open.",
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
+            return
+        }
+        packageController.openInstalledApp(context, targetPkg)
             .onFailure {
-                _statusBannerMessage.value = "Could not launch $packageName on this device."
+                val msg = "Could not launch $targetPkg on this device."
+                _statusBannerMessage.value = msg
+                android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
             }
     }
 

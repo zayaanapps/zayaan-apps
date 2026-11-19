@@ -590,14 +590,41 @@ class AndroidPackageController(private val context: Context) {
     }
 
     fun openInstalledApp(activityContext: Context, packageName: String): Result<Unit> {
+        val targetPkg = packageName.trim()
+        if (targetPkg.isBlank()) {
+            return Result.failure(IllegalArgumentException("Package name cannot be blank"))
+        }
         return try {
-            val launchIntent = activityContext.packageManager.getLaunchIntentForPackage(packageName)
+            val pm = activityContext.packageManager
+            val launchIntent = pm.getLaunchIntentForPackage(targetPkg)
+                ?: pm.getLeanbackLaunchIntentForPackage(targetPkg)
+                ?: run {
+                    val mainQuery = Intent(Intent.ACTION_MAIN).apply {
+                        setPackage(targetPkg)
+                    }
+                    val resolved = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        pm.queryIntentActivities(mainQuery, PackageManager.ResolveInfoFlags.of(0))
+                    } else {
+                        @Suppress("DEPRECATION")
+                        pm.queryIntentActivities(mainQuery, 0)
+                    }
+                    val targetActivity = resolved.firstOrNull { it.activityInfo?.exported != false }?.activityInfo
+                        ?: resolved.firstOrNull()?.activityInfo
+                    if (targetActivity != null) {
+                        Intent(Intent.ACTION_MAIN).apply {
+                            setClassName(targetActivity.packageName, targetActivity.name)
+                            addCategory(Intent.CATEGORY_LAUNCHER)
+                        }
+                    } else {
+                        null
+                    }
+                }
             if (launchIntent != null) {
-                launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
                 activityContext.startActivity(launchIntent)
                 Result.success(Unit)
             } else {
-                Result.failure(IllegalStateException("No launch activity found for $packageName"))
+                Result.failure(IllegalStateException("No launch activity found for $targetPkg"))
             }
         } catch (e: Exception) {
             Result.failure(e)

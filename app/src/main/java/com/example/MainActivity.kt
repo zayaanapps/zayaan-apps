@@ -3,6 +3,7 @@ package com.example
 import android.Manifest
 import android.os.Build
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -417,7 +418,15 @@ fun AuthenticatedStoreShell(
                                     onStartDownload = { viewModel.startApkDownload(it) },
                                     onCancelDownload = { viewModel.cancelActiveDownload(it) },
                                     onInstallApk = { ctx, path -> viewModel.installDownloadedApk(ctx, path) },
-                                    onOpenInstalledApp = { ctx, pkg -> viewModel.openInstalledApp(ctx, pkg) },
+                                    onOpenInstalledApp = { ctx, pkg ->
+                                        if (pkg.trim() == ctx.packageName) {
+                                            selectedAppIdForDetail = null
+                                            currentTab = ZayaanTab.STORE
+                                            Toast.makeText(ctx, "Zayaan Apps Store is open", Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            viewModel.openInstalledApp(ctx, pkg)
+                                        }
+                                    },
                                     onOpenBrowserDownload = { ctx, app -> viewModel.openExternalDownloadUrl(ctx, app) },
                                     onToggleBookmark = { viewModel.toggleBookmark(it) },
                                     onToggleFavorite = { viewModel.toggleFavorite(it) },
@@ -526,7 +535,13 @@ fun AuthenticatedStoreShell(
                                                 viewModel.clearComparisonApps()
                                             },
                                             onOpenInstalledApp = { ctx, pkg ->
-                                                viewModel.openInstalledApp(ctx, pkg)
+                                                if (pkg.trim() == ctx.packageName) {
+                                                    selectedAppIdForDetail = null
+                                                    currentTab = ZayaanTab.STORE
+                                                    Toast.makeText(ctx, "Zayaan Apps Store is open", Toast.LENGTH_SHORT).show()
+                                                } else {
+                                                    viewModel.openInstalledApp(ctx, pkg)
+                                                }
                                             }
                                         )
                                     }
