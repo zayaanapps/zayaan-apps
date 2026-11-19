@@ -280,23 +280,28 @@ class StoreRepository(
             reviewRef.update(updates).await()
         }
 
-        // Update aggregate ratingSum and reviewCount on the published StoreApp
+        // Update aggregate ratingSum and reviewCount on the published StoreApp using live Firestore counts
         if (appDocId.isNotBlank()) {
             val appRef = db.collection("apps").document(appDocId)
-            val newReviewCount = if (existingSnap.exists()) {
-                app.reviewCount.coerceAtLeast(1L)
-            } else {
-                app.reviewCount + 1L
-            }
-            val newRatingSum = (app.ratingSum - previousRating + coercedRating).coerceAtLeast(coercedRating)
             try {
-                appRef.update(
-                    mapOf(
-                        "ratingSum" to newRatingSum,
-                        "reviewCount" to newReviewCount,
-                        "updatedAt" to FieldValue.serverTimestamp()
-                    )
-                ).await()
+                val appSnap = appRef.get().await()
+                if (appSnap.exists()) {
+                    val cloudReviewCount = (appSnap.getLong("reviewCount") ?: app.reviewCount).coerceAtLeast(0L)
+                    val cloudRatingSum = (appSnap.getLong("ratingSum") ?: app.ratingSum).coerceAtLeast(0L)
+                    val newReviewCount = if (existingSnap.exists()) {
+                        cloudReviewCount.coerceAtLeast(1L)
+                    } else {
+                        cloudReviewCount + 1L
+                    }
+                    val newRatingSum = (cloudRatingSum - previousRating + coercedRating).coerceAtLeast(coercedRating)
+                    appRef.update(
+                        mapOf(
+                            "ratingSum" to newRatingSum,
+                            "reviewCount" to newReviewCount,
+                            "updatedAt" to FieldValue.serverTimestamp()
+                        )
+                    ).await()
+                }
             } catch (_: Exception) {
                 // Ignore if app document is not yet persisted in Firestore
             }
@@ -308,9 +313,11 @@ class StoreRepository(
      */
     suspend fun voteReviewHelpful(review: AppReview): Result<Unit> = runCatching {
         require(review.id.isNotBlank()) { "Review ID cannot be blank" }
-        db.collection("reviews").document(review.id).update(
+        val docRef = db.collection("reviews").document(review.id)
+        val currentHelpful = docRef.get().await().getLong("helpfulCount") ?: review.helpfulCount
+        docRef.update(
             mapOf(
-                "helpfulCount" to (review.helpfulCount + 1L),
+                "helpfulCount" to (currentHelpful + 1L),
                 "flagged" to review.flagged,
                 "updatedAt" to FieldValue.serverTimestamp()
             )
@@ -346,11 +353,38 @@ class StoreRepository(
     }
 
     /**
-     * Deletes a review (allowed for the review author or store administrator).
+     * Deletes a review (allowed for the review author or store administrator)
+     * and decrements the parent app's aggregate `ratingSum` and `reviewCount`.
      */
     suspend fun deleteReview(reviewId: String): Result<Unit> = runCatching {
         require(reviewId.isNotBlank()) { "Review ID cannot be blank" }
-        db.collection("reviews").document(reviewId).delete().await()
+        val reviewRef = db.collection("reviews").document(reviewId)
+        val snap = reviewRef.get().await()
+        val targetAppId = snap.getString("appId") ?: ""
+        val deletedRating = (snap.getLong("rating") ?: 0L).coerceIn(0L, 5L)
+        reviewRef.delete().await()
+
+        if (targetAppId.isNotBlank() && deletedRating > 0L) {
+            val appRef = db.collection("apps").document(targetAppId)
+            try {
+                val appSnap = appRef.get().await()
+                if (appSnap.exists()) {
+                    val cloudCount = (appSnap.getLong("reviewCount") ?: 0L).coerceAtLeast(0L)
+                    val cloudSum = (appSnap.getLong("ratingSum") ?: 0L).coerceAtLeast(0L)
+                    val newCount = (cloudCount - 1L).coerceAtLeast(0L)
+                    val newSum = if (newCount == 0L) 0L else (cloudSum - deletedRating).coerceAtLeast(0L)
+                    appRef.update(
+                        mapOf(
+                            "ratingSum" to newSum,
+                            "reviewCount" to newCount,
+                            "updatedAt" to FieldValue.serverTimestamp()
+                        )
+                    ).await()
+                }
+            } catch (_: Exception) {
+                // Review deletion succeeded; ignore if app doc aggregate update is skipped
+            }
+        }
     }
 
     /**

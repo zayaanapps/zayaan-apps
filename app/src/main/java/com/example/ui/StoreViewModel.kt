@@ -22,12 +22,14 @@ import com.example.data.StoreCategory
 import com.example.data.StoreNotification
 import com.example.data.StoreRepository
 import com.example.data.UserPreference
+import com.google.firebase.Timestamp
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 import java.io.File
+import java.util.Date
 
 sealed interface UiState<out T> {
     data object Loading : UiState<Nothing>
@@ -173,13 +175,79 @@ class StoreViewModel(
         }
     }
 
+    private fun applyLocalReviewAggregates(apps: List<StoreApp>, reviews: List<AppReview>): List<StoreApp> {
+        if (reviews.isEmpty()) return apps
+        val grouped = reviews.groupBy { it.appId }
+        return apps.map { app ->
+            val appId = app.appId.ifBlank { app.docId }
+            val appReviews = grouped[appId].orEmpty()
+            if (appReviews.isEmpty()) {
+                app
+            } else {
+                app.copy(
+                    ratingSum = appReviews.sumOf { it.rating },
+                    reviewCount = appReviews.size.toLong()
+                )
+            }
+        }
+    }
+
+    private fun refreshGuestCatalogAggregates(reviews: List<AppReview>) {
+        val currentPub = (_publishedAppsState.value as? UiState.Success)?.data
+        if (currentPub != null) {
+            _publishedAppsState.value = UiState.Success(applyLocalReviewAggregates(currentPub, reviews))
+        }
+        val currentAdmin = (_adminAppsState.value as? UiState.Success)?.data
+        if (currentAdmin != null) {
+            _adminAppsState.value = UiState.Success(applyLocalReviewAggregates(currentAdmin, reviews))
+        }
+    }
+
     private fun loadGuestPreviewStore() {
-        val starterApps = enrichCatalogWithLiveStoreRelease(StoreRepository.officialStarterApps())
+        val localReviews = packageController.loadLocalReviewsBackup()
+        _allReviewsState.value = localReviews
+        val starterApps = applyLocalReviewAggregates(
+            enrichCatalogWithLiveStoreRelease(StoreRepository.officialStarterApps()),
+            localReviews
+        )
         _publishedAppsState.value = UiState.Success(starterApps)
         _adminAppsState.value = UiState.Success(starterApps)
         _categoriesState.value = UiState.Success(StoreRepository.officialDefaultCategories())
         _userPreferencesState.value = UserPreference(userId = currentUserId, darkMode = true, notifyUpdates = true)
         refreshInstalledPackages(starterApps)
+    }
+
+    private fun syncPendingLocalReviewsToCloud(catalogApps: List<StoreApp>) {
+        val pending = packageController.loadLocalReviewsBackup()
+        if (pending.isEmpty()) return
+        viewModelScope.launch {
+            val displayName = currentUserEmail?.substringBefore("@")?.replaceFirstChar { it.uppercase() }
+                ?: "Zayaan User"
+            var allSynced = true
+            pending.forEach { localReview ->
+                val targetApp = catalogApps.firstOrNull {
+                    (it.appId.ifBlank { it.docId }) == localReview.appId
+                } ?: StoreApp(
+                    docId = localReview.appId,
+                    appId = localReview.appId,
+                    appName = localReview.appName
+                )
+                val result = repository.submitOrUpdateReview(
+                    app = targetApp,
+                    userId = currentUserId,
+                    userName = displayName,
+                    rating = localReview.rating,
+                    comment = localReview.comment,
+                    verifiedInstall = localReview.verifiedInstall
+                )
+                if (result.isFailure) {
+                    allSynced = false
+                }
+            }
+            if (allSynced) {
+                packageController.clearLocalReviewsBackup()
+            }
+        }
     }
 
     private fun observeStoreStreams() {
@@ -197,6 +265,8 @@ class StoreViewModel(
                         if (apps.isEmpty() && !hasAutoSeededEmptyStore) {
                             hasAutoSeededEmptyStore = true
                             seedInitialCatalogIfEmpty()
+                        } else if (apps.isNotEmpty()) {
+                            syncPendingLocalReviewsToCloud(enriched)
                         }
                     }.onFailure { e ->
                         _publishedAppsState.value = UiState.Error(e.localizedMessage ?: "Failed to load catalog")
@@ -802,20 +872,39 @@ class StoreViewModel(
         val isVerifiedInstall = _installedStatuses.value[app.packageName]?.isInstalled == true
         val displayName = currentUserEmail?.substringBefore("@")?.replaceFirstChar { it.uppercase() }
             ?: "Zayaan User"
+        val appId = app.appId.ifBlank { app.docId }
+        val existing = _allReviewsState.value.firstOrNull {
+            it.appId == appId && it.userId == currentUserId
+        }
+        val coercedRating = rating.coerceIn(1L, 5L)
+        val cleanComment = comment.trim().take(1500).ifBlank { "Rated $coercedRating stars." }
+
         if (!isAuthenticated) {
-            val appId = app.appId.ifBlank { app.docId }
+            val nowTs = Timestamp(Date())
             val localReview = AppReview(
                 id = "${appId}_${currentUserId}",
                 appId = appId,
                 appName = app.appName,
                 userId = currentUserId,
                 userName = displayName,
-                rating = rating,
-                comment = comment,
-                verifiedInstall = isVerifiedInstall
+                rating = coercedRating,
+                comment = cleanComment,
+                verifiedInstall = isVerifiedInstall,
+                helpfulCount = existing?.helpfulCount ?: 0L,
+                developerReply = existing?.developerReply ?: "",
+                flagged = existing?.flagged ?: false,
+                createdAt = existing?.createdAt ?: nowTs,
+                updatedAt = nowTs
             )
-            _allReviewsState.value = listOf(localReview) + _allReviewsState.value.filterNot { it.id == localReview.id }
-            _statusBannerMessage.value = "Saved your $rating★ review locally (cloud sync resumes when Sign-In is enabled)."
+            val updatedList = listOf(localReview) + _allReviewsState.value.filterNot { it.id == localReview.id }
+            _allReviewsState.value = updatedList
+            packageController.saveLocalReviewsBackup(updatedList)
+            refreshGuestCatalogAggregates(updatedList)
+            _statusBannerMessage.value = if (existing != null) {
+                "Updated your $coercedRating★ review (saved locally; auto-syncs to Cloud when Sign-In is enabled)."
+            } else {
+                "Saved your $coercedRating★ review locally (auto-syncs to Cloud when Sign-In is enabled)."
+            }
             return
         }
         viewModelScope.launch {
@@ -823,29 +912,35 @@ class StoreViewModel(
                 app = app,
                 userId = currentUserId,
                 userName = displayName,
-                rating = rating,
-                comment = comment,
+                rating = coercedRating,
+                comment = cleanComment,
                 verifiedInstall = isVerifiedInstall
             ).onSuccess {
-                _statusBannerMessage.value = "Published your $rating★ review for ${app.appName}."
+                _statusBannerMessage.value = if (existing != null) {
+                    "Updated your $coercedRating★ review for ${app.appName} in Cloud."
+                } else {
+                    "Published your $coercedRating★ review for ${app.appName} to Cloud."
+                }
             }.onFailure { e ->
-                _statusBannerMessage.value = "Could not post review: ${e.localizedMessage}"
+                _statusBannerMessage.value = "Could not save review to Cloud: ${e.localizedMessage}"
             }
         }
     }
 
     fun voteReviewHelpful(review: AppReview) {
         if (!isAuthenticated) {
-            _allReviewsState.value = _allReviewsState.value.map {
+            val updatedList = _allReviewsState.value.map {
                 if (it.id == review.id) it.copy(helpfulCount = it.helpfulCount + 1) else it
             }
+            _allReviewsState.value = updatedList
+            packageController.saveLocalReviewsBackup(updatedList)
             _statusBannerMessage.value = "Marked ${review.userName}'s review as helpful."
             return
         }
         viewModelScope.launch {
             repository.voteReviewHelpful(review)
                 .onSuccess {
-                    _statusBannerMessage.value = "Marked ${review.userName}'s review as helpful (+1)."
+                    _statusBannerMessage.value = "Marked ${review.userName}'s review as helpful (+1) in Cloud."
                 }
                 .onFailure { e ->
                     _statusBannerMessage.value = "Vote failed: ${e.localizedMessage}"
@@ -854,13 +949,26 @@ class StoreViewModel(
     }
 
     fun flagReviewForModeration(review: AppReview, flagged: Boolean = true) {
+        if (!isAuthenticated) {
+            val updatedList = _allReviewsState.value.map {
+                if (it.id == review.id) it.copy(flagged = flagged, updatedAt = Timestamp(Date())) else it
+            }
+            _allReviewsState.value = updatedList
+            packageController.saveLocalReviewsBackup(updatedList)
+            _statusBannerMessage.value = if (flagged) {
+                "Review flagged locally for moderation."
+            } else {
+                "Cleared moderation flag on review."
+            }
+            return
+        }
         viewModelScope.launch {
             repository.setReviewFlagged(review, flagged)
                 .onSuccess {
                     _statusBannerMessage.value = if (flagged) {
-                        "Review flagged for moderator review."
+                        "Review flagged for moderator review in Cloud."
                     } else {
-                        "Cleared moderation flag on review."
+                        "Cleared moderation flag on review in Cloud."
                     }
                     if (!flagged) {
                         logAudit("REVIEW_APPROVED", "REVIEW", review.id, "Cleared moderation flag on review by ${review.userName} for ${review.appName}.")
@@ -873,10 +981,25 @@ class StoreViewModel(
     }
 
     fun replyToReviewAsAdmin(review: AppReview, replyText: String) {
+        if (!isAuthenticated) {
+            val updatedList = _allReviewsState.value.map {
+                if (it.id == review.id) {
+                    it.copy(
+                        developerReply = replyText.trim().take(1000),
+                        flagged = false,
+                        updatedAt = Timestamp(Date())
+                    )
+                } else it
+            }
+            _allReviewsState.value = updatedList
+            packageController.saveLocalReviewsBackup(updatedList)
+            _statusBannerMessage.value = "Saved developer reply locally."
+            return
+        }
         viewModelScope.launch {
             repository.replyToReviewAsAdmin(review, replyText)
                 .onSuccess {
-                    _statusBannerMessage.value = "Posted developer reply to ${review.userName}."
+                    _statusBannerMessage.value = "Posted developer reply to ${review.userName} in Cloud."
                     logAudit("REVIEW_REPLIED", "REVIEW", review.id, "Posted official developer reply on ${review.appName}.")
                 }
                 .onFailure { e ->
@@ -886,10 +1009,18 @@ class StoreViewModel(
     }
 
     fun deleteReview(review: AppReview) {
+        if (!isAuthenticated) {
+            val updatedList = _allReviewsState.value.filterNot { it.id == review.id }
+            _allReviewsState.value = updatedList
+            packageController.saveLocalReviewsBackup(updatedList)
+            refreshGuestCatalogAggregates(updatedList)
+            _statusBannerMessage.value = "Deleted review by ${review.userName}."
+            return
+        }
         viewModelScope.launch {
             repository.deleteReview(review.id)
                 .onSuccess {
-                    _statusBannerMessage.value = "Deleted review by ${review.userName}."
+                    _statusBannerMessage.value = "Deleted review by ${review.userName} from Cloud."
                     logAudit("REVIEW_DELETED", "REVIEW", review.id, "Deleted review by ${review.userName} on ${review.appName}.")
                 }
                 .onFailure { e ->

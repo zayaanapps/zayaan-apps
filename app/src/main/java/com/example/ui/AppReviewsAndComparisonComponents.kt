@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CompareArrows
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.RateReview
@@ -86,9 +87,16 @@ fun RatingsAndReviewsSection(
         reviews.firstOrNull { it.userId == currentUserId }
     }
     var selectedStars by remember(existingUserReview) {
-        mutableLongStateOf(existingUserReview?.rating ?: 5L)
+        mutableLongStateOf(5L)
     }
     var reviewComment by remember(existingUserReview) {
+        mutableStateOf("")
+    }
+    var showEditReviewDialog by remember { mutableStateOf(false) }
+    var editStars by remember(existingUserReview) {
+        mutableLongStateOf(existingUserReview?.rating ?: 5L)
+    }
+    var editComment by remember(existingUserReview) {
         mutableStateOf(existingUserReview?.comment ?: "")
     }
     var replyingToReview by remember { mutableStateOf<AppReview?>(null) }
@@ -224,99 +232,169 @@ fun RatingsAndReviewsSection(
                 }
             }
 
-            // Compact Rate & Review Box
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f),
-                shape = RoundedCornerShape(12.dp),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.22f)),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+            // Review Submission Form (hidden once submitted, replaced by compact Edit option)
+            if (existingUserReview != null) {
+                Surface(
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.22f),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("submitted_review_summary_bar")
                 ) {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 9.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = if (existingUserReview != null) "Update Your Review" else "Rate & Review ${app.appName}",
-                            style = MaterialTheme.typography.labelLarge,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Surface(
-                            color = MaterialTheme.colorScheme.surface,
-                            shape = RoundedCornerShape(8.dp),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f))
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
                         ) {
-                            Text(
-                                text = "$selectedStars / 5 ★",
-                                fontSize = 10.5.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
-                                maxLines = 1,
-                                softWrap = false
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Star,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.tertiary,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Text(
+                                    text = "Your review (${existingUserReview.rating}/5 ★)",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            if (existingUserReview.comment.isNotBlank()) {
+                                Text(
+                                    text = existingUserReview.comment,
+                                    fontSize = 11.5.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        OutlinedButton(
+                            onClick = {
+                                editStars = existingUserReview.rating
+                                editComment = existingUserReview.comment
+                                showEditReviewDialog = true
+                            },
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            modifier = Modifier.testTag("open_edit_review_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "Edit review",
+                                modifier = Modifier.size(15.dp)
                             )
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Text("Edit", fontSize = 12.sp)
                         }
                     }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                }
+            } else {
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.22f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            for (star in 1L..5L) {
-                                IconButton(
-                                    onClick = { selectedStars = star },
-                                    modifier = Modifier.testTag("star_rating_button_$star")
-                                ) {
-                                    Icon(
-                                        imageVector = if (star <= selectedStars) Icons.Default.Star else Icons.Default.StarBorder,
-                                        contentDescription = "Rate $star stars",
-                                        tint = if (star <= selectedStars) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(22.dp)
-                                    )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Rate & Review ${app.appName}",
+                                style = MaterialTheme.typography.labelLarge,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Surface(
+                                color = MaterialTheme.colorScheme.surface,
+                                shape = RoundedCornerShape(8.dp),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f))
+                            ) {
+                                Text(
+                                    text = "$selectedStars / 5 ★",
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                            }
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                for (star in 1L..5L) {
+                                    IconButton(
+                                        onClick = { selectedStars = star },
+                                        modifier = Modifier.testTag("star_rating_button_$star")
+                                    ) {
+                                        Icon(
+                                            imageVector = if (star <= selectedStars) Icons.Default.Star else Icons.Default.StarBorder,
+                                            contentDescription = "Rate $star stars",
+                                            tint = if (star <= selectedStars) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
-                    }
 
-                    OutlinedTextField(
-                        value = reviewComment,
-                        onValueChange = { reviewComment = it },
-                        label = { Text("Share your experience...", fontSize = 12.sp) },
-                        minLines = 1,
-                        maxLines = 3,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("review_comment_input")
-                    )
+                        OutlinedTextField(
+                            value = reviewComment,
+                            onValueChange = { reviewComment = it },
+                            label = { Text("Share your experience...", fontSize = 12.sp) },
+                            minLines = 1,
+                            maxLines = 3,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("review_comment_input")
+                        )
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        Button(
-                            onClick = {
-                                onSubmitReview(selectedStars, reviewComment)
-                            },
-                            modifier = Modifier.testTag("submit_review_button")
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Send,
-                                contentDescription = null,
-                                modifier = Modifier.size(15.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = if (existingUserReview != null) "Update Review" else "Post Review",
-                                fontSize = 12.sp
-                            )
+                            Button(
+                                onClick = {
+                                    onSubmitReview(selectedStars, reviewComment)
+                                },
+                                modifier = Modifier.testTag("submit_review_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Send,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Post Review",
+                                    fontSize = 12.sp
+                                )
+                            }
                         }
                     }
                 }
@@ -361,11 +439,127 @@ fun RatingsAndReviewsSection(
                             replyingToReview = review
                             replyDraft = review.developerReply
                         },
+                        onEditClick = {
+                            editStars = review.rating
+                            editComment = review.comment
+                            showEditReviewDialog = true
+                        },
                         onDeleteClick = { onDeleteReview(review) }
                     )
                 }
             }
         }
+    }
+
+    if (showEditReviewDialog && existingUserReview != null) {
+        AlertDialog(
+            onDismissRequest = { showEditReviewDialog = false },
+            title = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        text = "Edit Your Review",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = app.appName,
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Surface(
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.28f))
+                        ) {
+                            Text(
+                                text = "$editStars / 5 ★",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        for (star in 1L..5L) {
+                            IconButton(
+                                onClick = { editStars = star },
+                                modifier = Modifier.testTag("edit_star_rating_button_$star")
+                            ) {
+                                Icon(
+                                    imageVector = if (star <= editStars) Icons.Default.Star else Icons.Default.StarBorder,
+                                    contentDescription = "Rate $star stars",
+                                    tint = if (star <= editStars) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(26.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = editComment,
+                        onValueChange = { editComment = it },
+                        label = { Text("Update your review...") },
+                        minLines = 2,
+                        maxLines = 5,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("edit_review_comment_input")
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onSubmitReview(editStars, editComment)
+                        showEditReviewDialog = false
+                    },
+                    modifier = Modifier.testTag("save_edited_review_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Send,
+                        contentDescription = null,
+                        modifier = Modifier.size(15.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Save Changes")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showEditReviewDialog = false },
+                    modifier = Modifier.testTag("cancel_edit_review_button")
+                ) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 
     if (replyingToReview != null) {
@@ -409,6 +603,7 @@ private fun ReviewItemCard(
     onVoteHelpful: () -> Unit,
     onFlagToggle: () -> Unit,
     onReplyClick: () -> Unit,
+    onEditClick: () -> Unit,
     onDeleteClick: () -> Unit
 ) {
     val dateStr = remember(review.updatedAt, review.createdAt) {
@@ -554,6 +749,19 @@ private fun ReviewItemCard(
                             tint = if (review.flagged) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(18.dp)
                         )
+                    }
+                    if (isOwnReview) {
+                        IconButton(
+                            onClick = onEditClick,
+                            modifier = Modifier.testTag("edit_review_icon_button_${review.id}")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "Edit review",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     }
                     if (isOwnReview || isAdmin) {
                         IconButton(

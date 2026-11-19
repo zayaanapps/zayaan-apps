@@ -19,13 +19,16 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
+import com.google.firebase.Timestamp
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.security.MessageDigest
+import java.util.Date
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
@@ -43,6 +46,8 @@ class AndroidPackageController(private val context: Context) {
 
     companion object {
         private const val UPDATE_CHANNEL_ID = "zayaan_app_updates"
+        private const val PREFS_NAME = "zayaan_store_local_cache"
+        private const val KEY_PENDING_REVIEWS_JSON = "pending_reviews_json"
     }
 
     init {
@@ -778,5 +783,79 @@ class AndroidPackageController(private val context: Context) {
             essential = true,
             published = true
         )
+    }
+
+    fun saveLocalReviewsBackup(reviews: List<AppReview>) {
+        try {
+            val prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val arr = JSONArray()
+            reviews.forEach { review ->
+                val obj = JSONObject().apply {
+                    put("id", review.id)
+                    put("appId", review.appId)
+                    put("appName", review.appName)
+                    put("userId", review.userId)
+                    put("userName", review.userName)
+                    put("rating", review.rating)
+                    put("comment", review.comment)
+                    put("verifiedInstall", review.verifiedInstall)
+                    put("helpfulCount", review.helpfulCount)
+                    put("developerReply", review.developerReply)
+                    put("flagged", review.flagged)
+                    put("createdAtMillis", review.createdAt?.toDate()?.time ?: System.currentTimeMillis())
+                    put("updatedAtMillis", review.updatedAt?.toDate()?.time ?: System.currentTimeMillis())
+                }
+                arr.put(obj)
+            }
+            prefs.edit().putString(KEY_PENDING_REVIEWS_JSON, arr.toString()).apply()
+        } catch (_: Exception) {
+        }
+    }
+
+    fun loadLocalReviewsBackup(): List<AppReview> {
+        return try {
+            val prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val raw = prefs.getString(KEY_PENDING_REVIEWS_JSON, null) ?: return emptyList()
+            val arr = JSONArray(raw)
+            buildList {
+                for (i in 0 until arr.length()) {
+                    val obj = arr.optJSONObject(i) ?: continue
+                    val id = obj.optString("id", "")
+                    val appId = obj.optString("appId", "")
+                    if (id.isBlank() || appId.isBlank()) continue
+                    val createdMillis = obj.optLong("createdAtMillis", 0L)
+                    val updatedMillis = obj.optLong("updatedAtMillis", 0L)
+                    add(
+                        AppReview(
+                            id = id,
+                            appId = appId,
+                            appName = obj.optString("appName", appId),
+                            userId = obj.optString("userId", "guest-preview"),
+                            userName = obj.optString("userName", "Zayaan User"),
+                            rating = obj.optLong("rating", 5L).coerceIn(1L, 5L),
+                            comment = obj.optString("comment", ""),
+                            verifiedInstall = obj.optBoolean("verifiedInstall", false),
+                            helpfulCount = obj.optLong("helpfulCount", 0L).coerceAtLeast(0L),
+                            developerReply = obj.optString("developerReply", ""),
+                            flagged = obj.optBoolean("flagged", false),
+                            createdAt = if (createdMillis > 0L) Timestamp(Date(createdMillis)) else null,
+                            updatedAt = if (updatedMillis > 0L) Timestamp(Date(updatedMillis)) else null
+                        )
+                    )
+                }
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    fun clearLocalReviewsBackup() {
+        try {
+            appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .edit()
+                .remove(KEY_PENDING_REVIEWS_JSON)
+                .apply()
+        } catch (_: Exception) {
+        }
     }
 }
