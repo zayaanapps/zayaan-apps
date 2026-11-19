@@ -180,6 +180,40 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
       app.appId == 'zayaan-apps-store' ||
       app.packageName == 'com.zayaanapps.store';
 
+  UserInstalledAppModel? _installedInfoFor(StoreAppModel app) {
+    final direct = _installedByAppId[app.appId];
+    if (direct != null) return direct;
+    final pkgLower = app.packageName.trim().toLowerCase();
+    if (pkgLower.isNotEmpty) {
+      for (final record in _installedByAppId.values) {
+        if (record.packageName.trim().toLowerCase() == pkgLower) {
+          return record;
+        }
+      }
+    }
+    return null;
+  }
+
+  bool _isUpdateAvailableFor(StoreAppModel app) {
+    final info = _installedInfoFor(app);
+    if (info == null || !info.installed) return false;
+    if (info.updateAvailable) return true;
+    if (info.remoteVersionCode > 0 &&
+        app.versionCode > info.remoteVersionCode &&
+        info.installedVersionCode > 0 &&
+        app.versionCode > info.installedVersionCode &&
+        app.versionName.trim() != info.installedVersionName.trim()) {
+      return true;
+    }
+    return false;
+  }
+
+  bool _isInstalledLatestOnDevice(StoreAppModel app) {
+    final info = _installedInfoFor(app);
+    if (info == null || !info.installed) return false;
+    return !_isUpdateAvailableFor(app);
+  }
+
   ZayaanFirestoreService? _tryFirestore() {
     try {
       if (Firebase.apps.isNotEmpty) {
@@ -957,9 +991,8 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
         try {
           await fs.incrementDownloadCount(app.appId);
         } catch (_) {}
-        final installedInfo = _installedByAppId[app.appId];
         final action =
-            (isRemoteUpdate || installedInfo?.updateAvailable == true)
+            (isRemoteUpdate || _isUpdateAvailableFor(app))
                 ? 'UPDATE'
                 : 'DOWNLOAD';
         try {
@@ -987,8 +1020,7 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
   }
 
   String appNameActionLabel(StoreAppModel app, bool isRemoteUpdate) {
-    final installedInfo = _installedByAppId[app.appId];
-    return (isRemoteUpdate || installedInfo?.updateAvailable == true)
+    return (isRemoteUpdate || _isUpdateAvailableFor(app))
         ? 'update for ${app.appName}'
         : 'download for ${app.appName}';
   }
@@ -1359,6 +1391,30 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
 
   Widget _buildHomeAppIcon(StoreAppModel app, ColorScheme cs,
       {double size = 48, double radius = 12}) {
+    if (_isStoreAppModel(app)) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(radius),
+        child: Image.asset(
+          'assets/zayaan_logo.png',
+          width: size,
+          height: size,
+          fit: BoxFit.contain,
+          errorBuilder: (_, __, ___) => Container(
+            width: size,
+            height: size,
+            color: cs.primaryContainer,
+            alignment: Alignment.center,
+            child: Text(
+              app.appName.substring(0, 1),
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: cs.onPrimaryContainer,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     return Container(
       width: size,
       height: size,
@@ -1497,43 +1553,59 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    child: Row(
                       children: [
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Flexible(
-                              child: Text(
-                                'Zayaan Apps Store',
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: Image.asset(
+                            'assets/zayaan_logo.png',
+                            width: 38,
+                            height: 38,
+                            fit: BoxFit.contain,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      'Zayaan Apps Store',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w800,
+                                        color: heroTitleColor,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 5),
+                                  Icon(
+                                    Icons.verified,
+                                    size: 15,
+                                    color: isDark
+                                        ? const Color(0xFF6EDBA9)
+                                        : cs.primary,
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 1),
+                              Text(
+                                'Verified Android APKs • GitHub Releases & Cloud',
                                 style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w800,
-                                  color: heroTitleColor,
+                                  fontSize: 11,
+                                  color: heroSubtitleColor,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
-                            ),
-                            const SizedBox(width: 5),
-                            Icon(
-                              Icons.verified,
-                              size: 15,
-                              color: isDark
-                                  ? const Color(0xFF6EDBA9)
-                                  : cs.primary,
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 1),
-                        Text(
-                          'Verified Android APKs • GitHub Releases & Cloud',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: heroSubtitleColor,
+                            ],
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
@@ -1750,18 +1822,78 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
               Wrap(
                 spacing: 8,
                 runSpacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  FilledButton.icon(
-                    style: FilledButton.styleFrom(
-                      visualDensity: VisualDensity.compact,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
-                      textStyle: const TextStyle(
-                          fontSize: 12, fontWeight: FontWeight.w600),
-                    ),
-                    onPressed: () => _handleDownload(_catalog.first),
-                    icon: const Icon(Icons.download, size: 15),
-                    label: const Text('Download Store APK'),
+                  Builder(
+                    builder: (context) {
+                      final storeApp = _catalog.first;
+                      final storeInstalledInfo = _installedInfoFor(storeApp);
+                      final storeInstalledLatest =
+                          _isSignedIn && _isInstalledLatestOnDevice(storeApp);
+                      final storeNeedsUpdate =
+                          _isSignedIn && _isUpdateAvailableFor(storeApp);
+                      if (storeInstalledLatest) {
+                        final ver = storeInstalledInfo?.installedVersionName
+                                    .isNotEmpty ==
+                                true
+                            ? storeInstalledInfo!.installedVersionName
+                            : storeApp.versionName;
+                        return OutlinedButton.icon(
+                          onPressed: () => _openAppDetail(storeApp),
+                          style: OutlinedButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
+                            textStyle: const TextStyle(
+                                fontSize: 12, fontWeight: FontWeight.w700),
+                            foregroundColor: isDark
+                                ? const Color(0xFF6EDBA9)
+                                : cs.primary,
+                            backgroundColor: isDark
+                                ? const Color(0xFF6EDBA9)
+                                    .withValues(alpha: 0.14)
+                                : cs.primary.withValues(alpha: 0.10),
+                            side: BorderSide(
+                              color: isDark
+                                  ? const Color(0xFF6EDBA9)
+                                      .withValues(alpha: 0.55)
+                                  : cs.primary.withValues(alpha: 0.38),
+                            ),
+                          ),
+                          icon: const Icon(Icons.check_circle, size: 15),
+                          label: Text(
+                              'Already Installed on Android (v$ver)'),
+                        );
+                      }
+                      if (storeNeedsUpdate) {
+                        return FilledButton.icon(
+                          style: FilledButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
+                            textStyle: const TextStyle(
+                                fontSize: 12, fontWeight: FontWeight.w600),
+                          ),
+                          onPressed: () =>
+                              _handleDownload(storeApp, isRemoteUpdate: true),
+                          icon: const Icon(Icons.system_update, size: 15),
+                          label: Text(
+                              'Update Store on Android (v${storeApp.versionName})'),
+                        );
+                      }
+                      return FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 6),
+                          textStyle: const TextStyle(
+                              fontSize: 12, fontWeight: FontWeight.w600),
+                        ),
+                        onPressed: () => _handleDownload(storeApp),
+                        icon: const Icon(Icons.download, size: 15),
+                        label: const Text('Download Store APK'),
+                      );
+                    },
                   ),
                   OutlinedButton.icon(
                     onPressed: () => _openAppDetail(_catalog.first),
@@ -2043,37 +2175,97 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
                                               fontWeight: FontWeight.w600)),
                                     ],
                                   ),
-                                  InkWell(
-                                    borderRadius: BorderRadius.circular(8),
-                                    onTap: () => _handleDownload(app),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color:
-                                            cs.primary.withValues(alpha: 0.14),
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(
-                                            color: cs.primary
-                                                .withValues(alpha: 0.35)),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(Icons.cloud_download,
-                                              size: 12, color: cs.primary),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            'Get APK',
-                                            style: TextStyle(
-                                              fontSize: 10.5,
-                                              fontWeight: FontWeight.w600,
-                                              color: cs.primary,
+                                  Builder(
+                                    builder: (context) {
+                                      final isInstalledLatest = _isSignedIn &&
+                                          _isInstalledLatestOnDevice(app);
+                                      final isUpdate = _isSignedIn &&
+                                          _isUpdateAvailableFor(app);
+                                      if (isInstalledLatest) {
+                                        return InkWell(
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                          onTap: () => _openAppDetail(app),
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 8, vertical: 4),
+                                            decoration: BoxDecoration(
+                                              color: cs.primary
+                                                  .withValues(alpha: 0.14),
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                              border: Border.all(
+                                                  color: cs.primary
+                                                      .withValues(alpha: 0.35)),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(Icons.check_circle,
+                                                    size: 12,
+                                                    color: cs.primary),
+                                                const SizedBox(width: 4),
+                                                Text(
+                                                  'Installed',
+                                                  style: TextStyle(
+                                                    fontSize: 10.5,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: cs.primary,
+                                                  ),
+                                                ),
+                                              ],
                                             ),
                                           ),
-                                        ],
-                                      ),
-                                    ),
+                                        );
+                                      }
+                                      return InkWell(
+                                        borderRadius: BorderRadius.circular(8),
+                                        onTap: () => _handleDownload(app,
+                                            isRemoteUpdate: isUpdate),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 8, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: (isUpdate
+                                                    ? cs.tertiary
+                                                    : cs.primary)
+                                                .withValues(alpha: 0.14),
+                                            borderRadius:
+                                                BorderRadius.circular(8),
+                                            border: Border.all(
+                                                color: (isUpdate
+                                                        ? cs.tertiary
+                                                        : cs.primary)
+                                                    .withValues(alpha: 0.35)),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                isUpdate
+                                                    ? Icons.system_update
+                                                    : Icons.cloud_download,
+                                                size: 12,
+                                                color: isUpdate
+                                                    ? cs.tertiary
+                                                    : cs.primary,
+                                              ),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                isUpdate ? 'Update' : 'Get APK',
+                                                style: TextStyle(
+                                                  fontSize: 10.5,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: isUpdate
+                                                      ? cs.tertiary
+                                                      : cs.primary,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      );
+                                    },
                                   ),
                                 ],
                               ),
@@ -2359,15 +2551,60 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
                       ),
                       onPressed: () => _toggleCompare(app.appId),
                     ),
-                    FilledButton.tonalIcon(
-                      onPressed: () => _openAppDetail(app),
-                      icon: const Icon(Icons.download, size: 15),
-                      label: Text(
-                        PlatformApkInstaller.isAndroidPlatform
-                            ? 'Install'
-                            : 'Get APK',
-                        style: const TextStyle(fontSize: 12),
-                      ),
+                    Builder(
+                      builder: (context) {
+                        final isInstalledLatest =
+                            _isSignedIn && _isInstalledLatestOnDevice(app);
+                        final isUpdate =
+                            _isSignedIn && _isUpdateAvailableFor(app);
+                        if (isInstalledLatest) {
+                          return OutlinedButton.icon(
+                            onPressed: () => _openAppDetail(app),
+                            style: OutlinedButton.styleFrom(
+                              visualDensity: VisualDensity.compact,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 6),
+                              foregroundColor: cs.primary,
+                              backgroundColor:
+                                  cs.primary.withValues(alpha: 0.08),
+                              side: BorderSide(
+                                  color: cs.primary.withValues(alpha: 0.35)),
+                            ),
+                            icon: const Icon(Icons.check_circle, size: 15),
+                            label: const Text(
+                              'Installed',
+                              style: TextStyle(
+                                  fontSize: 12, fontWeight: FontWeight.w600),
+                            ),
+                          );
+                        }
+                        if (isUpdate) {
+                          return FilledButton.icon(
+                            onPressed: () =>
+                                _handleDownload(app, isRemoteUpdate: true),
+                            style: FilledButton.styleFrom(
+                              visualDensity: VisualDensity.compact,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 6),
+                            ),
+                            icon: const Icon(Icons.system_update, size: 15),
+                            label: const Text(
+                              'Update',
+                              style: TextStyle(fontSize: 12),
+                            ),
+                          );
+                        }
+                        return FilledButton.tonalIcon(
+                          onPressed: () => _openAppDetail(app),
+                          icon: const Icon(Icons.download, size: 15),
+                          label: Text(
+                            PlatformApkInstaller.isAndroidPlatform
+                                ? 'Install'
+                                : 'Get APK',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        );
+                      },
                     ),
                   ],
                 ),
@@ -2571,11 +2808,10 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
     final downloadedApps =
         _catalog.where((a) => _downloadHistoryIds.contains(a.appId)).toList();
     final installedApps = _catalog
-        .where((a) => _installedByAppId[a.appId]?.installed == true)
+        .where((a) => _installedInfoFor(a)?.installed == true)
         .toList();
-    final updatableApps = _catalog
-        .where((a) => _installedByAppId[a.appId]?.updateAvailable == true)
-        .toList();
+    final updatableApps =
+        _catalog.where((a) => _isUpdateAvailableFor(a)).toList();
 
     return ListView(
       padding: const EdgeInsets.all(14),
@@ -2600,16 +2836,14 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
             children: [
               Row(
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(7),
-                    decoration: BoxDecoration(
-                      color: cs.primaryContainer,
-                      borderRadius: BorderRadius.circular(10),
-                      border:
-                          Border.all(color: cs.primary.withValues(alpha: 0.28)),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Image.asset(
+                      'assets/zayaan_logo.png',
+                      width: 34,
+                      height: 34,
+                      fit: BoxFit.contain,
                     ),
-                    child: Icon(Icons.inventory_2,
-                        size: 18, color: cs.onPrimaryContainer),
                   ),
                   const SizedBox(width: 9),
                   Expanded(
@@ -2863,7 +3097,7 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
           )
         else
           ...updatableApps.map((app) {
-            final info = _installedByAppId[app.appId];
+            final info = _installedInfoFor(app);
             return Card(
               margin: const EdgeInsets.only(bottom: 8),
               elevation: 0,
@@ -2928,8 +3162,8 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
           ),
           const SizedBox(height: 8),
           ...installedApps.map((app) {
-            final info = _installedByAppId[app.appId];
-            final needsUpdate = info?.updateAvailable == true;
+            final info = _installedInfoFor(app);
+            final needsUpdate = _isUpdateAvailableFor(app);
             return Card(
               margin: const EdgeInsets.only(bottom: 8),
               elevation: 0,
@@ -3290,16 +3524,14 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
             children: [
               Row(
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(7),
-                    decoration: BoxDecoration(
-                      color: cs.primary.withValues(alpha: 0.14),
-                      borderRadius: BorderRadius.circular(10),
-                      border:
-                          Border.all(color: cs.primary.withValues(alpha: 0.32)),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Image.asset(
+                      'assets/zayaan_logo.png',
+                      width: 34,
+                      height: 34,
+                      fit: BoxFit.contain,
                     ),
-                    child: Icon(Icons.admin_panel_settings,
-                        size: 18, color: cs.primary),
                   ),
                   const SizedBox(width: 9),
                   Expanded(
@@ -3579,15 +3811,14 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
             children: [
               Row(
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(7),
-                    decoration: BoxDecoration(
-                      color: cs.primary.withValues(alpha: 0.14),
-                      borderRadius: BorderRadius.circular(10),
-                      border:
-                          Border.all(color: cs.primary.withValues(alpha: 0.32)),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Image.asset(
+                      'assets/zayaan_logo.png',
+                      width: 34,
+                      height: 34,
+                      fit: BoxFit.contain,
                     ),
-                    child: Icon(Icons.public, size: 18, color: cs.primary),
                   ),
                   const SizedBox(width: 9),
                   Expanded(
@@ -3657,19 +3888,68 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  SizedBox(
-                    height: 32,
-                    child: FilledButton.icon(
-                      onPressed: () => _handleDownload(_catalog.first),
-                      style: FilledButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(9)),
-                      ),
-                      icon: const Icon(Icons.rocket_launch, size: 14),
-                      label: const Text('Latest Release APK',
-                          style: TextStyle(fontSize: 11.5)),
-                    ),
+                  Builder(
+                    builder: (context) {
+                      final storeApp = _catalog.first;
+                      final storeInstalledLatest =
+                          _isSignedIn && _isInstalledLatestOnDevice(storeApp);
+                      final storeNeedsUpdate =
+                          _isSignedIn && _isUpdateAvailableFor(storeApp);
+                      final storeInfo = _installedInfoFor(storeApp);
+                      if (storeInstalledLatest) {
+                        final ver =
+                            storeInfo?.installedVersionName.isNotEmpty == true
+                                ? storeInfo!.installedVersionName
+                                : storeApp.versionName;
+                        return SizedBox(
+                          height: 32,
+                          child: OutlinedButton.icon(
+                            onPressed: () => _openAppDetail(storeApp),
+                            style: OutlinedButton.styleFrom(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 12),
+                              foregroundColor: cs.primary,
+                              backgroundColor:
+                                  cs.primary.withValues(alpha: 0.08),
+                              side: BorderSide(
+                                  color: cs.primary.withValues(alpha: 0.35)),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(9)),
+                            ),
+                            icon: const Icon(Icons.check_circle, size: 14),
+                            label: Text(
+                              'Store Installed on Android (v$ver)',
+                              style: const TextStyle(
+                                  fontSize: 11.5, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        );
+                      }
+                      return SizedBox(
+                        height: 32,
+                        child: FilledButton.icon(
+                          onPressed: () => _handleDownload(storeApp,
+                              isRemoteUpdate: storeNeedsUpdate),
+                          style: FilledButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(9)),
+                          ),
+                          icon: Icon(
+                            storeNeedsUpdate
+                                ? Icons.system_update
+                                : Icons.rocket_launch,
+                            size: 14,
+                          ),
+                          label: Text(
+                            storeNeedsUpdate
+                                ? 'Update Store on Android'
+                                : 'Latest Release APK',
+                            style: const TextStyle(fontSize: 11.5),
+                          ),
+                        ),
+                      );
+                    },
                   ),
                   SizedBox(
                     height: 32,
@@ -4014,43 +4294,7 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Container(
-                      width: 62,
-                      height: 62,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(16),
-                        color: cs.primaryContainer,
-                        border: Border.all(
-                          color: cs.outline.withValues(alpha: 0.28),
-                        ),
-                      ),
-                      clipBehavior: Clip.antiAlias,
-                      child: app.iconUrl.isNotEmpty
-                          ? Image.network(
-                              app.iconUrl,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Center(
-                                child: Text(
-                                  app.appName.substring(0, 1),
-                                  style: TextStyle(
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.bold,
-                                    color: cs.onPrimaryContainer,
-                                  ),
-                                ),
-                              ),
-                            )
-                          : Center(
-                              child: Text(
-                                app.appName.substring(0, 1),
-                                style: TextStyle(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                  color: cs.onPrimaryContainer,
-                                ),
-                              ),
-                            ),
-                    ),
+                    _buildHomeAppIcon(app, cs, size: 62, radius: 16),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
@@ -4211,10 +4455,91 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
                   width: double.infinity,
                   child: Builder(
                     builder: (context) {
-                      final installedInfo = _installedByAppId[app.appId];
-                      final isUpdate = installedInfo?.updateAvailable == true;
+                      final installedInfo = _installedInfoFor(app);
+                      final isUpdate =
+                          _isSignedIn && _isUpdateAvailableFor(app);
+                      final isInstalledLatest =
+                          _isSignedIn && _isInstalledLatestOnDevice(app);
                       final needsSignIn =
                           !_isSignedIn && !_isStoreAppModel(app);
+
+                      if (isInstalledLatest) {
+                        final ver =
+                            installedInfo?.installedVersionName.isNotEmpty ==
+                                    true
+                                ? installedInfo!.installedVersionName
+                                : app.versionName;
+                        final device =
+                            installedInfo?.deviceModel.isNotEmpty == true
+                                ? ' • ${installedInfo!.deviceModel}'
+                                : '';
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: cs.primary.withValues(alpha: 0.10),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                                color: cs.primary.withValues(alpha: 0.35)),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(7),
+                                decoration: BoxDecoration(
+                                  color: cs.primary.withValues(alpha: 0.16),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Icon(Icons.check_circle,
+                                    size: 18, color: cs.primary),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Already installed on your Android device',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.bold,
+                                        color: cs.primary,
+                                      ),
+                                    ),
+                                    Text(
+                                      'Installed v$ver (Latest)$device',
+                                      style: TextStyle(
+                                        fontSize: 11.5,
+                                        color: cs.onSurfaceVariant,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 9, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: cs.primary,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  'Up to date',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: cs.onPrimary,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+
                       final btnLabel = needsSignIn
                           ? 'Sign in to Download (v${app.versionName})'
                           : isUpdate

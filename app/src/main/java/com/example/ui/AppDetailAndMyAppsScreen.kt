@@ -2,6 +2,7 @@ package com.example.ui
 
 import android.content.Context
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -283,19 +284,16 @@ fun AppDetailScreen(
             ) {
                 Column(modifier = Modifier.padding(14.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        val detailIconModel: Any = if (
-                            app.packageName == "com.zayaanapps.store" &&
-                            (app.iconUrl.isBlank() || app.iconUrl.contains("/web/icons/Icon-192.png"))
-                        ) {
-                            R.drawable.img_launcher_icon_1795021165006
+                        val detailIconModel: Any = if (app.packageName == "com.zayaanapps.store") {
+                            R.drawable.zayaan_logo_badge
                         } else {
                             app.iconUrl
                         }
                         AsyncImage(
                             model = detailIconModel,
                             contentDescription = "${app.appName} icon",
-                            placeholder = painterResource(id = R.drawable.img_launcher_icon_1795021165006),
-                            error = painterResource(id = R.drawable.img_launcher_icon_1795021165006),
+                            placeholder = painterResource(id = R.drawable.zayaan_logo_badge),
+                            error = painterResource(id = R.drawable.zayaan_logo_badge),
                             modifier = Modifier
                                 .size(64.dp)
                                 .clip(RoundedCornerShape(16.dp))
@@ -1406,19 +1404,16 @@ private fun RelatedAppMiniCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            val relatedIconModel: Any = if (
-                app.packageName == "com.zayaanapps.store" &&
-                (app.iconUrl.isBlank() || app.iconUrl.contains("/web/icons/Icon-192.png"))
-            ) {
-                R.drawable.img_launcher_icon_1795021165006
+            val relatedIconModel: Any = if (app.packageName == "com.zayaanapps.store") {
+                R.drawable.zayaan_logo_badge
             } else {
                 app.iconUrl
             }
             AsyncImage(
                 model = relatedIconModel,
                 contentDescription = "${app.appName} icon",
-                placeholder = painterResource(id = R.drawable.img_launcher_icon_1795021165006),
-                error = painterResource(id = R.drawable.img_launcher_icon_1795021165006),
+                placeholder = painterResource(id = R.drawable.zayaan_logo_badge),
+                error = painterResource(id = R.drawable.zayaan_logo_badge),
                 modifier = Modifier
                     .size(48.dp)
                     .clip(RoundedCornerShape(12.dp))
@@ -2228,20 +2223,14 @@ fun MyAppsScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(9.dp)
                         ) {
-                            Surface(
-                                color = cs.primaryContainer,
-                                shape = RoundedCornerShape(10.dp),
-                                border = BorderStroke(1.dp, cs.primary.copy(alpha = 0.28f))
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Inventory2,
-                                    contentDescription = null,
-                                    tint = cs.onPrimaryContainer,
-                                    modifier = Modifier
-                                        .padding(7.dp)
-                                        .size(18.dp)
-                                )
-                            }
+                            Image(
+                                painter = painterResource(id = R.drawable.zayaan_logo_badge),
+                                contentDescription = "Zayaan Apps Logo",
+                                contentScale = ContentScale.Fit,
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clip(RoundedCornerShape(9.dp))
+                            )
                             Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
                                 Text(
                                     text = "Library, Downloads & Updates",
@@ -3107,19 +3096,16 @@ private fun MyAppsThumbnailIcon(
     size: androidx.compose.ui.unit.Dp
 ) {
     val cs = MaterialTheme.colorScheme
-    val iconModel: Any = if (
-        app.packageName == "com.zayaanapps.store" &&
-        (app.iconUrl.isBlank() || app.iconUrl.contains("/web/icons/Icon-192.png"))
-    ) {
-        R.drawable.img_launcher_icon_1795021165006
+    val iconModel: Any = if (app.packageName == "com.zayaanapps.store") {
+        R.drawable.zayaan_logo_badge
     } else {
         app.iconUrl
     }
     AsyncImage(
         model = iconModel,
         contentDescription = "${app.appName} icon",
-        placeholder = painterResource(id = R.drawable.img_launcher_icon_1795021165006),
-        error = painterResource(id = R.drawable.img_launcher_icon_1795021165006),
+        placeholder = painterResource(id = R.drawable.zayaan_logo_badge),
+        error = painterResource(id = R.drawable.zayaan_logo_badge),
         modifier = Modifier
             .size(size)
             .clip(RoundedCornerShape(11.dp))

@@ -461,19 +461,14 @@ fun AuthScreen(onAuthSuccess: () -> Unit) {
                                 modifier = Modifier.padding(16.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Surface(
-                                    shape = RoundedCornerShape(14.dp),
-                                    color = MaterialTheme.colorScheme.primary
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Shop,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onPrimary,
-                                        modifier = Modifier
-                                            .padding(10.dp)
-                                            .size(28.dp)
-                                    )
-                                }
+                                Image(
+                                    painter = painterResource(id = R.drawable.zayaan_logo_badge),
+                                    contentDescription = "Zayaan Apps Logo",
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .clip(RoundedCornerShape(12.dp)),
+                                    contentScale = ContentScale.Fit
+                                )
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column {
                                     Text(

@@ -851,12 +851,12 @@ fun AuthenticatedStoreShell(
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Image(
-                            painter = painterResource(id = R.drawable.img_launcher_icon_1795021165006),
+                            painter = painterResource(id = R.drawable.zayaan_logo_badge),
                             contentDescription = "Zayaan Apps",
                             modifier = Modifier
-                                .size(80.dp)
+                                .size(84.dp)
                                 .clip(RoundedCornerShape(20.dp)),
-                            contentScale = ContentScale.Crop
+                            contentScale = ContentScale.Fit
                         )
                         Text(
                             text = "Zayaan Apps",

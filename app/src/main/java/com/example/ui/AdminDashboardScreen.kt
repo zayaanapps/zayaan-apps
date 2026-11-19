@@ -197,20 +197,14 @@ fun AdminDashboardScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(9.dp)
                     ) {
-                        Surface(
-                            color = cs.primaryContainer,
-                            shape = RoundedCornerShape(10.dp),
-                            border = BorderStroke(1.dp, cs.primary.copy(alpha = 0.28f))
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.AdminPanelSettings,
-                                contentDescription = null,
-                                tint = cs.onPrimaryContainer,
-                                modifier = Modifier
-                                    .padding(7.dp)
-                                    .size(18.dp)
-                            )
-                        }
+                        androidx.compose.foundation.Image(
+                            painter = androidx.compose.ui.res.painterResource(id = com.example.R.drawable.zayaan_logo_badge),
+                            contentDescription = "Zayaan Apps Logo",
+                            contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                            modifier = Modifier
+                                .size(34.dp)
+                                .clip(RoundedCornerShape(9.dp))
+                        )
                         Column(
                             modifier = Modifier.weight(1f),
                             verticalArrangement = Arrangement.spacedBy(1.dp)
@@ -795,20 +789,17 @@ private fun AppEmblemAvatar(app: StoreApp, sizeDp: Int) {
         shape = RoundedCornerShape(11.dp),
         color = cs.primaryContainer
     ) {
-        if (app.iconUrl.isNotBlank()) {
-            val emblemModel: Any = if (
-                app.packageName == "com.zayaanapps.store" &&
-                app.iconUrl.contains("/web/icons/Icon-192.png")
-            ) {
-                com.example.R.drawable.img_launcher_icon_1795021165006
+        if (app.iconUrl.isNotBlank() || app.packageName == "com.zayaanapps.store") {
+            val emblemModel: Any = if (app.packageName == "com.zayaanapps.store") {
+                com.example.R.drawable.zayaan_logo_badge
             } else {
                 app.iconUrl
             }
             coil.compose.AsyncImage(
                 model = emblemModel,
                 contentDescription = "${app.appName} icon",
-                placeholder = androidx.compose.ui.res.painterResource(id = com.example.R.drawable.img_launcher_icon_1795021165006),
-                error = androidx.compose.ui.res.painterResource(id = com.example.R.drawable.img_launcher_icon_1795021165006),
+                placeholder = androidx.compose.ui.res.painterResource(id = com.example.R.drawable.zayaan_logo_badge),
+                error = androidx.compose.ui.res.painterResource(id = com.example.R.drawable.zayaan_logo_badge),
                 modifier = Modifier.fillMaxSize(),
                 contentScale = androidx.compose.ui.layout.ContentScale.Crop
             )

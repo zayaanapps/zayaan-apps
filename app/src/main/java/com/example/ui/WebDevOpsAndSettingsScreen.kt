@@ -145,25 +145,14 @@ fun WebDevOpsAndSettingsScreen(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box(
+                        androidx.compose.foundation.Image(
+                            painter = androidx.compose.ui.res.painterResource(id = com.example.R.drawable.zayaan_logo_badge),
+                            contentDescription = "Zayaan Apps Logo",
+                            contentScale = androidx.compose.ui.layout.ContentScale.Fit,
                             modifier = Modifier
                                 .size(34.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(cs.primary.copy(alpha = 0.14f))
-                                .border(
-                                    width = 1.dp,
-                                    color = cs.primary.copy(alpha = 0.32f),
-                                    shape = RoundedCornerShape(10.dp)
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Public,
-                                contentDescription = null,
-                                tint = cs.primary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
+                                .clip(RoundedCornerShape(9.dp))
+                        )
                         Spacer(modifier = Modifier.width(9.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(

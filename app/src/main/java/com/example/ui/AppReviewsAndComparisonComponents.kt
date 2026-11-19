@@ -914,19 +914,16 @@ fun AppComparisonSectionCard(
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier.clickable { onSelectApp(app) }
                                 ) {
-                                    val iconModel: Any = if (
-                                        app.packageName == "com.zayaanapps.store" &&
-                                        (app.iconUrl.isBlank() || app.iconUrl.contains("/web/icons/Icon-192.png"))
-                                    ) {
-                                        R.drawable.img_launcher_icon_1795021165006
+                                    val iconModel: Any = if (app.packageName == "com.zayaanapps.store") {
+                                        R.drawable.zayaan_logo_badge
                                     } else {
                                         app.iconUrl
                                     }
                                     AsyncImage(
                                         model = iconModel,
                                         contentDescription = "${app.appName} icon",
-                                        placeholder = painterResource(id = R.drawable.img_launcher_icon_1795021165006),
-                                        error = painterResource(id = R.drawable.img_launcher_icon_1795021165006),
+                                        placeholder = painterResource(id = R.drawable.zayaan_logo_badge),
+                                        error = painterResource(id = R.drawable.zayaan_logo_badge),
                                         modifier = Modifier
                                             .size(38.dp)
                                             .clip(RoundedCornerShape(10.dp))
