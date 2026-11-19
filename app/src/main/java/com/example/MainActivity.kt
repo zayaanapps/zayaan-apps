@@ -430,6 +430,9 @@ fun AuthenticatedStoreShell(
                                     },
                                     onDownloadLatestGitHubRelease = { ctx, app ->
                                         viewModel.downloadLatestGitHubReleaseApk(app, ctx)
+                                    },
+                                    onUninstallApp = { ctx, pkg ->
+                                        viewModel.uninstallInstalledApp(ctx, pkg)
                                     }
                                 )
                             } else {

@@ -112,7 +112,8 @@ fun AppDetailScreen(
     onAdminReplyReview: (AppReview, String) -> Unit = { _, _ -> },
     onDeleteReview: (AppReview) -> Unit = {},
     onReportApp: (String, String) -> Unit = { _, _ -> },
-    onDownloadLatestGitHubRelease: (Context, StoreApp) -> Unit = { _, target -> onStartDownload(target) }
+    onDownloadLatestGitHubRelease: (Context, StoreApp) -> Unit = { _, target -> onStartDownload(target) },
+    onUninstallApp: (Context, String) -> Unit = { _, _ -> }
 ) {
     val context = LocalContext.current
     val appId = app.appId.ifBlank { app.docId }
@@ -503,7 +504,42 @@ fun AppDetailScreen(
                         }
 
                         is DownloadState.ReadyToInstall -> {
+                            val apkVersionLabel = downloadState.versionName.ifBlank { app.versionName }
+                            val hasSignatureConflict = installedStatus?.isInstalled == true &&
+                                downloadState.signingCertSha256.isNotBlank() &&
+                                !downloadState.signatureMatchesInstalled
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                if (hasSignatureConflict) {
+                                    Surface(
+                                        color = MaterialTheme.colorScheme.errorContainer,
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.padding(12.dp),
+                                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Text(
+                                                text = "Signing Certificate Differs from Installed Build",
+                                                style = MaterialTheme.typography.titleSmall,
+                                                color = MaterialTheme.colorScheme.onErrorContainer
+                                            )
+                                            Text(
+                                                text = "Android blocks updating over an existing build signed with a different key ('package conflicts'). Tap 'Uninstall Old Build' once, then install v$apkVersionLabel.",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onErrorContainer
+                                            )
+                                            OutlinedButton(
+                                                onClick = { onUninstallApp(context, app.packageName) },
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .testTag("uninstall_conflicting_app_button")
+                                            ) {
+                                                Text("Uninstall Old Build (${app.packageName})")
+                                            }
+                                        }
+                                    }
+                                }
                                 Button(
                                     onClick = { onInstallApk(context, downloadState.apkFilePath) },
                                     modifier = Modifier
@@ -515,7 +551,7 @@ fun AppDetailScreen(
                                 ) {
                                     Icon(imageVector = Icons.Default.InstallMobile, contentDescription = null)
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Install APK Now (v${app.versionName})")
+                                    Text("Install APK Now (v$apkVersionLabel)")
                                 }
                                 if (downloadState.computedSha256.isNotBlank()) {
                                     Text(
@@ -530,7 +566,11 @@ fun AppDetailScreen(
                                         text = "Signing Cert SHA-256: ${downloadState.signingCertSha256.take(24)}... (${if (downloadState.signatureMatchesInstalled) "Signature Verified" else "Signature Differs"})",
                                         style = MaterialTheme.typography.labelSmall,
                                         fontFamily = FontFamily.Monospace,
-                                        color = MaterialTheme.colorScheme.primary
+                                        color = if (downloadState.signatureMatchesInstalled) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            MaterialTheme.colorScheme.error
+                                        }
                                     )
                                 }
                                 OutlinedButton(

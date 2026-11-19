@@ -617,6 +617,24 @@ class StoreViewModel(
                     apkFileSize = resolved.fileSizeFormatted.ifBlank { app.apkFileSize },
                     releaseNotes = resolved.releaseNotes.ifBlank { app.releaseNotes }
                 )
+                if (updatedApp.packageName == "com.zayaanapps.store" || updatedApp.appId == "zayaan-apps-store") {
+                    latestGitHubStoreRelease = updatedApp
+                }
+                val matchKey = updatedApp.appId.ifBlank { updatedApp.docId }
+                val currentPublished = (_publishedAppsState.value as? UiState.Success)?.data
+                if (currentPublished != null) {
+                    val refreshed = currentPublished.map {
+                        if ((it.appId.ifBlank { it.docId }) == matchKey) updatedApp else it
+                    }
+                    _publishedAppsState.value = UiState.Success(refreshed)
+                    refreshInstalledPackages(refreshed)
+                }
+                val currentAdmin = (_adminAppsState.value as? UiState.Success)?.data
+                if (currentAdmin != null) {
+                    _adminAppsState.value = UiState.Success(
+                        currentAdmin.map { if ((it.appId.ifBlank { it.docId }) == matchKey) updatedApp else it }
+                    )
+                }
                 _statusBannerMessage.value = "Found latest GitHub Release v${updatedApp.versionName} (${resolved.assetName}). Downloading APK..."
                 startApkDownload(updatedApp, autoPromptInstallContext = context, forceRedownload = true)
             } else {
@@ -655,13 +673,16 @@ class StoreViewModel(
                 _downloadStates.value = _downloadStates.value + (key to state)
                 if (state is DownloadState.ReadyToInstall) {
                     refreshCachedApks()
+                    val resolvedVer = state.versionName.ifBlank { app.versionName }
                     val verifyNote = buildString {
                         if (state.checksumVerified) append(" • SHA-256 Verified")
                         if (state.signingCertSha256.isNotBlank() && state.signatureMatchesInstalled) {
                             append(" • Cert Signature Verified")
+                        } else if (state.signingCertSha256.isNotBlank()) {
+                            append(" • Signature Differs (Uninstall old build first)")
                         }
                     }
-                    _statusBannerMessage.value = "${app.appName} v${app.versionName} downloaded$verifyNote. Tap 'Install APK' to launch Android Package Installer."
+                    _statusBannerMessage.value = "${app.appName} v$resolvedVer downloaded$verifyNote."
                     if (autoPromptInstallContext != null) {
                         installDownloadedApk(autoPromptInstallContext, state.apkFilePath)
                     }
@@ -706,8 +727,20 @@ class StoreViewModel(
             return
         }
         packageController.launchApkInstaller(context, apkFilePath)
+            .onSuccess {
+                if (_statusBannerMessage.value?.contains("Install Unknown Apps", ignoreCase = true) == true) {
+                    _statusBannerMessage.value = null
+                }
+            }
             .onFailure { e ->
                 _statusBannerMessage.value = "Installer error: ${e.localizedMessage}"
+            }
+    }
+
+    fun uninstallInstalledApp(context: Context, packageName: String) {
+        packageController.uninstallPackage(context, packageName)
+            .onFailure { e ->
+                _statusBannerMessage.value = "Uninstall error: ${e.localizedMessage}"
             }
     }
 

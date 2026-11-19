@@ -419,6 +419,8 @@ class AndroidPackageController(private val context: Context) {
                 DownloadState.ReadyToInstall(
                     appId = appId,
                     apkFilePath = targetFile.absolutePath,
+                    versionName = archiveVer.versionName.ifBlank { app.versionName },
+                    versionCode = archiveVer.versionCode.takeIf { it > 0L } ?: app.versionCode,
                     computedSha256 = archiveVer.sha256Checksum,
                     checksumVerified = verified,
                     signingCertSha256 = archiveVer.signingCertSha256,
@@ -542,6 +544,8 @@ class AndroidPackageController(private val context: Context) {
                 DownloadState.ReadyToInstall(
                     appId = appId,
                     apkFilePath = targetFile.absolutePath,
+                    versionName = archiveVer.versionName.ifBlank { app.versionName },
+                    versionCode = archiveVer.versionCode.takeIf { it > 0L } ?: app.versionCode,
                     computedSha256 = archiveVer.sha256Checksum,
                     checksumVerified = verified,
                     signingCertSha256 = archiveVer.signingCertSha256,
@@ -595,6 +599,18 @@ class AndroidPackageController(private val context: Context) {
             } else {
                 Result.failure(IllegalStateException("No launch activity found for $packageName"))
             }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    fun uninstallPackage(activityContext: Context, packageName: String): Result<Unit> {
+        return try {
+            val uninstallIntent = Intent(Intent.ACTION_DELETE, Uri.parse("package:$packageName")).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            activityContext.startActivity(uninstallIntent)
+            Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
         }

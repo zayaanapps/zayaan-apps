@@ -297,6 +297,8 @@ sealed interface DownloadState {
     data class ReadyToInstall(
         val appId: String,
         val apkFilePath: String,
+        val versionName: String = "",
+        val versionCode: Long = 0L,
         val computedSha256: String = "",
         val checksumVerified: Boolean = true,
         val signingCertSha256: String = "",
