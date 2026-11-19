@@ -270,7 +270,8 @@ data class ResolvedGitHubReleaseAsset(
     val browserDownloadUrl: String,
     val fileSizeFormatted: String,
     val releaseNotes: String,
-    val releaseHtmlUrl: String
+    val releaseHtmlUrl: String,
+    val sha256Checksum: String = ""
 )
 
 data class InstalledAppStatus(

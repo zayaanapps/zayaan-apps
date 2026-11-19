@@ -124,6 +124,59 @@ jobs:
           echo "sha256=$SHA256_HASH" >> $GITHUB_OUTPUT
           echo "Built APK ($APK_SOURCE) SHA-256: $SHA256_HASH"
 
+      - name: Generate Latest Release Notes (Updates, Fixes & Changes)
+        id: release_notes
+        run: |
+          TAG_NAME="${{ steps.version_info.outputs.tag_name }}"
+          VERSION_NAME="${{ steps.version_info.outputs.version_name }}"
+          BUILD_CODE="${{ steps.version_info.outputs.build_code }}"
+          SHA256_HASH="${{ steps.apk_assets.outputs.sha256 }}"
+          PREV_TAG=$(git tag -l 'v1.0.0.*' --sort=-v:refname | grep -Fxv "$TAG_NAME" | head -n 1 || true)
+
+          : > release_notes_body.md
+
+          if [ -f "RELEASE_NOTES.md" ]; then
+            cat RELEASE_NOTES.md >> release_notes_body.md
+            printf '\n' >> release_notes_body.md
+          fi
+
+          if [ -n "$PREV_TAG" ]; then
+            COMMITS=$(git log "${PREV_TAG}..HEAD" --no-merges --pretty=format:"- %s" | grep -vE '^- (Merge |chore\(release\))' | head -n 15 || true)
+          else
+            COMMITS=$(git log -n 8 --no-merges --pretty=format:"- %s" | grep -vE '^- (Merge |chore\(release\))' || true)
+          fi
+
+          if [ -n "$COMMITS" ]; then
+            echo "### Recent Commits ($TAG_NAME)" >> release_notes_body.md
+            printf '%s\n\n' "$COMMITS" >> release_notes_body.md
+          elif [ ! -f "RELEASE_NOTES.md" ]; then
+            {
+              echo "### Latest Updates, Fixes & Changes ($TAG_NAME)"
+              echo "- Updated Zayaan Apps Store build to v${VERSION_NAME} (Build ${BUILD_CODE})."
+              echo "- Includes latest stability fixes, UI refinements, and security improvements."
+              echo ""
+            } >> release_notes_body.md
+          fi
+
+          if [ -n "$PREV_TAG" ]; then
+            echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${PREV_TAG}...${TAG_NAME}" >> release_notes_body.md
+          fi
+
+          {
+            echo ""
+            echo "<details>"
+            echo "<summary>Package & Build Metadata</summary>"
+            echo ""
+            echo "- **Package Name:** \`com.zayaanapps.store\`"
+            echo "- **Version Name:** \`${VERSION_NAME}\`"
+            echo "- **Version Code:** \`${BUILD_CODE}\`"
+            echo "- **Commit:** \`${{ github.sha }}\`"
+            echo "- **APK SHA-256 Checksum:** \`${SHA256_HASH}\`"
+            echo "- **Responsive Web Portal:** https://zayaanapps.github.io/zayaan-apps/"
+            echo "- **Direct APK Assets:** \`zayaan-apps-release.apk\`, \`zayaan-apps.apk\`, \`app-release.apk\`"
+            echo "</details>"
+          } >> release_notes_body.md
+
       - name: Publish Native Android APK to GitHub Releases (Always Mark Latest)
         uses: softprops/action-gh-release@v2
         env:
@@ -132,23 +185,14 @@ jobs:
           tag_name: ${{ steps.version_info.outputs.tag_name }}
           name: "Zayaan Apps Store ${{ steps.version_info.outputs.tag_name }}"
           make_latest: 'true'
-          body: |
-            ### Zayaan Apps Official Store Release (${{ steps.version_info.outputs.tag_name }})
-            - **Package Name:** `com.zayaanapps.store`
-            - **Architecture:** Native Kotlin & Jetpack Compose (100% identical to Google AI Studio Preview)
-            - **Version Name:** `${{ steps.version_info.outputs.version_name }}`
-            - **Version Code:** `${{ steps.version_info.outputs.build_code }}`
-            - **Commit:** `${{ github.sha }}`
-            - **APK SHA-256 Checksum:** `${{ steps.apk_assets.outputs.sha256 }}`
-            - **Responsive Web Portal:** https://zayaanapps.github.io/zayaan-apps/
-            - **Direct APK Assets:** `zayaan-apps-release.apk`, `zayaan-apps.apk`, `app-release.apk`
+          body_path: release_notes_body.md
           files: |
             release_assets/zayaan-apps-release.apk
             release_assets/zayaan-apps.apk
             release_assets/app-release.apk
           draft: false
           prerelease: false
-          generate_release_notes: true
+          generate_release_notes: false
 
   # ============================================================================
   # JOB B: FLUTTER WEB BUILD & GITHUB PAGES DEPLOYMENT

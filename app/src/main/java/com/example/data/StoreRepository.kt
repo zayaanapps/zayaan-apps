@@ -1218,7 +1218,7 @@ class StoreRepository(
                 versionCode = BuildConfig.VERSION_CODE.toLong(),
                 apkDownloadUrl = "https://github.com/zayaanapps/zayaan-apps/releases/latest/download/zayaan-apps-release.apk",
                 apkFileSize = "16.8 MB",
-                releaseNotes = "v${BuildConfig.VERSION_NAME} Marketplace Release:\n• Google Play Store-inspired discovery sections & curated collections\n• Advanced search with instant suggestions, history, filters & sorting\n• Rich app detail sheets with related apps & developer specs\n• Automatic Store Self-Update notification & 1-tap APK upgrade",
+                releaseNotes = "### Latest Updates, Fixes & Changes (v${BuildConfig.VERSION_NAME})\n• Automatically deletes downloaded APK packages right after installation completes\n• Guided device permission prompts for Install Unknown Apps and Notifications\n• Moved Package ID, version, compatibility & release specs into About This Application\n• Polished compact bordered Home & App Details UI with System/Light/Dark theme support",
                 featured = true,
                 editorsChoice = true,
                 essential = true,

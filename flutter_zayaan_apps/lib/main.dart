@@ -202,7 +202,13 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
       }
 
       final parsedCode = int.tryParse(versionName.split('.').last) ?? 1;
-      final notes = ((jsonMap['body'] as String?) ?? '').trim();
+      final rawNotes = ((jsonMap['body'] as String?) ?? '').trim();
+      final notes = _sanitizeWhatsNewNotes(rawNotes, versionName);
+      final shaMatch = RegExp(
+        r'SHA-?256[^0-9a-fA-F]*([0-9a-fA-F]{64})',
+        caseSensitive: false,
+      ).firstMatch(rawNotes);
+      final parsedSha256 = shaMatch?.group(1)?.toLowerCase() ?? '';
 
       if (!mounted) return;
       setState(() {
@@ -231,6 +237,9 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
             downloadCount: existing.downloadCount,
             ratingSum: existing.ratingSum,
             reviewCount: existing.reviewCount,
+            sha256Checksum: parsedSha256.isNotEmpty
+                ? parsedSha256
+                : existing.sha256Checksum,
             minAndroidSdk: existing.minAndroidSdk,
             targetAndroidSdk: existing.targetAndroidSdk,
             architecture: existing.architecture,
@@ -274,7 +283,7 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
           'https://github.com/zayaanapps/zayaan-apps/releases/latest/download/zayaan-apps-release.apk',
       apkFileSize: '14.2 MB',
       releaseNotes:
-          'v1.0.0.1 Marketplace Release:\n• Google Play Store-inspired discovery sections & curated collections\n• Advanced search with instant suggestions, history, filters & sorting\n• Rich app detail sheets with related apps & developer specs\n• Automatic Store Self-Update notification & 1-tap APK upgrade',
+          "### Latest Updates, Fixes & Changes (v1.0.0.1)\n• Automatically deletes downloaded APK packages right after installation completes\n• Guided device permission prompts for Install Unknown Apps and Notifications\n• Moved Package ID, version, compatibility & release specs into About This Application\n• Polished compact bordered Home & App Details UI with System/Light/Dark theme support",
       featured: true,
       editorsChoice: true,
       essential: true,
@@ -2750,17 +2759,74 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
     return TextSpan(children: children);
   }
 
+  String _sanitizeWhatsNewNotes(String rawNotes, String versionName) {
+    final withoutDetails = rawNotes.replaceAll(
+      RegExp(r'<details>[\s\S]*?</details>', caseSensitive: false),
+      '',
+    );
+    const metadataPrefixes = [
+      '### zayaan apps official store release',
+      'package name:',
+      'architecture:',
+      'version name:',
+      'version code:',
+      'commit:',
+      'apk sha-256 checksum:',
+      'responsive web portal:',
+      'direct apk assets:',
+    ];
+    final kept = <String>[];
+    var compareLine = '';
+    for (final rawLine in withoutDetails.split('\n')) {
+      final trimmed = rawLine.trim();
+      var normalized = trimmed
+          .replaceAll('**', '')
+          .replaceAll('`', '')
+          .trim();
+      if (normalized.startsWith('- ')) {
+        normalized = normalized.substring(2).trim();
+      } else if (normalized.startsWith('* ')) {
+        normalized = normalized.substring(2).trim();
+      }
+      final lower = normalized.toLowerCase();
+      if (lower.startsWith('full changelog:') ||
+          trimmed.toLowerCase().contains('/compare/')) {
+        compareLine = trimmed;
+        continue;
+      }
+      final isMetadata = metadataPrefixes.any((p) => lower.startsWith(p));
+      if (!isMetadata) {
+        kept.add(rawLine);
+      }
+    }
+    final cleanedBody = kept.join('\n').trim();
+    final buffer = StringBuffer();
+    if (cleanedBody.isNotEmpty) {
+      buffer.write(cleanedBody);
+    } else {
+      buffer.writeln('### Latest Updates, Fixes & Changes (v$versionName)');
+      buffer.write(
+          '• Updated release v$versionName with latest fixes, performance & UI refinements.');
+    }
+    if (compareLine.isNotEmpty) {
+      buffer.write('\n\n$compareLine');
+    }
+    return buffer.toString().trim();
+  }
+
   Widget _buildWhatsNewCompactCard(StoreAppModel app) {
     final cs = Theme.of(context).colorScheme;
-    final extractedLinks = _extractLinksFromText(app.releaseNotes);
-    final nonEmptyLines = app.releaseNotes
+    final sanitizedNotes =
+        _sanitizeWhatsNewNotes(app.releaseNotes, app.versionName);
+    final extractedLinks = _extractLinksFromText(sanitizedNotes);
+    final nonEmptyLines = sanitizedNotes
         .split('\n')
         .map((l) => l.trim())
         .where((l) => l.isNotEmpty)
         .toList();
-    final isLong = nonEmptyLines.length > 6 || app.releaseNotes.length > 320;
+    final isLong = nonEmptyLines.length > 6 || sanitizedNotes.length > 320;
     final displayedText = (_whatsNewExpanded || !isLong)
-        ? app.releaseNotes
+        ? sanitizedNotes
         : nonEmptyLines
             .where((l) {
               final lower = l.toLowerCase();
@@ -2889,11 +2955,13 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
 
   Widget _buildAboutCompactCard(StoreAppModel app) {
     final cs = Theme.of(context).colorScheme;
-    final extractedLinks = _extractLinksFromText(app.description);
-    final isLong = app.description.length > 260;
+    final introText =
+        app.description.isNotEmpty ? app.description : app.shortDescription;
+    final extractedLinks = _extractLinksFromText(introText);
+    final isLong = introText.length > 260;
     final displayed = (_aboutExpanded || !isLong)
-        ? app.description
-        : '${app.description.substring(0, 260).trimRight()}...';
+        ? introText
+        : '${introText.substring(0, 260).trimRight()}...';
 
     return Card(
       shape: RoundedRectangleBorder(
@@ -2906,12 +2974,25 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Icon(Icons.info_outline, size: 18, color: cs.primary),
-                const SizedBox(width: 6),
-                const Text(
-                  'About This Application',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                Row(
+                  children: [
+                    Icon(Icons.info_outline, size: 18, color: cs.primary),
+                    const SizedBox(width: 6),
+                    const Text(
+                      'About This Application',
+                      style:
+                          TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+                _buildBorderedBadge(
+                  icon: Icons.new_releases_outlined,
+                  label: 'v${app.versionName}',
+                  bgColor: cs.primaryContainer.withValues(alpha: 0.65),
+                  fgColor: cs.onPrimaryContainer,
+                  borderColor: cs.primary.withValues(alpha: 0.25),
                 ),
               ],
             ),
@@ -2980,6 +3061,45 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
                   label: Text(_aboutExpanded ? 'Show less' : 'Read more'),
                 ),
               ),
+            const SizedBox(height: 10),
+            Container(
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHighest.withValues(alpha: 0.28),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: cs.outline.withValues(alpha: 0.22)),
+              ),
+              child: Column(
+                children: [
+                  _buildSpecRow(
+                      cs, Icons.inventory_2_outlined, 'Package', app.packageName),
+                  _buildSpecDivider(cs),
+                  _buildSpecRow(cs, Icons.new_releases_outlined, 'Version',
+                      'v${app.versionName} (Build ${app.versionCode})'),
+                  _buildSpecDivider(cs),
+                  _buildSpecRow(
+                      cs, Icons.category_outlined, 'Category', app.category),
+                  _buildSpecDivider(cs),
+                  _buildSpecRow(
+                      cs, Icons.sd_storage_outlined, 'APK Size', app.apkFileSize),
+                  _buildSpecDivider(cs),
+                  _buildSpecRow(cs, Icons.storefront_outlined, 'Developer',
+                      app.developerName),
+                  _buildSpecDivider(cs),
+                  _buildSpecRow(cs, Icons.phone_android, 'Android OS',
+                      'API ${app.minAndroidSdk}+ (Target ${app.targetAndroidSdk})'),
+                  if (app.architecture.isNotEmpty) ...[
+                    _buildSpecDivider(cs),
+                    _buildSpecRow(
+                        cs, Icons.memory, 'Architecture', app.architecture),
+                  ],
+                  if (app.sha256Checksum.isNotEmpty) ...[
+                    _buildSpecDivider(cs),
+                    _buildSpecRow(cs, Icons.fingerprint, 'SHA-256',
+                        '${app.sha256Checksum.substring(0, app.sha256Checksum.length.clamp(0, 20))}...'),
+                  ],
+                ],
+              ),
+            ),
           ],
         ),
       ),

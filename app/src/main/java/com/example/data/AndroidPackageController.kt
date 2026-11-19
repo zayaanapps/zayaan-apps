@@ -49,6 +49,7 @@ class AndroidPackageController(private val context: Context) {
         private const val PREFS_NAME = "zayaan_store_local_cache"
         private const val KEY_PENDING_REVIEWS_JSON = "pending_reviews_json"
         private const val KEY_APP_THEME_MODE = "app_theme_mode"
+        private const val KEY_PENDING_INSTALL_APKS = "pending_install_apks_json"
     }
 
     init {
@@ -74,6 +75,20 @@ class AndroidPackageController(private val context: Context) {
     }
 
     /**
+     * Checks if notification permission is granted (required on Android 13+).
+     */
+    fun isNotificationPermissionGranted(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ContextCompat.checkSelfPermission(
+                appContext,
+                android.Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+        } else {
+            true
+        }
+    }
+
+    /**
      * Checks if the user has granted Android's "Install Unknown Apps" permission for Zayaan Apps.
      */
     fun canRequestPackageInstalls(): Boolean {
@@ -91,15 +106,22 @@ class AndroidPackageController(private val context: Context) {
     /**
      * Opens the official Android system settings screen to allow installing unknown apps from Zayaan Apps.
      */
+    fun buildManageUnknownAppSourcesIntent(activityContext: Context): Intent? {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Intent(
+                Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                Uri.parse("package:${activityContext.packageName}")
+            )
+        } else {
+            null
+        }
+    }
+
     fun openManageUnknownAppSourcesSettings(activityContext: Context): Result<Unit> {
         return try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                val intent = Intent(
-                    Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                    Uri.parse("package:${activityContext.packageName}")
-                ).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
+            val intent = buildManageUnknownAppSourcesIntent(activityContext)
+            if (intent != null) {
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 activityContext.startActivity(intent)
             }
             Result.success(Unit)
@@ -240,26 +262,193 @@ class AndroidPackageController(private val context: Context) {
         )
     }
 
+    private fun apkStorageDirectories(): List<File> = listOfNotNull(
+        File(appContext.cacheDir, "apks"),
+        File(appContext.filesDir, "apks"),
+        appContext.externalCacheDir?.let { File(it, "apks") }
+    )
+
     /**
-     * Lists all locally downloaded APK files stored in the cache directory.
+     * Lists all locally downloaded APK files stored in the cache/internal APK directories.
      */
     fun listDownloadedApkFiles(): List<File> {
-        val apkDir = File(appContext.cacheDir, "apks")
-        if (!apkDir.exists()) return emptyList()
-        return apkDir.listFiles { f -> f.isFile && f.name.endsWith(".apk") }
-            ?.sortedByDescending { it.lastModified() }
-            ?: emptyList()
+        return apkStorageDirectories()
+            .filter { it.exists() }
+            .flatMap { dir ->
+                dir.listFiles { f -> f.isFile && f.name.endsWith(".apk", ignoreCase = true) }?.toList().orEmpty()
+            }
+            .sortedByDescending { it.lastModified() }
     }
 
     fun deleteDownloadedApkFile(apkFilePath: String): Boolean {
         return try {
             val file = File(apkFilePath)
             val partFile = File("$apkFilePath.part")
-            if (partFile.exists()) partFile.delete()
-            if (file.exists()) file.delete() else false
+            val partDeleted = if (partFile.exists()) partFile.delete() else false
+            val fileDeleted = if (file.exists()) file.delete() else false
+            removePendingInstallByPath(apkFilePath)
+            fileDeleted || partDeleted
         } catch (_: Exception) {
             false
         }
+    }
+
+    private fun recordPendingApkInstall(
+        packageName: String,
+        appId: String,
+        versionCode: Long,
+        apkFilePath: String
+    ) {
+        if (packageName.isBlank() && appId.isBlank()) return
+        try {
+            val prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val raw = prefs.getString(KEY_PENDING_INSTALL_APKS, "{}") ?: "{}"
+            val root = runCatching { JSONObject(raw) }.getOrElse { JSONObject() }
+            val key = packageName.ifBlank { appId }
+            val entry = JSONObject().apply {
+                put("packageName", packageName)
+                put("appId", appId)
+                put("versionCode", versionCode)
+                put("apkFilePath", apkFilePath)
+                put("recordedAt", System.currentTimeMillis())
+            }
+            root.put(key, entry)
+            prefs.edit().putString(KEY_PENDING_INSTALL_APKS, root.toString()).apply()
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun removePendingInstallByPath(apkFilePath: String) {
+        try {
+            val prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val raw = prefs.getString(KEY_PENDING_INSTALL_APKS, null) ?: return
+            val root = runCatching { JSONObject(raw) }.getOrElse { return }
+            val keysToRemove = mutableListOf<String>()
+            val iter = root.keys()
+            while (iter.hasNext()) {
+                val key = iter.next()
+                val obj = root.optJSONObject(key)
+                if (obj == null || obj.optString("apkFilePath") == apkFilePath) {
+                    keysToRemove.add(key)
+                }
+            }
+            if (keysToRemove.isNotEmpty()) {
+                keysToRemove.forEach { root.remove(it) }
+                prefs.edit().putString(KEY_PENDING_INSTALL_APKS, root.toString()).apply()
+            }
+        } catch (_: Exception) {
+        }
+    }
+
+    /**
+     * Automatically deletes downloaded APK packages from local storage as soon as the corresponding
+     * package & version (or newer) is installed on the device. Returns package names cleaned up.
+     */
+    fun cleanupInstalledApkPackages(): List<String> {
+        val cleanedPackages = mutableListOf<String>()
+
+        // 1. Inspect every .apk file currently sitting in APK directories
+        for (file in listDownloadedApkFiles()) {
+            val archiveInfo = inspectApkArchiveInfo(file)
+            if (archiveInfo.packageName.isNotBlank()) {
+                val installed = getInstalledStatus(archiveInfo.packageName, archiveInfo.versionCode)
+                val targetCode = archiveInfo.versionCode
+                if (installed.isInstalled && (targetCode <= 0L || installed.installedVersionCode >= targetCode)) {
+                    if (deleteDownloadedApkFile(file.absolutePath)) {
+                        cleanedPackages.add(archiveInfo.packageName)
+                    }
+                }
+            }
+        }
+
+        // 2. Check tracked pending installs (survives process restart after store self-update)
+        try {
+            val prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val raw = prefs.getString(KEY_PENDING_INSTALL_APKS, null)
+            if (!raw.isNullOrBlank()) {
+                val root = JSONObject(raw)
+                val keysToRemove = mutableListOf<String>()
+                val iter = root.keys()
+                while (iter.hasNext()) {
+                    val key = iter.next()
+                    val obj = root.optJSONObject(key) ?: continue
+                    val pkg = obj.optString("packageName", "")
+                    val verCode = obj.optLong("versionCode", 0L)
+                    val path = obj.optString("apkFilePath", "")
+                    val file = if (path.isNotBlank()) File(path) else null
+                    if (pkg.isNotBlank()) {
+                        val installed = getInstalledStatus(pkg, verCode)
+                        if (installed.isInstalled && (verCode <= 0L || installed.installedVersionCode >= verCode)) {
+                            if (path.isNotBlank() && deleteDownloadedApkFile(path)) {
+                                cleanedPackages.add(pkg)
+                            }
+                            keysToRemove.add(key)
+                        } else if (file == null || !file.exists()) {
+                            keysToRemove.add(key)
+                        }
+                    } else if (file == null || !file.exists()) {
+                        keysToRemove.add(key)
+                    }
+                }
+                if (keysToRemove.isNotEmpty()) {
+                    keysToRemove.forEach { root.remove(it) }
+                    prefs.edit().putString(KEY_PENDING_INSTALL_APKS, root.toString()).apply()
+                }
+            }
+        } catch (_: Exception) {
+        }
+
+        return cleanedPackages.distinct()
+    }
+
+    /**
+     * Deletes downloaded APK files belonging to a specific installed/updated package immediately
+     * when Android broadcasts ACTION_PACKAGE_ADDED or ACTION_PACKAGE_REPLACED.
+     */
+    fun deleteApksForInstalledPackage(packageName: String, catalogApps: List<StoreApp> = emptyList()): List<String> {
+        if (packageName.isBlank()) return emptyList()
+        val deletedPaths = mutableListOf<String>()
+        val installed = getInstalledStatus(packageName, 0L)
+        if (!installed.isInstalled) return emptyList()
+
+        val matchingAppIds = catalogApps
+            .filter { it.packageName.equals(packageName, ignoreCase = true) }
+            .map { it.appId.ifBlank { it.docId }.replace(Regex("[^a-zA-Z0-9_\\-]"), "_") }
+            .filter { it.isNotBlank() }
+            .toSet()
+
+        for (file in listDownloadedApkFiles()) {
+            val archiveInfo = inspectApkArchiveInfo(file)
+            val matchesPkg = archiveInfo.packageName.equals(packageName, ignoreCase = true) &&
+                (archiveInfo.versionCode <= 0L || installed.installedVersionCode >= archiveInfo.versionCode)
+            val matchesPrefix = matchingAppIds.any { file.name.startsWith("$it-v") }
+            if (matchesPkg || matchesPrefix) {
+                if (deleteDownloadedApkFile(file.absolutePath)) {
+                    deletedPaths.add(file.absolutePath)
+                }
+            }
+        }
+
+        // Also clean any tracked pending install entry for this package
+        try {
+            val prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val raw = prefs.getString(KEY_PENDING_INSTALL_APKS, null)
+            if (!raw.isNullOrBlank()) {
+                val root = JSONObject(raw)
+                val obj = root.optJSONObject(packageName)
+                if (obj != null) {
+                    val path = obj.optString("apkFilePath", "")
+                    if (path.isNotBlank() && deleteDownloadedApkFile(path)) {
+                        deletedPaths.add(path)
+                    }
+                    root.remove(packageName)
+                    prefs.edit().putString(KEY_PENDING_INSTALL_APKS, root.toString()).apply()
+                }
+            }
+        } catch (_: Exception) {
+        }
+
+        return deletedPaths.distinct()
     }
 
     fun postStoreAnnouncementNotification(notification: StoreNotification) {
@@ -406,9 +595,17 @@ class AndroidPackageController(private val context: Context) {
         val apkDir = File(appContext.cacheDir, "apks").apply {
             if (!exists()) mkdirs()
         }
-        val safeFileName = "${appId.replace(Regex("[^a-zA-Z0-9_\\-]"), "_")}-v${app.versionCode}.apk"
+        val safeAppPrefix = appId.replace(Regex("[^a-zA-Z0-9_\\-]"), "_")
+        val safeFileName = "$safeAppPrefix-v${app.versionCode}.apk"
         val targetFile = File(apkDir, safeFileName)
         val partFile = File(apkDir, "$safeFileName.part")
+
+        // Delete any older cached APK files for this same app before downloading a new build
+        apkDir.listFiles { f ->
+            f.isFile && f.name.startsWith("$safeAppPrefix-v") && f.name != safeFileName && f.name != "$safeFileName.part"
+        }?.forEach { staleFile ->
+            staleFile.delete()
+        }
 
         val shouldBypassCache = forceRedownload || url.contains("/releases/latest/", ignoreCase = true)
         if (shouldBypassCache) {
@@ -569,15 +766,27 @@ class AndroidPackageController(private val context: Context) {
     }.flowOn(Dispatchers.IO)
 
     /**
-     * Launches the standard Android system package installer confirmation dialog for a downloaded APK file.
-     * Respects Android security restrictions and user confirmation requirements.
+     * Builds the system APK installation Intent and records the APK as pending install so it is
+     * automatically deleted immediately after installation completes.
      */
-    fun launchApkInstaller(activityContext: Context, apkFilePath: String): Result<Unit> {
+    fun buildApkInstallIntent(
+        activityContext: Context,
+        apkFilePath: String,
+        appId: String = "",
+        forActivityResult: Boolean = false
+    ): Result<Intent> {
         return try {
             val file = File(apkFilePath)
             if (!file.exists()) {
                 return Result.failure(IllegalStateException("Downloaded APK file not found at $apkFilePath"))
             }
+            val archiveInfo = inspectApkArchiveInfo(file)
+            recordPendingApkInstall(
+                packageName = archiveInfo.packageName,
+                appId = appId,
+                versionCode = archiveInfo.versionCode,
+                apkFilePath = file.absolutePath
+            )
             val apkUri: Uri = FileProvider.getUriForFile(
                 activityContext,
                 "${activityContext.packageName}.fileprovider",
@@ -586,12 +795,23 @@ class AndroidPackageController(private val context: Context) {
             val installIntent = Intent(Intent.ACTION_VIEW).apply {
                 setDataAndType(apkUri, "application/vnd.android.package-archive")
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                if (!forActivityResult) {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
             }
-            activityContext.startActivity(installIntent)
-            Result.success(Unit)
+            Result.success(installIntent)
         } catch (e: Exception) {
             Result.failure(e)
+        }
+    }
+
+    /**
+     * Launches the standard Android system package installer confirmation dialog for a downloaded APK file.
+     * Respects Android security restrictions and user confirmation requirements.
+     */
+    fun launchApkInstaller(activityContext: Context, apkFilePath: String, appId: String = ""): Result<Unit> {
+        return buildApkInstallIntent(activityContext, apkFilePath, appId, forActivityResult = false).mapCatching { installIntent ->
+            activityContext.startActivity(installIntent)
         }
     }
 
@@ -683,8 +903,73 @@ class AndroidPackageController(private val context: Context) {
         }
     }
 
+    private fun extractSha256FromReleaseBody(rawBody: String): String {
+        val match = Regex("""SHA-?256[^0-9a-fA-F]*([0-9a-fA-F]{64})""", RegexOption.IGNORE_CASE).find(rawBody)
+        return match?.groupValues?.getOrNull(1)?.lowercase() ?: ""
+    }
+
     /**
-     * Resolves the latest `.apk` asset download URL, version tag, file size, and release notes
+     * Filters out technical build metadata blocks (`Package Name`, `Version Code`, `SHA-256`,
+     * `<details>...</details>`, etc.) so "What's New" always highlights actual updates, fixes, and changes.
+     */
+    private fun cleanGitHubReleaseNotes(rawBody: String, tagName: String): String {
+        val withoutDetails = rawBody.replace(
+            Regex("""<details>[\s\S]*?</details>""", RegexOption.IGNORE_CASE),
+            ""
+        )
+        val metadataLinePrefixes = listOf(
+            "### zayaan apps official store release",
+            "package name:",
+            "architecture:",
+            "version name:",
+            "version code:",
+            "commit:",
+            "apk sha-256 checksum:",
+            "responsive web portal:",
+            "direct apk assets:"
+        )
+        val keptLines = mutableListOf<String>()
+        var compareLinkLine = ""
+
+        for (rawLine in withoutDetails.lines()) {
+            val trimmed = rawLine.trim()
+            val normalizedForCheck = trimmed
+                .removePrefix("- ")
+                .removePrefix("* ")
+                .replace("**", "")
+                .replace("`", "")
+                .trim()
+                .lowercase()
+            if (normalizedForCheck.startsWith("full changelog:") || trimmed.contains("/compare/", ignoreCase = true)) {
+                compareLinkLine = trimmed
+                continue
+            }
+            val isMetadataBoilerplate = metadataLinePrefixes.any { prefix ->
+                normalizedForCheck.startsWith(prefix)
+            }
+            if (!isMetadataBoilerplate) {
+                keptLines.add(rawLine)
+            }
+        }
+
+        val cleanedContent = keptLines.joinToString("\n").trim()
+        return buildString {
+            if (cleanedContent.isNotBlank()) {
+                append(cleanedContent)
+            } else {
+                append("### Latest Updates, Fixes & Changes (v$tagName)\n")
+                append("- Latest GitHub Release update synced to v$tagName.\n")
+                append("- Performance, stability, and UI improvements across Zayaan Apps.")
+            }
+            if (compareLinkLine.isNotBlank()) {
+                append("\n\n")
+                append(compareLinkLine)
+            }
+        }.trim()
+    }
+
+    /**
+     * Resolves the latest `.apk` asset download URL, version tag, file size, SHA-256, and cleaned release notes
      * from any GitHub repository URL or GitHub Releases URL (`https://github.com/<owner>/<repo>...`).
      */
     suspend fun resolveLatestGitHubReleaseAsset(repoOrReleaseUrl: String): ResolvedGitHubReleaseAsset? = withContext(Dispatchers.IO) {
@@ -709,7 +994,9 @@ class AndroidPackageController(private val context: Context) {
                 val json = JSONObject(jsonStr)
                 val tagName = json.optString("tag_name", "").removePrefix("v").trim()
                 val htmlUrl = json.optString("html_url", "https://github.com/$owner/$repo/releases/latest")
-                val releaseNotes = json.optString("body", "Official GitHub Release v$tagName")
+                val rawBody = json.optString("body", "")
+                val releaseNotes = cleanGitHubReleaseNotes(rawBody, tagName.ifBlank { "1.0.0.1" })
+                val parsedSha256 = extractSha256FromReleaseBody(rawBody)
                 val assets = json.optJSONArray("assets")
 
                 var apkUrl = ""
@@ -750,7 +1037,8 @@ class AndroidPackageController(private val context: Context) {
                     browserDownloadUrl = apkUrl,
                     fileSizeFormatted = formattedSize,
                     releaseNotes = releaseNotes,
-                    releaseHtmlUrl = htmlUrl
+                    releaseHtmlUrl = htmlUrl,
+                    sha256Checksum = parsedSha256
                 )
             }
         } catch (_: Exception) {
@@ -771,13 +1059,14 @@ class AndroidPackageController(private val context: Context) {
             packageName = "com.zayaanapps.store",
             category = "Tools",
             developerName = "Zayaan Apps Official",
-            description = "Official Zayaan Apps Store self-update package from GitHub Releases.",
-            shortDescription = "Official Zayaan Apps Store self-updater (${resolved.assetName}).",
+            description = "The official Zayaan Apps Android App Store & Web Distribution client. Discover, download, verify, and update official Zayaan Android applications directly from GitHub Releases with real-time version tracking.",
+            shortDescription = "Official Zayaan Apps Android marketplace & GitHub Releases distribution client.",
             versionName = resolved.tagName,
             versionCode = resolved.versionCode,
             apkDownloadUrl = resolved.browserDownloadUrl,
             apkFileSize = resolved.fileSizeFormatted,
             releaseNotes = resolved.releaseNotes,
+            sha256Checksum = resolved.sha256Checksum,
             githubRepoUrl = "https://github.com/${resolved.owner}/${resolved.repo}",
             featured = true,
             editorsChoice = true,

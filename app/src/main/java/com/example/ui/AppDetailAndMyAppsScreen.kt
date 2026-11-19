@@ -1025,10 +1025,10 @@ fun AppDetailScreen(
             }
         }
 
-        // 5. About This Application (Full Description)
+        // 5. About This Application (Introduction + Package, Version, Size & Specs)
         item {
             AboutApplicationCompactCard(
-                description = app.description
+                app = app
             )
         }
 
@@ -1727,6 +1727,56 @@ private fun AnnotatedString.Builder.appendFormattedInlineTokens(
     }
 }
 
+private fun sanitizeWhatsNewNotes(rawNotes: String, versionName: String): String {
+    val withoutDetails = rawNotes.replace(
+        Regex("""<details>[\s\S]*?</details>""", RegexOption.IGNORE_CASE),
+        ""
+    )
+    val metadataLinePrefixes = listOf(
+        "### zayaan apps official store release",
+        "package name:",
+        "architecture:",
+        "version name:",
+        "version code:",
+        "commit:",
+        "apk sha-256 checksum:",
+        "responsive web portal:",
+        "direct apk assets:"
+    )
+    val kept = mutableListOf<String>()
+    var compareLine = ""
+    for (rawLine in withoutDetails.lines()) {
+        val trimmed = rawLine.trim()
+        val normalized = trimmed
+            .removePrefix("- ")
+            .removePrefix("* ")
+            .replace("**", "")
+            .replace("`", "")
+            .trim()
+            .lowercase()
+        if (normalized.startsWith("full changelog:") || trimmed.contains("/compare/", ignoreCase = true)) {
+            compareLine = trimmed
+            continue
+        }
+        if (metadataLinePrefixes.none { normalized.startsWith(it) }) {
+            kept.add(rawLine)
+        }
+    }
+    val cleanedBody = kept.joinToString("\n").trim()
+    return buildString {
+        if (cleanedBody.isNotBlank()) {
+            append(cleanedBody)
+        } else {
+            append("### Latest Updates, Fixes & Changes (v$versionName)\n")
+            append("• Updated release v$versionName with latest fixes, performance & UI refinements.")
+        }
+        if (compareLine.isNotBlank()) {
+            append("\n\n")
+            append(compareLine)
+        }
+    }.trim()
+}
+
 @Composable
 private fun WhatsNewCompactCard(
     versionName: String,
@@ -1734,17 +1784,20 @@ private fun WhatsNewCompactCard(
     releaseNotes: String
 ) {
     val uriHandler = LocalUriHandler.current
-    var expanded by remember(releaseNotes) { mutableStateOf(false) }
-
-    val extractedLinks = remember(releaseNotes) { extractLinksFromRichText(releaseNotes) }
-    val nonEmptyLines = remember(releaseNotes) {
-        releaseNotes.lines().map { it.trim() }.filter { it.isNotEmpty() }
+    val cleanedNotes = remember(releaseNotes, versionName) {
+        sanitizeWhatsNewNotes(releaseNotes, versionName)
     }
-    val hasLongNotes = nonEmptyLines.size > 6 || releaseNotes.length > 320
+    var expanded by remember(cleanedNotes) { mutableStateOf(false) }
 
-    val displayedRawNotes = remember(releaseNotes, expanded, hasLongNotes) {
+    val extractedLinks = remember(cleanedNotes) { extractLinksFromRichText(cleanedNotes) }
+    val nonEmptyLines = remember(cleanedNotes) {
+        cleanedNotes.lines().map { it.trim() }.filter { it.isNotEmpty() }
+    }
+    val hasLongNotes = nonEmptyLines.size > 6 || cleanedNotes.length > 320
+
+    val displayedRawNotes = remember(cleanedNotes, expanded, hasLongNotes) {
         if (expanded || !hasLongNotes) {
-            releaseNotes
+            cleanedNotes
         } else {
             nonEmptyLines
                 .filterNot { line ->
@@ -1939,8 +1992,9 @@ private fun WhatsNewCompactCard(
 
 @Composable
 private fun AboutApplicationCompactCard(
-    description: String
+    app: StoreApp
 ) {
+    val description = app.description.ifBlank { app.shortDescription }
     var expanded by remember(description) { mutableStateOf(false) }
     val isLongDescription = description.length > 260 || description.lines().size > 5
 
@@ -1967,31 +2021,59 @@ private fun AboutApplicationCompactCard(
     ) {
         Column(
             modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Default.Info,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(18.dp)
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = "About this application",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Surface(
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f),
+                    shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f))
+                ) {
+                    Text(
+                        text = "v${app.versionName}",
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                        maxLines = 1,
+                        softWrap = false
+                    )
+                }
+            }
+
+            if (formattedDescription.isNotEmpty()) {
                 Text(
-                    text = "About this application",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold
+                    text = formattedDescription,
+                    fontSize = 12.5.sp,
+                    lineHeight = 18.sp,
+                    maxLines = if (expanded || !isLongDescription) Int.MAX_VALUE else 4,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
-            Text(
-                text = formattedDescription,
-                fontSize = 12.5.sp,
-                lineHeight = 18.sp,
-                maxLines = if (expanded || !isLongDescription) Int.MAX_VALUE else 4,
-                overflow = TextOverflow.Ellipsis
-            )
+
             if (isLongDescription) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -2021,6 +2103,36 @@ private fun AboutApplicationCompactCard(
                                 modifier = Modifier.size(14.dp)
                             )
                         }
+                    }
+                }
+            }
+
+            // Package, Version, Category, Size & OS Details right inside About App
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.22f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column {
+                    SpecKeyValueRow("Package", app.packageName, Icons.Default.Inventory2)
+                    SpecRowDivider()
+                    SpecKeyValueRow("Version", "v${app.versionName} (Build ${app.versionCode})", Icons.Default.NewReleases)
+                    SpecRowDivider()
+                    SpecKeyValueRow("Category", app.category, Icons.Default.Category)
+                    SpecRowDivider()
+                    SpecKeyValueRow("APK Size", app.apkFileSize, Icons.Default.SdStorage)
+                    SpecRowDivider()
+                    SpecKeyValueRow("Developer", app.developerName, Icons.Default.Storefront)
+                    SpecRowDivider()
+                    SpecKeyValueRow("Android OS", "API ${app.minAndroidSdk}+ (Target ${app.targetAndroidSdk})", Icons.Default.PhoneAndroid)
+                    if (app.architecture.isNotBlank()) {
+                        SpecRowDivider()
+                        SpecKeyValueRow("Architecture", app.architecture, Icons.Default.Memory)
+                    }
+                    if (app.sha256Checksum.isNotBlank()) {
+                        SpecRowDivider()
+                        SpecKeyValueRow("SHA-256", "${app.sha256Checksum.take(20)}...", Icons.Default.Fingerprint)
                     }
                 }
             }

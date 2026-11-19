@@ -22,11 +22,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.BrightnessAuto
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.InstallMobile
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Public
@@ -65,9 +67,12 @@ fun WebDevOpsAndSettingsScreen(
     themeMode: AppThemeMode,
     notifyUpdates: Boolean,
     currentUserEmail: String?,
+    canInstallUnknownApps: Boolean = true,
+    notificationsPermissionGranted: Boolean = true,
     onThemeModeChange: (AppThemeMode) -> Unit,
     onNotifyUpdatesChange: (Boolean) -> Unit,
     onRequestNotificationPermission: () -> Unit,
+    onRequestInstallUnknownAppsPermission: () -> Unit = {},
     onOpenUrl: (Context, String) -> Unit,
     onSignOut: () -> Unit,
     onShowCopiedMessage: (String) -> Unit,
@@ -295,6 +300,69 @@ fun WebDevOpsAndSettingsScreen(
                             },
                             modifier = Modifier.testTag("notify_updates_switch")
                         )
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+                    HorizontalDivider()
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                            Icon(imageVector = Icons.Default.InstallMobile, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text("Install Unknown Apps Permission", style = MaterialTheme.typography.labelLarge)
+                                Text(
+                                    text = if (canInstallUnknownApps) {
+                                        "Granted — APK updates auto-delete after install"
+                                    } else {
+                                        "Required to install & update APKs"
+                                    },
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        if (canInstallUnknownApps) {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = "Granted",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        } else {
+                            FilledTonalButton(onClick = onRequestInstallUnknownAppsPermission) {
+                                Text("Grant")
+                            }
+                        }
+                    }
+
+                    if (!notificationsPermissionGranted) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                Icon(imageVector = Icons.Default.Notifications, contentDescription = null, tint = MaterialTheme.colorScheme.tertiary)
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text("Notification Permission", style = MaterialTheme.typography.labelLarge)
+                                    Text(
+                                        text = "Tap Grant to receive app update & install alerts",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            FilledTonalButton(onClick = onRequestNotificationPermission) {
+                                Text("Grant")
+                            }
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(14.dp))

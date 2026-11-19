@@ -1,6 +1,10 @@
 package com.example
 
 import android.Manifest
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
@@ -10,6 +14,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeOut
@@ -37,9 +42,12 @@ import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Shop
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -51,6 +59,7 @@ import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -213,6 +222,7 @@ fun AuthenticatedStoreShell(
     val comparisonAppIds by viewModel.comparisonAppIds.collectAsStateWithLifecycle()
     val bannerMessage by viewModel.statusBannerMessage.collectAsStateWithLifecycle()
     val storeSelfUpdateApp by viewModel.storeSelfUpdateApp.collectAsStateWithLifecycle()
+    val pendingInstallPermission by viewModel.pendingInstallPermission.collectAsStateWithLifecycle()
     var selfUpdateDismissed by remember { mutableStateOf(false) }
 
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
@@ -243,15 +253,57 @@ fun AuthenticatedStoreShell(
     val scope = rememberCoroutineScope()
     val credentialManager = remember { CredentialManager.create(context) }
 
+    var permissionVersionTick by remember { mutableStateOf(0) }
+
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
-    ) { _ -> }
+    ) { _ ->
+        permissionVersionTick++
+    }
+
+    val unknownAppsSettingsLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) {
+        permissionVersionTick++
+        viewModel.onAppResumed(context)
+    }
+
+    // Prompt notification permission once if needed on Android 13+
+    LaunchedEffect(Unit) {
+        delay(450)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !viewModel.isNotificationPermissionGranted()) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
+    // Automatically delete downloaded APK files right after Android completes package install/update
+    DisposableEffect(context, viewModel) {
+        val packageReceiver = object : BroadcastReceiver() {
+            override fun onReceive(ctx: Context?, intent: Intent?) {
+                val action = intent?.action ?: return
+                if (action == Intent.ACTION_PACKAGE_ADDED || action == Intent.ACTION_PACKAGE_REPLACED) {
+                    val installedPkg = intent.data?.schemeSpecificPart ?: return
+                    viewModel.handlePackageInstalledOrReplaced(installedPkg)
+                }
+            }
+        }
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_PACKAGE_ADDED)
+            addAction(Intent.ACTION_PACKAGE_REPLACED)
+            addDataScheme("package")
+        }
+        ContextCompat.registerReceiver(context, packageReceiver, filter, ContextCompat.RECEIVER_EXPORTED)
+        onDispose {
+            runCatching { context.unregisterReceiver(packageReceiver) }
+        }
+    }
 
     val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner, viewModel) {
+    DisposableEffect(lifecycleOwner, viewModel, context) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                viewModel.rescanInstalledPackagesSilently()
+                permissionVersionTick++
+                viewModel.onAppResumed(context)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -448,7 +500,14 @@ fun AuthenticatedStoreShell(
                                     onBack = { selectedAppIdForDetail = null },
                                     onStartDownload = { viewModel.startApkDownload(it) },
                                     onCancelDownload = { viewModel.cancelActiveDownload(it) },
-                                    onInstallApk = { ctx, path -> viewModel.installDownloadedApk(ctx, path) },
+                                    onInstallApk = { ctx, path ->
+                                        viewModel.installDownloadedApk(
+                                            context = ctx,
+                                            apkFilePath = path,
+                                            appId = appId,
+                                            appName = activeDetailApp.appName
+                                        )
+                                    },
                                     onOpenInstalledApp = { ctx, pkg ->
                                         if (pkg.trim() == ctx.packageName) {
                                             selectedAppIdForDetail = null
@@ -483,6 +542,11 @@ fun AuthenticatedStoreShell(
                                         viewModel.submitReport(appId, "APP", reason, details)
                                     },
                                     onDownloadLatestGitHubRelease = { ctx, app ->
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                                            !viewModel.isNotificationPermissionGranted()
+                                        ) {
+                                            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                        }
                                         viewModel.downloadLatestGitHubReleaseApk(app, ctx)
                                     },
                                     onUninstallApp = { ctx, pkg ->
@@ -661,15 +725,29 @@ fun AuthenticatedStoreShell(
                                     }
 
                                     ZayaanTab.WEB_DEVOPS -> {
+                                        val canInstallUnknown = remember(permissionVersionTick) {
+                                            viewModel.canRequestPackageInstalls()
+                                        }
+                                        val notificationsAllowed = remember(permissionVersionTick) {
+                                            viewModel.isNotificationPermissionGranted()
+                                        }
                                         WebDevOpsAndSettingsScreen(
                                             themeMode = themeMode,
                                             notifyUpdates = notifyUpdates,
                                             currentUserEmail = currentUserEmail,
+                                            canInstallUnknownApps = canInstallUnknown,
+                                            notificationsPermissionGranted = notificationsAllowed,
                                             onThemeModeChange = { viewModel.updateThemeMode(it) },
                                             onNotifyUpdatesChange = { viewModel.updateNotificationPreference(it) },
                                             onRequestNotificationPermission = {
                                                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                                                     notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                                }
+                                            },
+                                            onRequestInstallUnknownAppsPermission = {
+                                                val intent = viewModel.buildManageUnknownAppSourcesIntent(context)
+                                                if (intent != null) {
+                                                    unknownAppsSettingsLauncher.launch(intent)
                                                 }
                                             },
                                             onOpenUrl = { ctx, url ->
@@ -691,6 +769,43 @@ fun AuthenticatedStoreShell(
                 }
             }
         }
+            val pendingPerm = pendingInstallPermission
+            if (pendingPerm != null) {
+                AlertDialog(
+                    onDismissRequest = { viewModel.dismissInstallPermissionPrompt() },
+                    icon = {
+                        Icon(
+                            imageVector = Icons.Default.Security,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    },
+                    title = { Text("Permission Required") },
+                    text = {
+                        Text(
+                            "To install or update \"${pendingPerm.appName}\", Android requires the 'Install Unknown Apps' permission for Zayaan Apps. Grant it in Settings and return to automatically continue installation (downloaded APK files are automatically deleted right after install)."
+                        )
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                viewModel.markAwaitingUnknownAppsPermissionGrant()
+                                val intent = viewModel.buildManageUnknownAppSourcesIntent(context)
+                                if (intent != null) {
+                                    unknownAppsSettingsLauncher.launch(intent)
+                                }
+                            }
+                        ) {
+                            Text("Allow Permission")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { viewModel.dismissInstallPermissionPrompt() }) {
+                            Text("Cancel")
+                        }
+                    }
+                )
+            }
             AnimatedVisibility(
                 visible = showLaunchSplash,
                 exit = fadeOut(animationSpec = tween(durationMillis = 260))

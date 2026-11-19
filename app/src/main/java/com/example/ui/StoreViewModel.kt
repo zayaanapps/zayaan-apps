@@ -40,6 +40,12 @@ sealed interface UiState<out T> {
     data class Error(val message: String) : UiState<Nothing>
 }
 
+data class PendingApkInstallPermission(
+    val appId: String,
+    val appName: String,
+    val apkFilePath: String
+)
+
 class StoreViewModel(
     private val repository: StoreRepository,
     private val packageController: AndroidPackageController,
@@ -126,6 +132,11 @@ class StoreViewModel(
     private val _storeSelfUpdateApp = MutableStateFlow<StoreApp?>(null)
     val storeSelfUpdateApp: StateFlow<StoreApp?> = _storeSelfUpdateApp.asStateFlow()
 
+    private val _pendingInstallPermission = MutableStateFlow<PendingApkInstallPermission?>(null)
+    val pendingInstallPermission: StateFlow<PendingApkInstallPermission?> = _pendingInstallPermission.asStateFlow()
+
+    private val _awaitingUnknownAppsGrant = MutableStateFlow<PendingApkInstallPermission?>(null)
+
     private var latestGitHubStoreRelease: StoreApp? = null
     private var hasAutoSeededEmptyStore = false
     private var notifiedUpdatePackages = mutableSetOf<String>()
@@ -138,7 +149,7 @@ class StoreViewModel(
             loadGuestPreviewStore()
         }
         checkGitHubSelfUpdate()
-        refreshCachedApks()
+        cleanupInstalledPackagesAndRefresh(silent = true)
     }
 
     private fun enrichCatalogWithLiveStoreRelease(apps: List<StoreApp>): List<StoreApp> {
@@ -165,7 +176,8 @@ class StoreViewModel(
                             versionCode = remote.versionCode,
                             apkDownloadUrl = remote.apkDownloadUrl.ifBlank { app.apkDownloadUrl },
                             apkFileSize = remote.apkFileSize.ifBlank { app.apkFileSize },
-                            releaseNotes = remote.releaseNotes.ifBlank { app.releaseNotes }
+                            releaseNotes = remote.releaseNotes.ifBlank { app.releaseNotes },
+                            sha256Checksum = remote.sha256Checksum.ifBlank { app.sha256Checksum }
                         )
                     }
                     installedBuildCode > app.versionCode -> {
@@ -465,6 +477,73 @@ class StoreViewModel(
         }
     }
 
+    fun cleanupInstalledPackagesAndRefresh(silent: Boolean = false) {
+        viewModelScope.launch {
+            val (cleanedPkgs, remainingFiles, remainingInfos) = withContext(Dispatchers.IO) {
+                val cleaned = packageController.cleanupInstalledApkPackages()
+                val files = packageController.listDownloadedApkFiles()
+                val infos = files.map { packageController.inspectApkArchiveInfo(it) }
+                Triple(cleaned, files, infos)
+            }
+            _downloadedApkFiles.value = remainingFiles
+            _cachedApkVerifications.value = remainingInfos
+            if (cleanedPkgs.isNotEmpty()) {
+                clearDownloadStatesForPackages(cleanedPkgs.toSet())
+                if (!silent) {
+                    val currentApps = (_publishedAppsState.value as? UiState.Success)?.data ?: emptyList()
+                    val names = cleanedPkgs.mapNotNull { pkg ->
+                        currentApps.firstOrNull { it.packageName.equals(pkg, ignoreCase = true) }?.appName
+                    }
+                    val label = names.takeIf { it.isNotEmpty() }?.joinToString(", ") ?: "${cleanedPkgs.size} app(s)"
+                    _statusBannerMessage.value = "Installed $label & deleted temporary APK package(s)."
+                }
+            }
+        }
+    }
+
+    fun handlePackageInstalledOrReplaced(packageName: String) {
+        if (packageName.isBlank()) return
+        viewModelScope.launch {
+            val currentApps = (_publishedAppsState.value as? UiState.Success)?.data ?: emptyList()
+            val (deletedPaths, remainingFiles, remainingInfos) = withContext(Dispatchers.IO) {
+                val deleted = packageController.deleteApksForInstalledPackage(packageName, currentApps)
+                packageController.cleanupInstalledApkPackages()
+                val files = packageController.listDownloadedApkFiles()
+                val infos = files.map { packageController.inspectApkArchiveInfo(it) }
+                Triple(deleted, files, infos)
+            }
+            _downloadedApkFiles.value = remainingFiles
+            _cachedApkVerifications.value = remainingInfos
+            clearDownloadStatesForPackages(setOf(packageName))
+            if (currentApps.isNotEmpty()) {
+                refreshInstalledPackages(currentApps)
+            }
+            if (deletedPaths.isNotEmpty()) {
+                val appName = currentApps.firstOrNull { it.packageName.equals(packageName, ignoreCase = true) }?.appName
+                    ?: packageName
+                _statusBannerMessage.value = "Installed $appName & deleted downloaded APK package."
+            }
+        }
+    }
+
+    private fun clearDownloadStatesForPackages(packageNames: Set<String>) {
+        if (packageNames.isEmpty()) return
+        val currentApps = (_publishedAppsState.value as? UiState.Success)?.data ?: emptyList()
+        val matchingAppIds = currentApps
+            .filter { app -> packageNames.any { pkg -> pkg.equals(app.packageName, ignoreCase = true) } }
+            .map { it.appId.ifBlank { it.docId } }
+            .toSet()
+
+        val updatedMap = _downloadStates.value.toMutableMap()
+        val keysToReset = updatedMap.entries.filter { (key, state) ->
+            key in matchingAppIds || (state is DownloadState.ReadyToInstall && !File(state.apkFilePath).exists())
+        }.map { it.key }
+        if (keysToReset.isNotEmpty()) {
+            keysToReset.forEach { updatedMap.remove(it) }
+            _downloadStates.value = updatedMap
+        }
+    }
+
     fun deleteCachedApk(apkFilePath: String) {
         if (packageController.deleteDownloadedApkFile(apkFilePath)) {
             refreshCachedApks()
@@ -613,8 +692,45 @@ class StoreViewModel(
     }
 
     fun rescanInstalledPackagesSilently() {
-        val currentApps = (_publishedAppsState.value as? UiState.Success)?.data ?: return
-        refreshInstalledPackages(currentApps)
+        val currentApps = (_publishedAppsState.value as? UiState.Success)?.data ?: emptyList()
+        if (currentApps.isNotEmpty()) {
+            refreshInstalledPackages(currentApps)
+        }
+        cleanupInstalledPackagesAndRefresh(silent = false)
+    }
+
+    fun onAppResumed(context: Context) {
+        rescanInstalledPackagesSilently()
+        val awaiting = _awaitingUnknownAppsGrant.value
+        if (awaiting != null && packageController.canRequestPackageInstalls()) {
+            _awaitingUnknownAppsGrant.value = null
+            _pendingInstallPermission.value = null
+            installDownloadedApk(
+                context = context,
+                apkFilePath = awaiting.apkFilePath,
+                appId = awaiting.appId,
+                appName = awaiting.appName
+            )
+        }
+    }
+
+    fun canRequestPackageInstalls(): Boolean = packageController.canRequestPackageInstalls()
+
+    fun isNotificationPermissionGranted(): Boolean = packageController.isNotificationPermissionGranted()
+
+    fun buildManageUnknownAppSourcesIntent(context: Context): android.content.Intent? =
+        packageController.buildManageUnknownAppSourcesIntent(context)
+
+    fun dismissInstallPermissionPrompt() {
+        _pendingInstallPermission.value = null
+    }
+
+    fun markAwaitingUnknownAppsPermissionGrant() {
+        val pending = _pendingInstallPermission.value
+        if (pending != null) {
+            _awaitingUnknownAppsGrant.value = pending
+        }
+        _pendingInstallPermission.value = null
     }
 
     private fun checkGitHubSelfUpdate() {
@@ -706,7 +822,8 @@ class StoreViewModel(
                     versionCode = maxOf(app.versionCode, resolved.versionCode),
                     apkDownloadUrl = resolved.browserDownloadUrl,
                     apkFileSize = resolved.fileSizeFormatted.ifBlank { app.apkFileSize },
-                    releaseNotes = resolved.releaseNotes.ifBlank { app.releaseNotes }
+                    releaseNotes = resolved.releaseNotes.ifBlank { app.releaseNotes },
+                    sha256Checksum = resolved.sha256Checksum.ifBlank { app.sha256Checksum }
                 )
                 if (updatedApp.packageName == "com.zayaanapps.store" || updatedApp.appId == "zayaan-apps-store") {
                     latestGitHubStoreRelease = updatedApp
@@ -775,7 +892,12 @@ class StoreViewModel(
                     }
                     _statusBannerMessage.value = "${app.appName} v$resolvedVer downloaded$verifyNote."
                     if (autoPromptInstallContext != null) {
-                        installDownloadedApk(autoPromptInstallContext, state.apkFilePath)
+                        installDownloadedApk(
+                            context = autoPromptInstallContext,
+                            apkFilePath = state.apkFilePath,
+                            appId = key,
+                            appName = app.appName
+                        )
                     }
                 } else if (state is DownloadState.Failed) {
                     _statusBannerMessage.value = state.errorMessage
@@ -801,7 +923,7 @@ class StoreViewModel(
                     _downloadStates.value = _downloadStates.value + (key to state)
                     if (state is DownloadState.ReadyToInstall) {
                         refreshCachedApks()
-                        installDownloadedApk(context, state.apkFilePath)
+                        installDownloadedApk(context, state.apkFilePath, key, app.appName)
                     } else if (state is DownloadState.Failed) {
                         _statusBannerMessage.value = "Failed updating ${app.appName}: ${state.errorMessage}"
                     }
@@ -811,14 +933,28 @@ class StoreViewModel(
         }
     }
 
-    fun installDownloadedApk(context: Context, apkFilePath: String) {
+    fun installDownloadedApk(
+        context: Context,
+        apkFilePath: String,
+        appId: String = "",
+        appName: String = ""
+    ) {
         if (!packageController.canRequestPackageInstalls()) {
-            _statusBannerMessage.value = "Grant 'Install Unknown Apps' permission in Android Settings to install APK updates."
-            packageController.openManageUnknownAppSourcesSettings(context)
+            val resolvedName = appName.ifBlank {
+                File(apkFilePath).nameWithoutExtension
+            }
+            _pendingInstallPermission.value = PendingApkInstallPermission(
+                appId = appId,
+                appName = resolvedName,
+                apkFilePath = apkFilePath
+            )
+            _statusBannerMessage.value = "Permission required: Allow 'Install Unknown Apps' to install $resolvedName."
             return
         }
-        packageController.launchApkInstaller(context, apkFilePath)
+        packageController.launchApkInstaller(context, apkFilePath, appId)
             .onSuccess {
+                _pendingInstallPermission.value = null
+                _awaitingUnknownAppsGrant.value = null
                 if (_statusBannerMessage.value?.contains("Install Unknown Apps", ignoreCase = true) == true) {
                     _statusBannerMessage.value = null
                 }
