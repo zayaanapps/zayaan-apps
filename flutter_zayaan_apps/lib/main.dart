@@ -3593,6 +3593,22 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
                   ],
                 ),
               ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                height: 34,
+                child: FilledButton.icon(
+                  onPressed: () => _openAdminAppEditorDialog(),
+                  style: FilledButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    textStyle: const TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.w700),
+                  ),
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('Publish New Android App'),
+                ),
+              ),
             ],
           ),
         ),
@@ -3726,7 +3742,13 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
                     ],
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 6),
+                IconButton(
+                  tooltip: 'Edit App',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () => _openAdminAppEditorDialog(existingApp: app),
+                  icon: Icon(Icons.edit_outlined, size: 18, color: cs.primary),
+                ),
                 SizedBox(
                   height: 30,
                   child: FilledButton.tonal(
@@ -3750,6 +3772,638 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
         ),
       ],
     );
+  }
+
+  Future<void> _openAdminAppEditorDialog({StoreAppModel? existingApp}) async {
+    final isNew = existingApp == null;
+    final nameCtrl = TextEditingController(text: existingApp?.appName ?? '');
+    final pkgCtrl = TextEditingController(text: existingApp?.packageName ?? '');
+    final idCtrl = TextEditingController(text: existingApp?.appId ?? '');
+    final verCtrl =
+        TextEditingController(text: existingApp?.versionName ?? '1.0.0.1');
+    final codeCtrl = TextEditingController(
+        text: (existingApp?.versionCode ?? 1).toString());
+    final sizeCtrl =
+        TextEditingController(text: existingApp?.apkFileSize ?? '12.0 MB');
+    final apkUrlCtrl =
+        TextEditingController(text: existingApp?.apkDownloadUrl ?? '');
+    final descCtrl =
+        TextEditingController(text: existingApp?.description ?? '');
+    final notesCtrl =
+        TextEditingController(text: existingApp?.releaseNotes ?? '');
+    final devCtrl = TextEditingController(
+        text: existingApp?.developerName ?? 'Zayaan Apps Studio');
+    final iconCtrl = TextEditingController(text: existingApp?.iconUrl ?? '');
+    final shotsCtrl = TextEditingController(
+        text: existingApp?.screenshots.join(', ') ?? '');
+    final shaCtrl =
+        TextEditingController(text: existingApp?.sha256Checksum ?? '');
+    final shortCtrl =
+        TextEditingController(text: existingApp?.shortDescription ?? '');
+    final emailCtrl = TextEditingController(
+        text: existingApp?.supportEmail ?? 'zayaanapps@gmail.com');
+    final repoCtrl = TextEditingController(
+        text: existingApp?.githubRepoUrl ??
+            'https://github.com/zayaanapps/zayaan-apps');
+    final policyCtrl = TextEditingController(
+        text: existingApp?.privacyPolicyUrl ??
+            'https://zayaanapps.github.io/zayaan-apps/');
+
+    String selectedCategory = kStoreCategories
+            .contains(existingApp?.category ?? 'Tools')
+        ? (existingApp?.category ?? 'Tools')
+        : 'Tools';
+    bool published = existingApp?.published ?? true;
+    bool featured = existingApp?.featured ?? false;
+    bool editorsChoice = existingApp?.editorsChoice ?? false;
+    bool essential = existingApp?.essential ?? false;
+    bool offlineCapable = existingApp?.offlineCapable ?? true;
+    bool showOptional = false;
+    bool pkgEdited = !isNew;
+    bool idEdited = !isNew;
+    bool isSaving = false;
+    String? errorMsg;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogCtx) {
+        return StatefulBuilder(
+          builder: (dialogCtx, setModalState) {
+            final cs = Theme.of(dialogCtx).colorScheme;
+            return AlertDialog(
+              title: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    isNew
+                        ? 'Publish New Android App'
+                        : "Update '${existingApp.appName}'",
+                    style: const TextStyle(
+                        fontSize: 17, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    isNew
+                        ? 'Enter just the essentials — extra metadata uses smart defaults.'
+                        : 'Update release details or expand optional metadata.',
+                    style: TextStyle(fontSize: 11.5, color: cs.onSurfaceVariant),
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: 460,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TextField(
+                        controller: nameCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'App Name *',
+                          hintText: 'e.g. Zayaan Notes',
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                        onChanged: (val) {
+                          if (isNew) {
+                            final slug = val
+                                .toLowerCase()
+                                .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+                                .replaceAll(RegExp(r'^-+|-+$'), '');
+                            if (!idEdited) idCtrl.text = slug;
+                            if (!pkgEdited) {
+                              final pkgSuffix = slug.replaceAll('-', '');
+                              pkgCtrl.text = pkgSuffix.isNotEmpty
+                                  ? 'com.zayaanapps.$pkgSuffix'
+                                  : '';
+                            }
+                          }
+                          if (errorMsg != null) {
+                            setModalState(() => errorMsg = null);
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: pkgCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Android Package Name *',
+                          hintText: 'com.zayaanapps.myapp',
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                        onChanged: (_) => pkgEdited = true,
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        'Category',
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: cs.onSurfaceVariant),
+                      ),
+                      const SizedBox(height: 6),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: kStoreCategories.map((cat) {
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 6),
+                              child: ChoiceChip(
+                                label: Text(cat,
+                                    style: const TextStyle(fontSize: 11.5)),
+                                selected: selectedCategory == cat,
+                                onSelected: (_) =>
+                                    setModalState(() => selectedCategory = cat),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: verCtrl,
+                              decoration: const InputDecoration(
+                                labelText: 'Version',
+                                hintText: '1.0.0.1',
+                                border: OutlineInputBorder(),
+                                isDense: true,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TextField(
+                              controller: sizeCtrl,
+                              decoration: const InputDecoration(
+                                labelText: 'APK Size',
+                                hintText: '12.0 MB',
+                                border: OutlineInputBorder(),
+                                isDense: true,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: apkUrlCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'APK Download URL *',
+                          hintText:
+                              'https://github.com/.../releases/download/v1.0/app.apk',
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                        onChanged: (_) {
+                          if (errorMsg != null) {
+                            setModalState(() => errorMsg = null);
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: descCtrl,
+                        minLines: 2,
+                        maxLines: 3,
+                        decoration: const InputDecoration(
+                          labelText: 'Short Description (optional)',
+                          hintText: 'What does this app do?',
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: cs.surfaceContainerHighest
+                              .withValues(alpha: 0.35),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                              color: cs.outline.withValues(alpha: 0.22)),
+                        ),
+                        child: SwitchListTile(
+                          dense: true,
+                          title: const Text(
+                            'Publish Live in Store',
+                            style: TextStyle(
+                                fontSize: 13, fontWeight: FontWeight.w600),
+                          ),
+                          subtitle: Text(
+                            published
+                                ? 'Visible to all users immediately'
+                                : 'Saved as hidden draft',
+                            style: const TextStyle(fontSize: 11),
+                          ),
+                          value: published,
+                          onChanged: (v) => setModalState(() => published = v),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                              color: cs.outline.withValues(alpha: 0.26)),
+                        ),
+                        child: Column(
+                          children: [
+                            InkWell(
+                              borderRadius: BorderRadius.circular(12),
+                              onTap: () => setModalState(
+                                  () => showOptional = !showOptional),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 10),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'More Details & Badges (Optional)',
+                                            style: TextStyle(
+                                              fontSize: 12.5,
+                                              fontWeight: FontWeight.w600,
+                                              color: cs.primary,
+                                            ),
+                                          ),
+                                          Text(
+                                            'Release notes, icon URL, screenshots, SHA-256 & featured flags',
+                                            style: TextStyle(
+                                                fontSize: 10.5,
+                                                color: cs.onSurfaceVariant),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Icon(
+                                      showOptional
+                                          ? Icons.expand_less
+                                          : Icons.expand_more,
+                                      color: cs.primary,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            if (showOptional)
+                              Padding(
+                                padding:
+                                    const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Divider(height: 14),
+                                    TextField(
+                                      controller: notesCtrl,
+                                      minLines: 2,
+                                      maxLines: 3,
+                                      decoration: const InputDecoration(
+                                        labelText: "What's New / Release Notes",
+                                        border: OutlineInputBorder(),
+                                        isDense: true,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: TextField(
+                                            controller: idCtrl,
+                                            enabled: isNew,
+                                            decoration: const InputDecoration(
+                                              labelText: 'App ID (slug)',
+                                              border: OutlineInputBorder(),
+                                              isDense: true,
+                                            ),
+                                            onChanged: (_) => idEdited = true,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: TextField(
+                                            controller: codeCtrl,
+                                            keyboardType: TextInputType.number,
+                                            decoration: const InputDecoration(
+                                              labelText: 'Version Code',
+                                              border: OutlineInputBorder(),
+                                              isDense: true,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 8),
+                                    TextField(
+                                      controller: devCtrl,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Developer / Studio',
+                                        border: OutlineInputBorder(),
+                                        isDense: true,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    TextField(
+                                      controller: shortCtrl,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Short Tagline (optional)',
+                                        border: OutlineInputBorder(),
+                                        isDense: true,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    TextField(
+                                      controller: iconCtrl,
+                                      decoration: const InputDecoration(
+                                        labelText: 'App Icon Image URL',
+                                        border: OutlineInputBorder(),
+                                        isDense: true,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    TextField(
+                                      controller: shotsCtrl,
+                                      decoration: const InputDecoration(
+                                        labelText:
+                                            'Screenshot URLs (comma-separated)',
+                                        border: OutlineInputBorder(),
+                                        isDense: true,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    TextField(
+                                      controller: shaCtrl,
+                                      decoration: const InputDecoration(
+                                        labelText: 'APK SHA-256 Checksum',
+                                        border: OutlineInputBorder(),
+                                        isDense: true,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: TextField(
+                                            controller: emailCtrl,
+                                            decoration: const InputDecoration(
+                                              labelText: 'Support Email',
+                                              border: OutlineInputBorder(),
+                                              isDense: true,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: TextField(
+                                            controller: repoCtrl,
+                                            decoration: const InputDecoration(
+                                              labelText: 'GitHub Repo URL',
+                                              border: OutlineInputBorder(),
+                                              isDense: true,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 8),
+                                    TextField(
+                                      controller: policyCtrl,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Privacy Policy URL',
+                                        border: OutlineInputBorder(),
+                                        isDense: true,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Wrap(
+                                      spacing: 6,
+                                      runSpacing: 4,
+                                      children: [
+                                        FilterChip(
+                                          label: const Text('Featured',
+                                              style: TextStyle(fontSize: 11)),
+                                          selected: featured,
+                                          onSelected: (v) =>
+                                              setModalState(() => featured = v),
+                                        ),
+                                        FilterChip(
+                                          label: const Text("Editor's Choice",
+                                              style: TextStyle(fontSize: 11)),
+                                          selected: editorsChoice,
+                                          onSelected: (v) => setModalState(
+                                              () => editorsChoice = v),
+                                        ),
+                                        FilterChip(
+                                          label: const Text('Essential',
+                                              style: TextStyle(fontSize: 11)),
+                                          selected: essential,
+                                          onSelected: (v) => setModalState(
+                                              () => essential = v),
+                                        ),
+                                        FilterChip(
+                                          label: const Text('Offline Ready',
+                                              style: TextStyle(fontSize: 11)),
+                                          selected: offlineCapable,
+                                          onSelected: (v) => setModalState(
+                                              () => offlineCapable = v),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      if (errorMsg != null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          errorMsg!,
+                          style: TextStyle(fontSize: 11.5, color: cs.error),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSaving ? null : () => Navigator.of(dialogCtx).pop(),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: isSaving
+                      ? null
+                      : () async {
+                          final cleanName = nameCtrl.text.trim();
+                          final cleanUrl = apkUrlCtrl.text.trim();
+                          if (cleanName.isEmpty) {
+                            setModalState(
+                                () => errorMsg = 'Please enter an App Name.');
+                            return;
+                          }
+                          if (cleanUrl.isEmpty) {
+                            setModalState(() =>
+                                errorMsg = 'Please paste the APK Download URL.');
+                            return;
+                          }
+                          final rawSlug = idCtrl.text.trim().isNotEmpty
+                              ? idCtrl.text.trim()
+                              : cleanName
+                                  .toLowerCase()
+                                  .replaceAll(RegExp(r'[^a-z0-9]+'), '-');
+                          final cleanSlug = rawSlug
+                              .replaceAll(RegExp(r'[^a-zA-Z0-9_\-]'), '-')
+                              .replaceAll(RegExp(r'^-+|-+$'), '');
+                          final finalSlug = cleanSlug.isNotEmpty
+                              ? cleanSlug
+                              : 'zayaan-app-${DateTime.now().millisecondsSinceEpoch}';
+                          final cleanVer = verCtrl.text.trim().isNotEmpty
+                              ? verCtrl.text.trim()
+                              : '1.0.0.1';
+                          final parsedCode =
+                              int.tryParse(codeCtrl.text.trim()) ??
+                                  int.tryParse(cleanVer.split('.').last) ??
+                                  1;
+                          final cleanDesc = descCtrl.text.trim().isNotEmpty
+                              ? descCtrl.text.trim()
+                              : '$cleanName — Official Android release published on Zayaan Apps.';
+                          final cleanShort = shortCtrl.text.trim().isNotEmpty
+                              ? shortCtrl.text.trim()
+                              : cleanDesc.split('\n').first;
+                          final cleanPkg = pkgCtrl.text.trim().isNotEmpty
+                              ? pkgCtrl.text.trim()
+                              : 'com.zayaanapps.${finalSlug.replaceAll('-', '')}';
+                          final shots = shotsCtrl.text
+                              .split(',')
+                              .map((s) => s.trim())
+                              .where((s) => s.isNotEmpty)
+                              .take(10)
+                              .toList();
+
+                          final model = StoreAppModel(
+                            appId: finalSlug,
+                            appName: cleanName,
+                            packageName: cleanPkg,
+                            category: selectedCategory,
+                            developerName: devCtrl.text.trim().isNotEmpty
+                                ? devCtrl.text.trim()
+                                : 'Zayaan Apps Studio',
+                            shortDescription: cleanShort,
+                            description: cleanDesc,
+                            iconUrl: iconCtrl.text.trim(),
+                            screenshots: shots,
+                            versionName: cleanVer,
+                            versionCode: parsedCode > 0 ? parsedCode : 1,
+                            apkDownloadUrl: cleanUrl,
+                            apkFileSize: sizeCtrl.text.trim().isNotEmpty
+                                ? sizeCtrl.text.trim()
+                                : '12.0 MB',
+                            releaseNotes: notesCtrl.text.trim().isNotEmpty
+                                ? notesCtrl.text.trim()
+                                : (isNew
+                                    ? 'Initial release v$cleanVer.'
+                                    : 'Updated release v$cleanVer.'),
+                            featured: featured,
+                            editorsChoice: editorsChoice,
+                            essential: essential,
+                            published: published,
+                            downloadCount: existingApp?.downloadCount ?? 0,
+                            ratingSum: existingApp?.ratingSum ?? 0,
+                            reviewCount: existingApp?.reviewCount ?? 0,
+                            sha256Checksum: shaCtrl.text.trim(),
+                            supportEmail: emailCtrl.text.trim().isNotEmpty
+                                ? emailCtrl.text.trim()
+                                : 'zayaanapps@gmail.com',
+                            githubRepoUrl: repoCtrl.text.trim().isNotEmpty
+                                ? repoCtrl.text.trim()
+                                : 'https://github.com/zayaanapps/zayaan-apps',
+                            privacyPolicyUrl: policyCtrl.text.trim().isNotEmpty
+                                ? policyCtrl.text.trim()
+                                : 'https://zayaanapps.github.io/zayaan-apps/',
+                            offlineCapable: offlineCapable,
+                            pageViews: existingApp?.pageViews ?? 0,
+                            authorUid: existingApp?.authorUid.isNotEmpty == true
+                                ? existingApp!.authorUid
+                                : (_currentUser?.uid ?? ''),
+                          );
+
+                          setModalState(() {
+                            isSaving = true;
+                            errorMsg = null;
+                          });
+                          try {
+                            final fs = _tryFirestore();
+                            if (fs == null) {
+                              throw StateError('Cloud Firestore unavailable.');
+                            }
+                            await fs.saveApp(model, isEdit: !isNew);
+                            if (mounted) {
+                              setState(() {
+                                final idx = _catalog.indexWhere(
+                                    (a) => a.appId == model.appId);
+                                if (idx >= 0) {
+                                  _catalog[idx] = model;
+                                } else {
+                                  _catalog.add(model);
+                                }
+                                _statusBanner = isNew
+                                    ? 'Published ${model.appName} v${model.versionName}!'
+                                    : 'Updated ${model.appName} v${model.versionName}!';
+                              });
+                            }
+                            if (dialogCtx.mounted) {
+                              Navigator.of(dialogCtx).pop();
+                            }
+                          } catch (e) {
+                            setModalState(() {
+                              isSaving = false;
+                              errorMsg = 'Save failed: $e';
+                            });
+                          }
+                        },
+                  child: Text(isSaving
+                      ? 'Saving...'
+                      : (isNew ? 'Publish App' : 'Save Update')),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    for (final c in [
+      nameCtrl,
+      pkgCtrl,
+      idCtrl,
+      verCtrl,
+      codeCtrl,
+      sizeCtrl,
+      apkUrlCtrl,
+      descCtrl,
+      notesCtrl,
+      devCtrl,
+      iconCtrl,
+      shotsCtrl,
+      shaCtrl,
+      shortCtrl,
+      emailCtrl,
+      repoCtrl,
+      policyCtrl,
+    ]) {
+      c.dispose();
+    }
   }
 
   Widget _buildAdminMetricPill(String label, String value, Color accent) {

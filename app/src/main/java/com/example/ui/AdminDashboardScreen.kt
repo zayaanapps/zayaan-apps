@@ -1,5 +1,6 @@
 package com.example.ui
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -34,6 +35,8 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CollectionsBookmark
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.People
@@ -63,6 +66,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.VerticalDivider
@@ -921,6 +925,7 @@ private fun AdminTogglePill(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun AppEditorDialog(
     initialApp: StoreApp,
@@ -931,6 +936,8 @@ private fun AppEditorDialog(
     var appId by remember { mutableStateOf(initialApp.appId) }
     var appName by remember { mutableStateOf(initialApp.appName) }
     var packageName by remember { mutableStateOf(initialApp.packageName) }
+    var appIdManuallyEdited by remember { mutableStateOf(!isNew && initialApp.appId.isNotBlank()) }
+    var packageManuallyEdited by remember { mutableStateOf(!isNew && initialApp.packageName.isNotBlank()) }
     var category by remember { mutableStateOf(initialApp.category) }
     var developerName by remember { mutableStateOf(initialApp.developerName) }
     var shortDescription by remember { mutableStateOf(initialApp.shortDescription) }
@@ -951,64 +958,94 @@ private fun AppEditorDialog(
     var essential by remember { mutableStateOf(initialApp.essential) }
     var published by remember { mutableStateOf(initialApp.published) }
     var offlineCapable by remember { mutableStateOf(initialApp.offlineCapable) }
+    var showOptionalDetails by remember { mutableStateOf(false) }
+    var validationError by remember { mutableStateOf<String?>(null) }
+
+    val cs = MaterialTheme.colorScheme
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text(if (isNew) "Publish New Application" else "Update '${initialApp.appName}' & Release Version")
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = if (isNew) "Publish New Android App" else "Update '${initialApp.appName}'",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = if (isNew) {
+                        "Just enter the essentials below — extra metadata uses smart defaults."
+                    } else {
+                        "Update release details or expand optional metadata."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = cs.onSurfaceVariant
+                )
+            }
         },
         text = {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                verticalArrangement = Arrangement.spacedBy(9.dp)
             ) {
                 OutlinedTextField(
                     value = appName,
-                    onValueChange = {
-                        appName = it
-                        if (isNew && appId.isBlank()) {
-                            appId = it.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-')
-                            packageName = "com.zayaanapps.${appId.replace("-", "")}"
+                    onValueChange = { next ->
+                        appName = next
+                        validationError = null
+                        if (isNew) {
+                            val slug = next.lowercase()
+                                .replace(Regex("[^a-z0-9]+"), "-")
+                                .trim('-')
+                            if (!appIdManuallyEdited) {
+                                appId = slug
+                            }
+                            if (!packageManuallyEdited) {
+                                val pkgSuffix = slug.replace("-", "")
+                                packageName = if (pkgSuffix.isNotEmpty()) {
+                                    "com.zayaanapps.$pkgSuffix"
+                                } else {
+                                    ""
+                                }
+                            }
                         }
                     },
                     label = { Text("App Name *") },
+                    placeholder = { Text("e.g. Zayaan Notes") },
                     singleLine = true,
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("editor_app_name_input")
                 )
 
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = appId,
-                        onValueChange = { if (isNew) appId = it },
-                        enabled = isNew,
-                        label = { Text("App ID (slug)") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f)
-                    )
-                    OutlinedTextField(
-                        value = packageName,
-                        onValueChange = { packageName = it },
-                        label = { Text("Package Name") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-
-                Text(
-                    text = "Category",
-                    style = MaterialTheme.typography.labelLarge
+                OutlinedTextField(
+                    value = packageName,
+                    onValueChange = {
+                        packageName = it
+                        packageManuallyEdited = true
+                    },
+                    label = { Text("Android Package Name *") },
+                    placeholder = { Text("com.zayaanapps.myapp") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
                 )
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    items(STORE_CATEGORIES) { cat ->
-                        FilterChip(
-                            selected = category == cat,
-                            onClick = { category = cat },
-                            label = { Text(cat) }
-                        )
+
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "Category",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = cs.onSurfaceVariant
+                    )
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items(STORE_CATEGORIES) { cat ->
+                            FilterChip(
+                                selected = category == cat,
+                                onClick = { category = cat },
+                                label = { Text(cat, fontSize = 11.5.sp) }
+                            )
+                        }
                     }
                 }
 
@@ -1016,24 +1053,8 @@ private fun AppEditorDialog(
                     OutlinedTextField(
                         value = versionName,
                         onValueChange = { versionName = it },
-                        label = { Text("Version Name (1.0.0.1)") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f)
-                    )
-                    OutlinedTextField(
-                        value = versionCodeText,
-                        onValueChange = { versionCodeText = it.filter { ch -> ch.isDigit() } },
-                        label = { Text("Version Code") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = developerName,
-                        onValueChange = { developerName = it },
-                        label = { Text("Developer / Studio") },
+                        label = { Text("Version") },
+                        placeholder = { Text("1.0.0.1") },
                         singleLine = true,
                         modifier = Modifier.weight(1f)
                     )
@@ -1041,6 +1062,7 @@ private fun AppEditorDialog(
                         value = apkFileSize,
                         onValueChange = { apkFileSize = it },
                         label = { Text("APK Size") },
+                        placeholder = { Text("12.0 MB") },
                         singleLine = true,
                         modifier = Modifier.weight(1f)
                     )
@@ -1048,134 +1070,299 @@ private fun AppEditorDialog(
 
                 OutlinedTextField(
                     value = apkDownloadUrl,
-                    onValueChange = { apkDownloadUrl = it },
-                    label = { Text("GitHub Releases APK Download URL *") },
-                    placeholder = { Text("https://github.com/zayaanapps/.../releases/download/v1.0.0.1/app-release.apk") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                OutlinedTextField(
-                    value = sha256Checksum,
-                    onValueChange = { sha256Checksum = it.trim() },
-                    label = { Text("APK SHA-256 Checksum (optional hex digest)") },
+                    onValueChange = {
+                        apkDownloadUrl = it
+                        validationError = null
+                    },
+                    label = { Text("APK Download URL *") },
+                    placeholder = { Text("https://github.com/.../releases/download/v1.0/app.apk") },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                OutlinedTextField(
-                    value = shortDescription,
-                    onValueChange = { shortDescription = it },
-                    label = { Text("Short Tagline / Summary") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                OutlinedTextField(
-                    value = iconUrl,
-                    onValueChange = { iconUrl = it },
-                    label = { Text("Icon URL (optional)") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                OutlinedTextField(
-                    value = screenshotsText,
-                    onValueChange = { screenshotsText = it },
-                    label = { Text("Screenshot URLs (comma-separated)") },
                     modifier = Modifier.fillMaxWidth()
                 )
 
                 OutlinedTextField(
                     value = description,
                     onValueChange = { description = it },
-                    label = { Text("Application Description *") },
-                    minLines = 3,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                OutlinedTextField(
-                    value = releaseNotes,
-                    onValueChange = { releaseNotes = it },
-                    label = { Text("Release Notes (What's New in v$versionName)") },
+                    label = { Text("Short Description (optional)") },
+                    placeholder = { Text("What does this app do?") },
                     minLines = 2,
+                    maxLines = 4,
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = supportEmail,
-                        onValueChange = { supportEmail = it },
-                        label = { Text("Support Email") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f)
-                    )
-                    OutlinedTextField(
-                        value = githubRepoUrl,
-                        onValueChange = { githubRepoUrl = it },
-                        label = { Text("GitHub Repo URL") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-
-                OutlinedTextField(
-                    value = privacyPolicyUrl,
-                    onValueChange = { privacyPolicyUrl = it },
-                    label = { Text("Privacy Policy URL") },
-                    singleLine = true,
+                Surface(
+                    color = cs.surfaceVariant.copy(alpha = 0.35f),
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.dp, cs.outline.copy(alpha = 0.22f)),
                     modifier = Modifier.fillMaxWidth()
-                )
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = featured, onCheckedChange = { featured = it })
-                    Text("Featured")
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Checkbox(checked = editorsChoice, onCheckedChange = { editorsChoice = it })
-                    Text("Editor's Choice")
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { published = !published }
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Publish Live in Store",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = if (published) "Visible to all users immediately" else "Saved as hidden draft",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = cs.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = published,
+                            onCheckedChange = { published = it }
+                        )
+                    }
                 }
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = essential, onCheckedChange = { essential = it })
-                    Text("Essential")
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Checkbox(checked = offlineCapable, onCheckedChange = { offlineCapable = it })
-                    Text("Offline Ready")
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Checkbox(checked = published, onCheckedChange = { published = it })
-                    Text("Published")
+                // Collapsible Optional Details & Badges Section
+                Surface(
+                    color = cs.surface,
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, cs.outline.copy(alpha = 0.26f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { showOptionalDetails = !showOptionalDetails }
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "More Details & Badges (Optional)",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = cs.primary
+                                )
+                                Text(
+                                    text = "Release notes, icon URL, screenshots, SHA-256 & featured flags",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = cs.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            Icon(
+                                imageVector = if (showOptionalDetails) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                contentDescription = if (showOptionalDetails) "Collapse optional details" else "Expand optional details",
+                                tint = cs.primary
+                            )
+                        }
+
+                        AnimatedVisibility(visible = showOptionalDetails) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                HorizontalDivider(color = cs.outline.copy(alpha = 0.18f))
+
+                                OutlinedTextField(
+                                    value = releaseNotes,
+                                    onValueChange = { releaseNotes = it },
+                                    label = { Text("What's New / Release Notes") },
+                                    minLines = 2,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    OutlinedTextField(
+                                        value = appId,
+                                        onValueChange = {
+                                            if (isNew) {
+                                                appId = it
+                                                appIdManuallyEdited = true
+                                            }
+                                        },
+                                        enabled = isNew,
+                                        label = { Text("App ID (slug)") },
+                                        singleLine = true,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    OutlinedTextField(
+                                        value = versionCodeText,
+                                        onValueChange = { versionCodeText = it.filter { ch -> ch.isDigit() } },
+                                        label = { Text("Version Code") },
+                                        singleLine = true,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+
+                                OutlinedTextField(
+                                    value = developerName,
+                                    onValueChange = { developerName = it },
+                                    label = { Text("Developer / Studio") },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+
+                                OutlinedTextField(
+                                    value = shortDescription,
+                                    onValueChange = { shortDescription = it },
+                                    label = { Text("Short Tagline (auto from description if blank)") },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+
+                                OutlinedTextField(
+                                    value = iconUrl,
+                                    onValueChange = { iconUrl = it },
+                                    label = { Text("App Icon Image URL") },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+
+                                OutlinedTextField(
+                                    value = screenshotsText,
+                                    onValueChange = { screenshotsText = it },
+                                    label = { Text("Screenshot URLs (comma-separated)") },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+
+                                OutlinedTextField(
+                                    value = sha256Checksum,
+                                    onValueChange = { sha256Checksum = it.trim() },
+                                    label = { Text("APK SHA-256 Checksum") },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    OutlinedTextField(
+                                        value = supportEmail,
+                                        onValueChange = { supportEmail = it },
+                                        label = { Text("Support Email") },
+                                        singleLine = true,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    OutlinedTextField(
+                                        value = githubRepoUrl,
+                                        onValueChange = { githubRepoUrl = it },
+                                        label = { Text("GitHub Repo URL") },
+                                        singleLine = true,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+
+                                OutlinedTextField(
+                                    value = privacyPolicyUrl,
+                                    onValueChange = { privacyPolicyUrl = it },
+                                    label = { Text("Privacy Policy URL") },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+
+                                Text(
+                                    text = "Storefront Badges",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = cs.onSurfaceVariant
+                                )
+                                FlowRow(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    FilterChip(
+                                        selected = featured,
+                                        onClick = { featured = !featured },
+                                        label = { Text("Featured") }
+                                    )
+                                    FilterChip(
+                                        selected = editorsChoice,
+                                        onClick = { editorsChoice = !editorsChoice },
+                                        label = { Text("Editor's Choice") }
+                                    )
+                                    FilterChip(
+                                        selected = essential,
+                                        onClick = { essential = !essential },
+                                        label = { Text("Essential") }
+                                    )
+                                    FilterChip(
+                                        selected = offlineCapable,
+                                        onClick = { offlineCapable = !offlineCapable },
+                                        label = { Text("Offline Ready") }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (!validationError.isNullOrBlank()) {
+                    Text(
+                        text = validationError!!,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = cs.error
+                    )
                 }
             }
         },
         confirmButton = {
             Button(
                 onClick = {
-                    val parsedCode = versionCodeText.toLongOrNull() ?: 1L
+                    val cleanName = appName.trim()
+                    if (cleanName.isBlank()) {
+                        validationError = "Please enter an App Name."
+                        return@Button
+                    }
+                    val cleanUrl = apkDownloadUrl.trim()
+                    if (cleanUrl.isBlank()) {
+                        validationError = "Please paste the APK Download URL."
+                        return@Button
+                    }
+                    val sanitizedSlug = appId
+                        .ifBlank { cleanName.lowercase().replace(Regex("[^a-z0-9]+"), "-") }
+                        .replace(Regex("[^a-zA-Z0-9_\\-]"), "-")
+                        .trim('-')
+                        .ifBlank { "zayaan-app-${System.currentTimeMillis()}" }
+                    val cleanVersion = versionName.trim().ifBlank { "1.0.0.1" }
+                    val parsedCode = versionCodeText.toLongOrNull()?.coerceAtLeast(1L)
+                        ?: cleanVersion.split('.').lastOrNull()?.toLongOrNull()?.coerceAtLeast(1L)
+                        ?: 1L
+                    val cleanDesc = description.trim()
+                        .ifBlank { "$cleanName — Official Android release published on Zayaan Apps." }
+                    val cleanShort = shortDescription.trim()
+                        .ifBlank { cleanDesc.lineSequence().firstOrNull().orEmpty().take(180) }
+                    val cleanPkg = packageName.trim()
+                        .ifBlank { "com.zayaanapps.${sanitizedSlug.replace("-", "")}" }
                     val parsedScreenshots = screenshotsText.split(",")
                         .map { it.trim() }
                         .filter { it.isNotEmpty() }
                         .take(10)
                     onSave(
                         initialApp.copy(
-                            appId = appId.ifBlank { appName.lowercase().replace(Regex("[^a-z0-9]+"), "-") },
-                            appName = appName.ifBlank { "Zayaan App" },
-                            packageName = packageName.ifBlank { "com.zayaanapps.custom" },
+                            appId = sanitizedSlug,
+                            appName = cleanName,
+                            packageName = cleanPkg,
                             category = category,
-                            developerName = developerName.ifBlank { "Zayaan Apps Studio" },
-                            shortDescription = shortDescription,
-                            versionName = versionName.ifBlank { "1.0.0.1" },
+                            developerName = developerName.trim().ifBlank { "Zayaan Apps Studio" },
+                            shortDescription = cleanShort,
+                            versionName = cleanVersion,
                             versionCode = parsedCode,
-                            apkFileSize = apkFileSize.ifBlank { "12.0 MB" },
-                            apkDownloadUrl = apkDownloadUrl.ifBlank {
-                                "https://github.com/zayaanapps/zayaan-apps/releases/latest/download/zayaan-apps.apk"
-                            },
-                            sha256Checksum = sha256Checksum,
-                            iconUrl = iconUrl,
+                            apkFileSize = apkFileSize.trim().ifBlank { "12.0 MB" },
+                            apkDownloadUrl = cleanUrl,
+                            sha256Checksum = sha256Checksum.trim(),
+                            iconUrl = iconUrl.trim(),
                             screenshots = parsedScreenshots,
-                            description = description.ifBlank { "Official Zayaan Apps distribution package." },
-                            releaseNotes = releaseNotes,
-                            supportEmail = supportEmail.ifBlank { "zayaanapps@gmail.com" },
-                            githubRepoUrl = githubRepoUrl.ifBlank { "https://github.com/zayaanapps/zayaan-apps" },
-                            privacyPolicyUrl = privacyPolicyUrl.ifBlank { "https://zayaanapps.github.io/zayaan-apps/" },
+                            description = cleanDesc,
+                            releaseNotes = releaseNotes.trim().ifBlank {
+                                if (isNew) "Initial release v$cleanVersion." else "Updated release v$cleanVersion."
+                            },
+                            supportEmail = supportEmail.trim().ifBlank { "zayaanapps@gmail.com" },
+                            githubRepoUrl = githubRepoUrl.trim().ifBlank { "https://github.com/zayaanapps/zayaan-apps" },
+                            privacyPolicyUrl = privacyPolicyUrl.trim().ifBlank { "https://zayaanapps.github.io/zayaan-apps/" },
                             featured = featured,
                             editorsChoice = editorsChoice,
                             essential = essential,
@@ -1186,7 +1373,7 @@ private fun AppEditorDialog(
                 },
                 modifier = Modifier.testTag("editor_save_button")
             ) {
-                Text("Save & Log Version")
+                Text(if (isNew) "Publish App" else "Save Update")
             }
         },
         dismissButton = {

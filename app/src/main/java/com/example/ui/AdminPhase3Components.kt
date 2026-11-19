@@ -3,6 +3,9 @@ package com.example.ui
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -23,6 +26,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Report
@@ -85,6 +90,8 @@ fun DeveloperPortalAndSubmissionsDialog(
     var appName by remember { mutableStateOf("") }
     var appId by remember { mutableStateOf("") }
     var packageName by remember { mutableStateOf("") }
+    var appIdManuallyEdited by remember { mutableStateOf(false) }
+    var packageManuallyEdited by remember { mutableStateOf(false) }
     var category by remember { mutableStateOf("Tools") }
     var developerName by remember {
         mutableStateOf(
@@ -93,13 +100,14 @@ fun DeveloperPortalAndSubmissionsDialog(
     }
     var versionName by remember { mutableStateOf("1.0.0.1") }
     var versionCodeText by remember { mutableStateOf("1") }
-    var apkFileSize by remember { mutableStateOf("14.0 MB") }
+    var apkFileSize by remember { mutableStateOf("12.0 MB") }
     var apkDownloadUrl by remember { mutableStateOf("") }
     var sha256Checksum by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var releaseNotes by remember { mutableStateOf("Initial Developer Portal submission.") }
     var supportEmail by remember { mutableStateOf(currentUserEmail ?: "zayaanapps@gmail.com") }
     var privacyPolicyUrl by remember { mutableStateOf("https://zayaanapps.github.io/zayaan-apps/") }
+    var showOptionalFields by remember { mutableStateOf(false) }
     var reviewNotesById by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
 
     AlertDialog(
@@ -129,40 +137,38 @@ fun DeveloperPortalAndSubmissionsDialog(
 
                 if (activeTab == "SUBMIT") {
                     Text(
-                        text = "Submit a new Android APK release or version update for administrator verification and catalog publication.",
+                        text = "Enter the essential app details below to submit for review. Extra fields use smart defaults.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     OutlinedTextField(
                         value = appName,
-                        onValueChange = {
-                            appName = it
-                            if (appId.isBlank()) {
-                                val slug = it.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-')
+                        onValueChange = { next ->
+                            appName = next
+                            val slug = next.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-')
+                            if (!appIdManuallyEdited) {
                                 appId = slug
-                                packageName = "com.zayaanapps.${slug.replace("-", "")}"
+                            }
+                            if (!packageManuallyEdited) {
+                                val pkgSuffix = slug.replace("-", "")
+                                packageName = if (pkgSuffix.isNotEmpty()) "com.zayaanapps.$pkgSuffix" else ""
                             }
                         },
                         label = { Text("Application Name *") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(
-                            value = appId,
-                            onValueChange = { appId = it },
-                            label = { Text("App ID (slug)") },
-                            singleLine = true,
-                            modifier = Modifier.weight(1f)
-                        )
-                        OutlinedTextField(
-                            value = packageName,
-                            onValueChange = { packageName = it },
-                            label = { Text("Package Name") },
-                            singleLine = true,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
+                    OutlinedTextField(
+                        value = packageName,
+                        onValueChange = {
+                            packageName = it
+                            packageManuallyEdited = true
+                        },
+                        label = { Text("Android Package Name *") },
+                        placeholder = { Text("com.zayaanapps.myapp") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         items(STORE_CATEGORIES) { cat ->
                             FilterChip(
@@ -174,9 +180,9 @@ fun DeveloperPortalAndSubmissionsDialog(
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedTextField(
-                            value = developerName,
-                            onValueChange = { developerName = it },
-                            label = { Text("Developer / Studio") },
+                            value = versionName,
+                            onValueChange = { versionName = it },
+                            label = { Text("Version (1.0.0.1)") },
                             singleLine = true,
                             modifier = Modifier.weight(1f)
                         )
@@ -188,77 +194,124 @@ fun DeveloperPortalAndSubmissionsDialog(
                             modifier = Modifier.weight(1f)
                         )
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(
-                            value = versionName,
-                            onValueChange = { versionName = it },
-                            label = { Text("Version (1.0.0.1)") },
-                            singleLine = true,
-                            modifier = Modifier.weight(1f)
-                        )
-                        OutlinedTextField(
-                            value = versionCodeText,
-                            onValueChange = { versionCodeText = it.filter { ch -> ch.isDigit() } },
-                            label = { Text("Version Code") },
-                            singleLine = true,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
                     OutlinedTextField(
                         value = apkDownloadUrl,
                         onValueChange = { apkDownloadUrl = it },
-                        label = { Text("GitHub Releases APK Download URL *") },
-                        placeholder = { Text("https://github.com/zayaanapps/.../releases/download/v1.0.0.1/app.apk") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    OutlinedTextField(
-                        value = sha256Checksum,
-                        onValueChange = { sha256Checksum = it.trim() },
-                        label = { Text("APK SHA-256 Checksum (Hex Digest)") },
+                        label = { Text("APK Download URL *") },
+                        placeholder = { Text("https://github.com/zayaanapps/.../releases/download/v1.0/app.apk") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
                         value = description,
                         onValueChange = { description = it },
-                        label = { Text("Detailed Application Description *") },
+                        label = { Text("Short Description (optional)") },
                         minLines = 2,
                         modifier = Modifier.fillMaxWidth()
                     )
-                    OutlinedTextField(
-                        value = releaseNotes,
-                        onValueChange = { releaseNotes = it },
-                        label = { Text("Release Notes / Changelog") },
-                        minLines = 2,
+
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)),
                         modifier = Modifier.fillMaxWidth()
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(
-                            value = supportEmail,
-                            onValueChange = { supportEmail = it },
-                            label = { Text("Support Email") },
-                            singleLine = true,
-                            modifier = Modifier.weight(1f)
-                        )
-                        OutlinedTextField(
-                            value = privacyPolicyUrl,
-                            onValueChange = { privacyPolicyUrl = it },
-                            label = { Text("Privacy Policy URL") },
-                            singleLine = true,
-                            modifier = Modifier.weight(1f)
-                        )
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { showOptionalFields = !showOptionalFields }
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Optional Details (SHA-256, Notes & Links)",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Icon(
+                                    imageVector = if (showOptionalFields) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            AnimatedVisibility(visible = showOptionalFields) {
+                                Column(
+                                    modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        OutlinedTextField(
+                                            value = appId,
+                                            onValueChange = {
+                                                appId = it
+                                                appIdManuallyEdited = true
+                                            },
+                                            label = { Text("App ID (slug)") },
+                                            singleLine = true,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        OutlinedTextField(
+                                            value = versionCodeText,
+                                            onValueChange = { versionCodeText = it.filter { ch -> ch.isDigit() } },
+                                            label = { Text("Version Code") },
+                                            singleLine = true,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                    }
+                                    OutlinedTextField(
+                                        value = developerName,
+                                        onValueChange = { developerName = it },
+                                        label = { Text("Developer / Studio") },
+                                        singleLine = true,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                    OutlinedTextField(
+                                        value = sha256Checksum,
+                                        onValueChange = { sha256Checksum = it.trim() },
+                                        label = { Text("APK SHA-256 Checksum") },
+                                        singleLine = true,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                    OutlinedTextField(
+                                        value = releaseNotes,
+                                        onValueChange = { releaseNotes = it },
+                                        label = { Text("Release Notes / Changelog") },
+                                        minLines = 2,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        OutlinedTextField(
+                                            value = supportEmail,
+                                            onValueChange = { supportEmail = it },
+                                            label = { Text("Support Email") },
+                                            singleLine = true,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        OutlinedTextField(
+                                            value = privacyPolicyUrl,
+                                            onValueChange = { privacyPolicyUrl = it },
+                                            label = { Text("Privacy Policy URL") },
+                                            singleLine = true,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
+
                     Button(
                         onClick = {
                             if (appName.isNotBlank()) {
+                                val slug = appId.ifBlank {
+                                    appName.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-')
+                                }.ifBlank { "zayaan-sub-${System.currentTimeMillis()}" }
                                 onSubmitNewApp(
                                     DeveloperSubmission(
-                                        appId = appId.ifBlank {
-                                            appName.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-')
-                                        },
+                                        appId = slug,
                                         appName = appName.trim(),
-                                        packageName = packageName.ifBlank { "com.zayaanapps.custom" },
+                                        packageName = packageName.ifBlank { "com.zayaanapps.${slug.replace("-", "")}" },
                                         category = category,
                                         developerName = developerName.ifBlank { "Community Developer" },
                                         description = description.ifBlank { "Submitted via Zayaan Developer Portal." },
@@ -277,7 +330,11 @@ fun DeveloperPortalAndSubmissionsDialog(
                                 )
                                 appName = ""
                                 appId = ""
+                                packageName = ""
+                                apkDownloadUrl = ""
                                 description = ""
+                                appIdManuallyEdited = false
+                                packageManuallyEdited = false
                                 activeTab = "QUEUE"
                             }
                         },
