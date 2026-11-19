@@ -1000,7 +1000,9 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
 
   Widget _buildStoreHomeTab(
       List<String> categories, List<StoreAppModel> filteredApps) {
-    final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
     final featuredApps = _catalog.where((a) => a.featured).toList();
     final editorsChoiceApps = _catalog.where((a) => a.editorsChoice).toList();
     final trendingApps = [..._catalog]
@@ -1008,22 +1010,46 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
     final totalDownloads =
         _catalog.fold<int>(0, (sum, a) => sum + a.downloadCount);
 
+    final heroBorderColor = isDark
+        ? const Color(0xFF6EDBA9).withValues(alpha: 0.38)
+        : cs.primary.withValues(alpha: 0.24);
+    final heroTitleColor = isDark ? Colors.white : cs.onSurface;
+    final heroSubtitleColor =
+        isDark ? const Color(0xFFC9DAE8) : cs.onSurfaceVariant;
+    final heroMetricBg = isDark
+        ? Colors.black.withValues(alpha: 0.26)
+        : cs.surface.withValues(alpha: 0.88);
+    final heroMetricBorder = isDark
+        ? Colors.white.withValues(alpha: 0.16)
+        : cs.outline.withValues(alpha: 0.20);
+    final heroDividerColor = isDark
+        ? Colors.white.withValues(alpha: 0.20)
+        : cs.outline.withValues(alpha: 0.20);
+
     return ListView(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
       children: [
-        // 1. Compact Bordered Hero Marketplace Banner
+        // 1. Minimal, Compact & Theme-Adaptive Header
         Container(
-          padding: const EdgeInsets.all(15),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            gradient: const LinearGradient(
-              colors: [Color(0xFF005236), Color(0xFF0C2235), Color(0xFF0E1E38)],
+            borderRadius: BorderRadius.circular(16),
+            gradient: LinearGradient(
+              colors: isDark
+                  ? const [
+                      Color(0xFF005236),
+                      Color(0xFF0C2235),
+                      Color(0xFF0E1E38),
+                    ]
+                  : const [
+                      Color(0xFFEAF8F1),
+                      Color(0xFFF3FAF7),
+                      Color(0xFFEAF3FB),
+                    ],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
-            border: Border.all(
-              color: const Color(0xFF6EDBA9).withValues(alpha: 0.42),
-            ),
+            border: Border.all(color: heroBorderColor),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1031,89 +1057,97 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF6EDBA9).withValues(alpha: 0.22),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: const Color(0xFF6EDBA9).withValues(alpha: 0.50),
-                      ),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.verified,
-                            size: 12, color: Color(0xFF6EDBA9)),
-                        SizedBox(width: 4),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                'Zayaan Apps Store',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
+                                  color: heroTitleColor,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 5),
+                            Icon(
+                              Icons.verified,
+                              size: 15,
+                              color: isDark
+                                  ? const Color(0xFF6EDBA9)
+                                  : cs.primary,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 1),
                         Text(
-                          'GITHUB RELEASES',
+                          'Verified Android APKs • GitHub Releases & Cloud',
                           style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF8BF8C4),
+                            fontSize: 11,
+                            color: heroSubtitleColor,
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
                   ),
+                  const SizedBox(width: 8),
                   ActionChip(
-                    visualDensity: VisualDensity.compact,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    visualDensity:
+                        const VisualDensity(horizontal: -2, vertical: -3),
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    labelPadding: const EdgeInsets.only(right: 4),
                     avatar: Icon(
                       switch (widget.themeMode) {
                         ThemeMode.system => Icons.brightness_auto,
                         ThemeMode.light => Icons.light_mode,
                         ThemeMode.dark => Icons.dark_mode,
                       },
-                      size: 15,
-                      color: const Color(0xFF6EDBA9),
+                      size: 14,
+                      color: isDark ? const Color(0xFF6EDBA9) : cs.primary,
                     ),
                     label: Text(
                       _themeModeLabel(widget.themeMode),
-                      style: const TextStyle(
-                        fontSize: 11.5,
-                        color: Colors.white,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: heroTitleColor,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    backgroundColor: Colors.white.withValues(alpha: 0.12),
+                    backgroundColor: isDark
+                        ? Colors.white.withValues(alpha: 0.12)
+                        : cs.surface.withValues(alpha: 0.90),
                     side: BorderSide(
-                      color: const Color(0xFF6EDBA9).withValues(alpha: 0.45),
+                      color: isDark
+                          ? const Color(0xFF6EDBA9).withValues(alpha: 0.40)
+                          : cs.primary.withValues(alpha: 0.25),
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(9),
                     ),
                     onPressed: _cycleThemeMode,
                     tooltip: 'Switch Theme (System / Light / Dark)',
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
-              const Text(
-                'Zayaan Apps Store',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.white,
-                ),
-              ),
-              const SizedBox(height: 2),
-              const Text(
-                'Verified Android APKs powered by GitHub Releases & Cloud Firestore.',
-                style: TextStyle(
-                  fontSize: 12.5,
-                  color: Color(0xFFD6E4F0),
-                ),
-              ),
-              const SizedBox(height: 10),
-              // Compact bordered 3-metric bar inside hero
+              const SizedBox(height: 7),
+              // Minimal bordered 3-metric bar inside hero
               Container(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.28),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.20),
-                  ),
+                  color: heroMetricBg,
+                  borderRadius: BorderRadius.circular(9),
+                  border: Border.all(color: heroMetricBorder),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1121,78 +1155,96 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.apps,
-                            size: 13, color: Color(0xFF6EDBA9)),
+                        Icon(Icons.apps,
+                            size: 12,
+                            color:
+                                isDark ? const Color(0xFF6EDBA9) : cs.primary),
                         const SizedBox(width: 4),
                         Text(
                           '${_catalog.length} Apps',
-                          style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white),
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w600,
+                            color: heroTitleColor,
+                          ),
                         ),
                       ],
                     ),
-                    Container(
-                        width: 1,
-                        height: 12,
-                        color: Colors.white.withValues(alpha: 0.22)),
+                    Container(width: 1, height: 11, color: heroDividerColor),
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.download,
-                            size: 13, color: Color(0xFF68D3FF)),
+                        Icon(Icons.download,
+                            size: 12,
+                            color: isDark
+                                ? const Color(0xFF68D3FF)
+                                : cs.secondary),
                         const SizedBox(width: 4),
                         Text(
                           '$totalDownloads DLs',
-                          style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white),
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w600,
+                            color: heroTitleColor,
+                          ),
                         ),
                       ],
                     ),
-                    Container(
-                        width: 1,
-                        height: 12,
-                        color: Colors.white.withValues(alpha: 0.22)),
-                    const Row(
+                    Container(width: 1, height: 11, color: heroDividerColor),
+                    Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(Icons.public,
-                            size: 13, color: Color(0xFFADC6FF)),
-                        SizedBox(width: 4),
+                            size: 12,
+                            color:
+                                isDark ? const Color(0xFFADC6FF) : cs.tertiary),
+                        const SizedBox(width: 4),
                         Text(
                           'Android & Web',
                           style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white),
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w600,
+                            color: heroTitleColor,
+                          ),
                         ),
                       ],
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 7),
               Wrap(
                 spacing: 8,
                 runSpacing: 6,
                 children: [
                   FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
+                      textStyle: const TextStyle(
+                          fontSize: 12, fontWeight: FontWeight.w600),
+                    ),
                     onPressed: () => _handleDownload(_catalog.first),
-                    icon: const Icon(Icons.download, size: 17),
+                    icon: const Icon(Icons.download, size: 15),
                     label: const Text('Download Store APK'),
                   ),
                   OutlinedButton.icon(
                     onPressed: () => _openAppDetail(_catalog.first),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.white,
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
+                      textStyle: const TextStyle(
+                          fontSize: 12, fontWeight: FontWeight.w600),
+                      foregroundColor: isDark ? Colors.white : cs.primary,
                       side: BorderSide(
-                        color: const Color(0xFF6EDBA9).withValues(alpha: 0.65),
+                        color: isDark
+                            ? const Color(0xFF6EDBA9).withValues(alpha: 0.55)
+                            : cs.primary.withValues(alpha: 0.38),
                       ),
                     ),
-                    icon: const Icon(Icons.verified_user_outlined, size: 17),
+                    icon: const Icon(Icons.verified_user_outlined, size: 15),
                     label: const Text('Inspect Release'),
                   ),
                 ],
@@ -1200,34 +1252,47 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
             ],
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
 
-        // 2. Compact Search Bar, Category/Subcategory Chips with Icons & Borders
+        // 2. Compact Bordered Search Bar & Minimal Filter Rows
         TextField(
+          style: const TextStyle(fontSize: 13.5),
           decoration: InputDecoration(
             isDense: true,
-            hintText: 'Search Zayaan Apps, packages, or developers...',
-            prefixIcon: const Icon(Icons.search, size: 20),
+            constraints: const BoxConstraints(maxHeight: 42),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+            hintText: 'Search Zayaan Apps, packages, developers...',
+            hintStyle: const TextStyle(fontSize: 13),
+            prefixIcon: const Icon(Icons.search, size: 18),
+            prefixIconConstraints:
+                const BoxConstraints(minWidth: 36, minHeight: 36),
             suffixIcon: _searchQuery.isNotEmpty
                 ? IconButton(
-                    icon: const Icon(Icons.clear, size: 18),
+                    icon: const Icon(Icons.clear, size: 16),
                     onPressed: () => setState(() => _searchQuery = ''),
                   )
                 : null,
+            suffixIconConstraints:
+                const BoxConstraints(minWidth: 34, minHeight: 34),
             filled: true,
             fillColor: cs.surface,
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide(color: cs.outline.withValues(alpha: 0.35)),
+              borderRadius: BorderRadius.circular(11),
+              borderSide: BorderSide(color: cs.outline.withValues(alpha: 0.30)),
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide(color: cs.outline.withValues(alpha: 0.35)),
+              borderRadius: BorderRadius.circular(11),
+              borderSide: BorderSide(color: cs.outline.withValues(alpha: 0.30)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(11),
+              borderSide: BorderSide(color: cs.primary.withValues(alpha: 0.78)),
             ),
           ),
           onChanged: (v) => setState(() => _searchQuery = v),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 7),
 
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
@@ -1237,14 +1302,21 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
               return Padding(
                 padding: const EdgeInsets.only(right: 6),
                 child: FilterChip(
-                  visualDensity: VisualDensity.compact,
-                  avatar: Icon(_webCategoryIcon(cat), size: 15),
-                  label: Text(cat, style: const TextStyle(fontSize: 12)),
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  visualDensity:
+                      const VisualDensity(horizontal: -2, vertical: -3),
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  labelPadding: const EdgeInsets.symmetric(horizontal: 3),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  avatar: Icon(_webCategoryIcon(cat), size: 13),
+                  label: Text(cat, style: const TextStyle(fontSize: 11.5)),
                   selected: selected,
                   side: BorderSide(
                     color: selected
-                        ? cs.primary.withValues(alpha: 0.55)
-                        : cs.outline.withValues(alpha: 0.28),
+                        ? cs.primary.withValues(alpha: 0.50)
+                        : cs.outline.withValues(alpha: 0.26),
                   ),
                   onSelected: (_) => setState(() => _selectedCategory = cat),
                 ),
@@ -1252,7 +1324,7 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
             }).toList(),
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 5),
 
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
@@ -1263,27 +1335,35 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
                 return Padding(
                   padding: const EdgeInsets.only(right: 6),
                   child: FilterChip(
-                    visualDensity: VisualDensity.compact,
-                    avatar: Icon(_webSubcategoryIcon(sub), size: 14),
-                    label: Text(sub, style: const TextStyle(fontSize: 11.5)),
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    visualDensity:
+                        const VisualDensity(horizontal: -2, vertical: -3),
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    labelPadding: const EdgeInsets.symmetric(horizontal: 3),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(9),
+                    ),
+                    avatar: Icon(_webSubcategoryIcon(sub), size: 13),
+                    label: Text(sub, style: const TextStyle(fontSize: 11)),
                     selected: selected,
                     side: BorderSide(
                       color: selected
-                          ? cs.secondary.withValues(alpha: 0.55)
-                          : cs.outline.withValues(alpha: 0.26),
+                          ? cs.secondary.withValues(alpha: 0.50)
+                          : cs.outline.withValues(alpha: 0.25),
                     ),
                     onSelected: (_) =>
                         setState(() => _selectedSubcategory = sub),
                   ),
                 );
               }),
-              const SizedBox(width: 6),
+              const SizedBox(width: 4),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
+                height: 30,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
                 decoration: BoxDecoration(
                   color: cs.surface,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: cs.outline.withValues(alpha: 0.28)),
+                  borderRadius: BorderRadius.circular(9),
+                  border: Border.all(color: cs.outline.withValues(alpha: 0.26)),
                 ),
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<MarketplaceSortOption>(
@@ -1296,7 +1376,7 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
                         .map((opt) => DropdownMenuItem(
                               value: opt,
                               child: Text('Sort: ${opt.label}',
-                                  style: const TextStyle(fontSize: 12)),
+                                  style: const TextStyle(fontSize: 11)),
                             ))
                         .toList(),
                   ),
@@ -1305,7 +1385,7 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
             ],
           ),
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 12),
 
         // 3. Featured Spotlight Carousel (compact & bordered)
         if (_searchQuery.isEmpty && _selectedCategory == 'All') ...[

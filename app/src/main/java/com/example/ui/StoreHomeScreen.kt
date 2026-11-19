@@ -21,6 +21,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Apps
@@ -50,20 +53,13 @@ import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.filled.WorkOutline
 import androidx.compose.material.icons.filled.WorkspacePremium
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -71,17 +67,23 @@ import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -351,10 +353,10 @@ fun StoreHomeScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .testTag("store_home_list"),
-                contentPadding = PaddingValues(bottom = 100.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                contentPadding = PaddingValues(top = 6.dp, bottom = 100.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                // 1. Promotional Hero Banner
+                // 1. Minimal & Compact Theme-Adaptive Header
                 item {
                     val liveStoreVersion = allApps
                         .firstOrNull { it.packageName == "com.zayaanapps.store" || it.appId == "zayaan-apps-store" }
@@ -368,93 +370,53 @@ fun StoreHomeScreen(
                     )
                 }
 
-                // 2. Advanced Search Bar + Instant Suggestions + Search History
+                // 2. Compact Search Bar + Instant Suggestions + Search History
                 item {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp)
                     ) {
-                        OutlinedTextField(
-                            value = searchQuery,
-                            onValueChange = onSearchQueryChange,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("store_search_input"),
-                            placeholder = {
-                                Text("Search apps, developers, categories, keywords...")
-                            },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.Search,
-                                    contentDescription = "Search applications"
-                                )
-                            },
-                            trailingIcon = {
-                                if (searchQuery.isNotEmpty()) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        TextButton(
-                                            onClick = { onSearchSubmit(searchQuery) },
-                                            modifier = Modifier.testTag("search_submit_button")
-                                        ) {
-                                            Text("Save")
-                                        }
-                                        IconButton(
-                                            onClick = { onSearchQueryChange("") },
-                                            modifier = Modifier.testTag("clear_search_button")
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Clear,
-                                                contentDescription = "Clear search query"
-                                            )
-                                        }
-                                    }
-                                }
-                            },
-                            singleLine = true,
-                            shape = RoundedCornerShape(14.dp),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                                unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f),
-                                focusedContainerColor = MaterialTheme.colorScheme.surface,
-                                unfocusedContainerColor = MaterialTheme.colorScheme.surface
-                            )
+                        CompactStoreSearchBar(
+                            searchQuery = searchQuery,
+                            onSearchQueryChange = onSearchQueryChange,
+                            onSearchSubmit = onSearchSubmit
                         )
 
                         // Instant Search Suggestions
                         if (instantSuggestions.isNotEmpty()) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "Instant Suggestions",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            LazyRow(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                contentPadding = PaddingValues(vertical = 4.dp)
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                items(instantSuggestions) { suggestion ->
-                                    AssistChip(
-                                        onClick = {
-                                            onSearchQueryChange(suggestion)
-                                            onSearchSubmit(suggestion)
-                                        },
-                                        label = { Text(suggestion) },
-                                        leadingIcon = {
-                                            Icon(
-                                                imageVector = Icons.Default.Search,
-                                                contentDescription = null,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                        }
-                                    )
+                                Text(
+                                    text = "Suggestions",
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                LazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    items(instantSuggestions) { suggestion ->
+                                        CompactFilterPill(
+                                            label = suggestion,
+                                            selected = false,
+                                            icon = Icons.Default.Search,
+                                            onClick = {
+                                                onSearchQueryChange(suggestion)
+                                                onSearchSubmit(suggestion)
+                                            }
+                                        )
+                                    }
                                 }
                             }
                         }
 
-                        // Recent Search History + Popular Searches
+                        // Recent Search History
                         if (searchQuery.isBlank() && searchHistory.isNotEmpty()) {
-                            Spacer(modifier = Modifier.height(8.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -462,30 +424,32 @@ fun StoreHomeScreen(
                             ) {
                                 Text(
                                     text = "Recent Searches",
-                                    style = MaterialTheme.typography.labelMedium,
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.Medium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
-                                TextButton(
-                                    onClick = onClearSearchHistory,
-                                    modifier = Modifier.testTag("clear_search_history_button")
-                                ) {
-                                    Text("Clear History", style = MaterialTheme.typography.labelSmall)
-                                }
+                                Text(
+                                    text = "Clear",
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .clickable(onClick = onClearSearchHistory)
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        .testTag("clear_search_history_button")
+                                )
                             }
+                            Spacer(modifier = Modifier.height(4.dp))
                             LazyRow(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 items(searchHistory) { historyItem ->
-                                    AssistChip(
-                                        onClick = { onSearchQueryChange(historyItem) },
-                                        label = { Text(historyItem) },
-                                        leadingIcon = {
-                                            Icon(
-                                                imageVector = Icons.Default.History,
-                                                contentDescription = null,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                        }
+                                    CompactFilterPill(
+                                        label = historyItem,
+                                        selected = false,
+                                        icon = Icons.Default.History,
+                                        onClick = { onSearchQueryChange(historyItem) }
                                     )
                                 }
                             }
@@ -493,44 +457,24 @@ fun StoreHomeScreen(
                     }
                 }
 
-                // 3. Primary Category Filter Bar + Subcategory & Sort Bar
+                // 3. Minimal & Compact Category, Subcategory & Sort Filter Rows
                 item {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
                         LazyRow(
                             contentPadding = PaddingValues(horizontal = 16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(7.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             items(categories) { category ->
                                 val isSelected = category.equals(selectedCategory, ignoreCase = true)
-                                FilterChip(
+                                CompactFilterPill(
+                                    label = category,
                                     selected = isSelected,
-                                    onClick = { onCategorySelect(category) },
-                                    leadingIcon = {
-                                        Icon(
-                                            imageVector = categoryIconFor(category),
-                                            contentDescription = null,
-                                            modifier = Modifier.size(15.dp)
-                                        )
-                                    },
-                                    label = {
-                                        Text(
-                                            text = category,
-                                            fontSize = 12.sp,
-                                            maxLines = 1
-                                        )
-                                    },
-                                    border = FilterChipDefaults.filterChipBorder(
-                                        enabled = true,
-                                        selected = isSelected,
-                                        borderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.30f),
-                                        selectedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
-                                    ),
+                                    icon = categoryIconFor(category),
+                                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                    selectedContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    selectedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.50f),
                                     modifier = Modifier.testTag("category_chip_${category.lowercase().replace(" ", "_")}"),
-                                    colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                        selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimaryContainer
-                                    )
+                                    onClick = { onCategorySelect(category) }
                                 )
                             }
                         }
@@ -538,39 +482,19 @@ fun StoreHomeScreen(
                         // Subcategories & Collection Filters
                         LazyRow(
                             contentPadding = PaddingValues(horizontal = 16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(7.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             items(MARKETPLACE_SUBCATEGORIES) { subcat ->
                                 val isSelected = subcat.equals(selectedSubcategory, ignoreCase = true)
-                                FilterChip(
+                                CompactFilterPill(
+                                    label = subcat,
                                     selected = isSelected,
-                                    onClick = { onSubcategorySelect(subcat) },
-                                    leadingIcon = {
-                                        Icon(
-                                            imageVector = subcategoryIconFor(subcat),
-                                            contentDescription = null,
-                                            modifier = Modifier.size(14.dp)
-                                        )
-                                    },
-                                    label = {
-                                        Text(
-                                            text = subcat,
-                                            fontSize = 11.5.sp,
-                                            maxLines = 1
-                                        )
-                                    },
-                                    border = FilterChipDefaults.filterChipBorder(
-                                        enabled = true,
-                                        selected = isSelected,
-                                        borderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.28f),
-                                        selectedBorderColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.55f)
-                                    ),
+                                    icon = subcategoryIconFor(subcat),
+                                    selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                    selectedContentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    selectedBorderColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.50f),
                                     modifier = Modifier.testTag("subcat_chip_${subcat.lowercase().replace(" ", "_")}"),
-                                    colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                        selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                                        selectedLeadingIconColor = MaterialTheme.colorScheme.onSecondaryContainer
-                                    )
+                                    onClick = { onSubcategorySelect(subcat) }
                                 )
                             }
                         }
@@ -578,29 +502,29 @@ fun StoreHomeScreen(
                         // Sort Options Bar
                         LazyRow(
                             contentPadding = PaddingValues(horizontal = 16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(7.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             item {
                                 Surface(
                                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                                    shape = RoundedCornerShape(8.dp),
+                                    shape = RoundedCornerShape(9.dp),
                                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.24f))
                                 ) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                     ) {
                                         Icon(
                                             imageVector = Icons.AutoMirrored.Filled.Sort,
                                             contentDescription = "Sort by",
-                                            modifier = Modifier.size(14.dp),
+                                            modifier = Modifier.size(13.dp),
                                             tint = MaterialTheme.colorScheme.primary
                                         )
-                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Spacer(modifier = Modifier.width(3.dp))
                                         Text(
                                             text = "Sort",
-                                            fontSize = 11.5.sp,
+                                            fontSize = 11.sp,
                                             fontWeight = FontWeight.SemiBold,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -609,37 +533,14 @@ fun StoreHomeScreen(
                             }
                             items(SortOption.entries) { option ->
                                 val isSelected = option == selectedSortOption
-                                AssistChip(
-                                    onClick = { onSortOptionSelect(option) },
-                                    label = {
-                                        Text(
-                                            text = option.label,
-                                            fontSize = 11.5.sp,
-                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                            maxLines = 1
-                                        )
-                                    },
-                                    border = AssistChipDefaults.assistChipBorder(
-                                        enabled = true,
-                                        borderColor = if (isSelected) {
-                                            MaterialTheme.colorScheme.tertiary.copy(alpha = 0.55f)
-                                        } else {
-                                            MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
-                                        }
-                                    ),
+                                CompactFilterPill(
+                                    label = option.label,
+                                    selected = isSelected,
+                                    selectedContainerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                                    selectedContentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                                    selectedBorderColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.50f),
                                     modifier = Modifier.testTag("sort_chip_${option.name.lowercase()}"),
-                                    colors = AssistChipDefaults.assistChipColors(
-                                        containerColor = if (isSelected) {
-                                            MaterialTheme.colorScheme.tertiaryContainer
-                                        } else {
-                                            MaterialTheme.colorScheme.surface
-                                        },
-                                        labelColor = if (isSelected) {
-                                            MaterialTheme.colorScheme.onTertiaryContainer
-                                        } else {
-                                            MaterialTheme.colorScheme.onSurfaceVariant
-                                        }
-                                    )
+                                    onClick = { onSortOptionSelect(option) }
                                 )
                             }
                         }
@@ -1164,152 +1065,332 @@ private fun SectionHeaderRow(
 }
 
 @Composable
+private fun CompactStoreSearchBar(
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
+    onSearchSubmit: (String) -> Unit
+) {
+    val cs = MaterialTheme.colorScheme
+    var isFocused by remember { mutableStateOf(false) }
+
+    Surface(
+        color = cs.surface,
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(
+            width = 1.dp,
+            color = if (isFocused) cs.primary.copy(alpha = 0.78f) else cs.outline.copy(alpha = 0.30f)
+        ),
+        shadowElevation = if (isFocused) 2.dp else 0.dp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(42.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Search,
+                contentDescription = "Search applications",
+                tint = if (isFocused) cs.primary else cs.onSurfaceVariant,
+                modifier = Modifier.size(18.dp)
+            )
+            Box(
+                modifier = Modifier.weight(1f),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                if (searchQuery.isEmpty()) {
+                    Text(
+                        text = "Search apps, packages, developers...",
+                        fontSize = 13.sp,
+                        color = cs.onSurfaceVariant.copy(alpha = 0.72f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                BasicTextField(
+                    value = searchQuery,
+                    onValueChange = onSearchQueryChange,
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(
+                        fontSize = 13.5.sp,
+                        color = cs.onSurface
+                    ),
+                    cursorBrush = SolidColor(cs.primary),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { onSearchSubmit(searchQuery) }),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onFocusChanged { isFocused = it.isFocused }
+                        .testTag("store_search_input")
+                )
+            }
+            if (searchQuery.isNotEmpty()) {
+                Surface(
+                    color = cs.primaryContainer,
+                    shape = RoundedCornerShape(7.dp),
+                    border = BorderStroke(1.dp, cs.primary.copy(alpha = 0.25f)),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(7.dp))
+                        .clickable { onSearchSubmit(searchQuery) }
+                        .testTag("search_submit_button")
+                ) {
+                    Text(
+                        text = "Save",
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = cs.onPrimaryContainer,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(RoundedCornerShape(7.dp))
+                        .clickable { onSearchQueryChange("") }
+                        .testTag("clear_search_button"),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Clear,
+                        contentDescription = "Clear search query",
+                        tint = cs.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CompactFilterPill(
+    label: String,
+    selected: Boolean,
+    icon: ImageVector? = null,
+    selectedContainerColor: Color = MaterialTheme.colorScheme.primaryContainer,
+    selectedContentColor: Color = MaterialTheme.colorScheme.onPrimaryContainer,
+    selectedBorderColor: Color = MaterialTheme.colorScheme.primary.copy(alpha = 0.45f),
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    val cs = MaterialTheme.colorScheme
+    Surface(
+        color = if (selected) selectedContainerColor else cs.surface,
+        shape = RoundedCornerShape(9.dp),
+        border = BorderStroke(
+            width = 1.dp,
+            color = if (selected) selectedBorderColor else cs.outline.copy(alpha = 0.26f)
+        ),
+        modifier = modifier
+            .clip(RoundedCornerShape(9.dp))
+            .clickable(onClick = onClick)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = if (selected) selectedContentColor else cs.onSurfaceVariant,
+                    modifier = Modifier.size(13.dp)
+                )
+            }
+            Text(
+                text = label,
+                fontSize = 11.5.sp,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                color = if (selected) selectedContentColor else cs.onSurfaceVariant,
+                maxLines = 1,
+                softWrap = false
+            )
+        }
+    }
+}
+
+@Composable
 private fun StoreHeroBanner(
     totalAppsCount: Int,
     totalDownloads: Long,
     storeVersionName: String = BuildConfig.VERSION_NAME
 ) {
+    val cs = MaterialTheme.colorScheme
+    val isDark = cs.background.luminance() < 0.5f
+
+    val cardBorderColor = if (isDark) {
+        Color(0xFF6EDBA9).copy(alpha = 0.36f)
+    } else {
+        cs.primary.copy(alpha = 0.24f)
+    }
+    val gradientColors = if (isDark) {
+        listOf(
+            Color(0xEC071224),
+            Color(0xD60C2235),
+            Color(0xBA063327)
+        )
+    } else {
+        listOf(
+            Color(0xF5EBF8F2),
+            Color(0xF2F3FAF7),
+            Color(0xEFEAF3FB)
+        )
+    }
+    val titleColor = if (isDark) Color.White else cs.onSurface
+    val subtitleColor = if (isDark) Color(0xFFC9DAE8) else cs.onSurfaceVariant
+    val verifiedTint = if (isDark) Color(0xFF6EDBA9) else cs.primary
+    val versionChipBg = if (isDark) Color.White.copy(alpha = 0.12f) else cs.surface.copy(alpha = 0.92f)
+    val versionChipBorder = if (isDark) Color(0xFF6EDBA9).copy(alpha = 0.35f) else cs.primary.copy(alpha = 0.25f)
+    val versionTextColor = if (isDark) Color.White else cs.onSurface
+    val metricsBg = if (isDark) Color.Black.copy(alpha = 0.26f) else cs.surface.copy(alpha = 0.88f)
+    val metricsBorder = if (isDark) Color.White.copy(alpha = 0.16f) else cs.outline.copy(alpha = 0.20f)
+    val metricTextColor = if (isDark) Color.White else cs.onSurface
+    val dividerColor = if (isDark) Color.White.copy(alpha = 0.20f) else cs.outline.copy(alpha = 0.20f)
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
-        shape = RoundedCornerShape(20.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.42f)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+            .padding(horizontal = 16.dp),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, cardBorderColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isDark) 2.dp else 1.dp)
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {
             Image(
                 painter = painterResource(id = R.drawable.img_store_hero_banner_1795021164708),
                 contentDescription = "Zayaan Apps Store Banner",
                 contentScale = ContentScale.Crop,
+                alpha = if (isDark) 0.45f else 0.08f,
                 modifier = Modifier.matchParentSize()
             )
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(
-                        Brush.horizontalGradient(
-                            colors = listOf(
-                                Color(0xF0071224),
-                                Color(0xCC0C2235),
-                                Color(0x99063327)
-                            )
-                        )
-                    )
-                    .padding(14.dp)
+                    .background(Brush.horizontalGradient(colors = gradientColors))
+                    .padding(horizontal = 12.dp, vertical = 10.dp)
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Surface(
-                            color = Color(0xFF6EDBA9).copy(alpha = 0.20f),
-                            shape = RoundedCornerShape(8.dp),
-                            border = BorderStroke(1.dp, Color(0xFF6EDBA9).copy(alpha = 0.45f))
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(9.dp)
                         ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Verified,
-                                    contentDescription = null,
-                                    tint = Color(0xFF6EDBA9),
-                                    modifier = Modifier.size(12.dp)
-                                )
+                            Image(
+                                painter = painterResource(id = R.drawable.img_launcher_icon_1795021165006),
+                                contentDescription = "Zayaan Apps Icon",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clip(RoundedCornerShape(9.dp))
+                                    .border(1.dp, cardBorderColor, RoundedCornerShape(9.dp))
+                            )
+                            Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Text(
+                                        text = "Zayaan Apps",
+                                        fontSize = 17.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = titleColor,
+                                        maxLines = 1
+                                    )
+                                    Icon(
+                                        imageVector = Icons.Default.Verified,
+                                        contentDescription = "Verified GitHub Releases",
+                                        tint = verifiedTint,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
                                 Text(
-                                    text = "GITHUB RELEASES",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF8BF8C4),
-                                    maxLines = 1
+                                    text = "Verified APKs • GitHub Releases & Cloud",
+                                    fontSize = 11.sp,
+                                    color = subtitleColor,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
+                        Spacer(modifier = Modifier.width(8.dp))
                         Surface(
-                            color = Color.White.copy(alpha = 0.14f),
+                            color = versionChipBg,
                             shape = RoundedCornerShape(8.dp),
-                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.25f))
+                            border = BorderStroke(1.dp, versionChipBorder)
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                horizontalArrangement = Arrangement.spacedBy(3.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.NewReleases,
                                     contentDescription = null,
-                                    tint = Color(0xFF67E8F9),
+                                    tint = if (isDark) Color(0xFF67E8F9) else cs.primary,
                                     modifier = Modifier.size(11.dp)
                                 )
                                 Text(
                                     text = "v$storeVersionName",
-                                    fontSize = 10.5.sp,
+                                    fontSize = 10.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = Color.White,
+                                    color = versionTextColor,
                                     maxLines = 1
                                 )
                             }
                         }
                     }
 
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(
-                            text = "Zayaan Apps",
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = Color.White
-                        )
-                        Text(
-                            text = "Verified Android APKs with live GitHub Releases & Cloud sync",
-                            fontSize = 12.sp,
-                            color = Color(0xFFD6E4F0),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-
-                    // Compact bordered 3-metric telemetry bar
+                    // Minimal bordered 3-metric telemetry strip
                     Surface(
-                        color = Color.Black.copy(alpha = 0.28f),
-                        shape = RoundedCornerShape(10.dp),
-                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
+                        color = metricsBg,
+                        shape = RoundedCornerShape(9.dp),
+                        border = BorderStroke(1.dp, metricsBorder),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                                .padding(horizontal = 10.dp, vertical = 4.5.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             HeroMetricPill(
                                 icon = Icons.Default.Apps,
                                 label = "$totalAppsCount Apps",
-                                tint = Color(0xFF6EDBA9)
+                                tint = if (isDark) Color(0xFF6EDBA9) else cs.primary,
+                                textColor = metricTextColor
                             )
                             VerticalDivider(
-                                modifier = Modifier.height(12.dp),
+                                modifier = Modifier.height(11.dp),
                                 thickness = 1.dp,
-                                color = Color.White.copy(alpha = 0.20f)
+                                color = dividerColor
                             )
                             HeroMetricPill(
                                 icon = Icons.Default.Download,
                                 label = "$totalDownloads DLs",
-                                tint = Color(0xFF68D3FF)
+                                tint = if (isDark) Color(0xFF68D3FF) else cs.secondary,
+                                textColor = metricTextColor
                             )
                             VerticalDivider(
-                                modifier = Modifier.height(12.dp),
+                                modifier = Modifier.height(11.dp),
                                 thickness = 1.dp,
-                                color = Color.White.copy(alpha = 0.20f)
+                                color = dividerColor
                             )
                             HeroMetricPill(
                                 icon = Icons.Default.Public,
                                 label = "Android & Web",
-                                tint = Color(0xFFADC6FF)
+                                tint = if (isDark) Color(0xFFADC6FF) else cs.tertiary,
+                                textColor = metricTextColor
                             )
                         }
                     }
@@ -1323,7 +1404,8 @@ private fun StoreHeroBanner(
 private fun HeroMetricPill(
     icon: ImageVector,
     label: String,
-    tint: Color
+    tint: Color,
+    textColor: Color = Color.White
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -1333,13 +1415,13 @@ private fun HeroMetricPill(
             imageVector = icon,
             contentDescription = null,
             tint = tint,
-            modifier = Modifier.size(13.dp)
+            modifier = Modifier.size(12.dp)
         )
         Text(
             text = label,
-            fontSize = 11.sp,
+            fontSize = 10.5.sp,
             fontWeight = FontWeight.SemiBold,
-            color = Color.White,
+            color = textColor,
             maxLines = 1,
             softWrap = false
         )
