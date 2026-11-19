@@ -667,9 +667,19 @@ private fun AppEmblemAvatar(app: StoreApp, sizeDp: Int) {
         color = MaterialTheme.colorScheme.primaryContainer
     ) {
         if (app.iconUrl.isNotBlank()) {
+            val emblemModel: Any = if (
+                app.packageName == "com.zayaanapps.store" &&
+                app.iconUrl.contains("/web/icons/Icon-192.png")
+            ) {
+                com.example.R.drawable.img_launcher_icon_1795021165006
+            } else {
+                app.iconUrl
+            }
             coil.compose.AsyncImage(
-                model = app.iconUrl,
+                model = emblemModel,
                 contentDescription = "${app.appName} icon",
+                placeholder = androidx.compose.ui.res.painterResource(id = com.example.R.drawable.img_launcher_icon_1795021165006),
+                error = androidx.compose.ui.res.painterResource(id = com.example.R.drawable.img_launcher_icon_1795021165006),
                 modifier = Modifier.fillMaxSize(),
                 contentScale = androidx.compose.ui.layout.ContentScale.Crop
             )

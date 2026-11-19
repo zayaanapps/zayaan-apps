@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.BuildConfig
 import com.example.data.AdminRecord
 import com.example.data.AndroidPackageController
 import com.example.data.ApkArchiveVerificationInfo
@@ -117,6 +118,7 @@ class StoreViewModel(
     private val _storeSelfUpdateApp = MutableStateFlow<StoreApp?>(null)
     val storeSelfUpdateApp: StateFlow<StoreApp?> = _storeSelfUpdateApp.asStateFlow()
 
+    private var latestGitHubStoreRelease: StoreApp? = null
     private var hasAutoSeededEmptyStore = false
     private var notifiedUpdatePackages = mutableSetOf<String>()
     private var notifiedAnnouncementIds = mutableSetOf<String>()
@@ -131,8 +133,48 @@ class StoreViewModel(
         refreshCachedApks()
     }
 
+    private fun enrichCatalogWithLiveStoreRelease(apps: List<StoreApp>): List<StoreApp> {
+        val remote = latestGitHubStoreRelease
+        val installedBuildCode = BuildConfig.VERSION_CODE.toLong()
+        val installedBuildName = BuildConfig.VERSION_NAME
+        val validStoreIconUrl =
+            "https://raw.githubusercontent.com/zayaanapps/zayaan-apps/main/app/src/main/res/drawable/img_launcher_icon_1795021165006.jpg"
+
+        return apps.map { app ->
+            if (app.packageName != "com.zayaanapps.store" && app.appId != "zayaan-apps-store") {
+                app
+            } else {
+                val fixedIconUrl = if (app.iconUrl.isBlank() || app.iconUrl.contains("/web/icons/Icon-192.png")) {
+                    validStoreIconUrl
+                } else {
+                    app.iconUrl
+                }
+                when {
+                    remote != null && remote.versionCode >= maxOf(app.versionCode, installedBuildCode) -> {
+                        app.copy(
+                            iconUrl = fixedIconUrl,
+                            versionName = remote.versionName.ifBlank { app.versionName },
+                            versionCode = remote.versionCode,
+                            apkDownloadUrl = remote.apkDownloadUrl.ifBlank { app.apkDownloadUrl },
+                            apkFileSize = remote.apkFileSize.ifBlank { app.apkFileSize },
+                            releaseNotes = remote.releaseNotes.ifBlank { app.releaseNotes }
+                        )
+                    }
+                    installedBuildCode > app.versionCode -> {
+                        app.copy(
+                            iconUrl = fixedIconUrl,
+                            versionName = installedBuildName,
+                            versionCode = installedBuildCode
+                        )
+                    }
+                    else -> app.copy(iconUrl = fixedIconUrl)
+                }
+            }
+        }
+    }
+
     private fun loadGuestPreviewStore() {
-        val starterApps = StoreRepository.officialStarterApps()
+        val starterApps = enrichCatalogWithLiveStoreRelease(StoreRepository.officialStarterApps())
         _publishedAppsState.value = UiState.Success(starterApps)
         _adminAppsState.value = UiState.Success(starterApps)
         _categoriesState.value = UiState.Success(StoreRepository.officialDefaultCategories())
@@ -149,8 +191,9 @@ class StoreViewModel(
                 }
                 .collect { result ->
                     result.onSuccess { apps ->
-                        _publishedAppsState.value = UiState.Success(apps)
-                        refreshInstalledPackages(apps)
+                        val enriched = enrichCatalogWithLiveStoreRelease(apps)
+                        _publishedAppsState.value = UiState.Success(enriched)
+                        refreshInstalledPackages(enriched)
                         if (apps.isEmpty() && !hasAutoSeededEmptyStore) {
                             hasAutoSeededEmptyStore = true
                             seedInitialCatalogIfEmpty()
@@ -168,7 +211,7 @@ class StoreViewModel(
                 }
                 .collect { result ->
                     result.onSuccess { apps ->
-                        _adminAppsState.value = UiState.Success(apps)
+                        _adminAppsState.value = UiState.Success(enrichCatalogWithLiveStoreRelease(apps))
                     }.onFailure { e ->
                         _adminAppsState.value = UiState.Error(e.localizedMessage ?: "Admin access restricted")
                     }
@@ -491,6 +534,20 @@ class StoreViewModel(
         viewModelScope.launch {
             val remoteRelease = packageController.fetchLatestGitHubStoreRelease()
             if (remoteRelease != null) {
+                latestGitHubStoreRelease = remoteRelease
+
+                val currentPublished = (_publishedAppsState.value as? UiState.Success)?.data
+                if (currentPublished != null) {
+                    val enrichedPublished = enrichCatalogWithLiveStoreRelease(currentPublished)
+                    _publishedAppsState.value = UiState.Success(enrichedPublished)
+                    refreshInstalledPackages(enrichedPublished)
+                }
+
+                val currentAdmin = (_adminAppsState.value as? UiState.Success)?.data
+                if (currentAdmin != null) {
+                    _adminAppsState.value = UiState.Success(enrichCatalogWithLiveStoreRelease(currentAdmin))
+                }
+
                 val selfStatus = packageController.inspectPackage(
                     packageName = remoteRelease.packageName,
                     remoteVersionCode = remoteRelease.versionCode,

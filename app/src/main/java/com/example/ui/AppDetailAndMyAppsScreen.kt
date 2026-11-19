@@ -64,11 +64,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.example.R
 import com.example.data.AppReview
 import com.example.data.AppVersionRecord
 import com.example.data.DownloadState
@@ -234,9 +236,19 @@ fun AppDetailScreen(
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        val detailIconModel: Any = if (
+                            app.packageName == "com.zayaanapps.store" &&
+                            (app.iconUrl.isBlank() || app.iconUrl.contains("/web/icons/Icon-192.png"))
+                        ) {
+                            R.drawable.img_launcher_icon_1795021165006
+                        } else {
+                            app.iconUrl
+                        }
                         AsyncImage(
-                            model = app.iconUrl,
+                            model = detailIconModel,
                             contentDescription = "${app.appName} icon",
+                            placeholder = painterResource(id = R.drawable.img_launcher_icon_1795021165006),
+                            error = painterResource(id = R.drawable.img_launcher_icon_1795021165006),
                             modifier = Modifier
                                 .size(76.dp)
                                 .clip(RoundedCornerShape(18.dp))
@@ -1099,9 +1111,19 @@ private fun RelatedAppMiniCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
+            val relatedIconModel: Any = if (
+                app.packageName == "com.zayaanapps.store" &&
+                (app.iconUrl.isBlank() || app.iconUrl.contains("/web/icons/Icon-192.png"))
+            ) {
+                R.drawable.img_launcher_icon_1795021165006
+            } else {
+                app.iconUrl
+            }
             AsyncImage(
-                model = app.iconUrl,
+                model = relatedIconModel,
                 contentDescription = "${app.appName} icon",
+                placeholder = painterResource(id = R.drawable.img_launcher_icon_1795021165006),
+                error = painterResource(id = R.drawable.img_launcher_icon_1795021165006),
                 modifier = Modifier
                     .size(48.dp)
                     .clip(RoundedCornerShape(12.dp))

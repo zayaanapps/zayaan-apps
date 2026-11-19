@@ -67,6 +67,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.example.BuildConfig
 import com.example.R
 import com.example.data.AppCollection
 import com.example.data.InstalledPackageStatus
@@ -336,9 +337,15 @@ fun StoreHomeScreen(
             ) {
                 // 1. Promotional Hero Banner
                 item {
+                    val liveStoreVersion = allApps
+                        .firstOrNull { it.packageName == "com.zayaanapps.store" || it.appId == "zayaan-apps-store" }
+                        ?.versionName
+                        ?.takeIf { it.isNotBlank() }
+                        ?: BuildConfig.VERSION_NAME
                     StoreHeroBanner(
                         totalAppsCount = allApps.size,
-                        totalDownloads = allApps.sumOf { it.downloadCount }
+                        totalDownloads = allApps.sumOf { it.downloadCount },
+                        storeVersionName = liveStoreVersion
                     )
                 }
 
@@ -959,7 +966,8 @@ private fun SectionHeaderRow(
 @Composable
 private fun StoreHeroBanner(
     totalAppsCount: Int,
-    totalDownloads: Long
+    totalDownloads: Long,
+    storeVersionName: String = BuildConfig.VERSION_NAME
 ) {
     Card(
         modifier = Modifier
@@ -1011,7 +1019,7 @@ private fun StoreHeroBanner(
                             shape = RoundedCornerShape(8.dp)
                         ) {
                             Text(
-                                text = "v1.0.0.1",
+                                text = "v$storeVersionName",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = Color.White,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
@@ -1101,9 +1109,19 @@ private fun FeaturedAppSpotlightCard(
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                val iconModel: Any = if (
+                    app.packageName == "com.zayaanapps.store" &&
+                    (app.iconUrl.isBlank() || app.iconUrl.contains("/web/icons/Icon-192.png"))
+                ) {
+                    R.drawable.img_launcher_icon_1795021165006
+                } else {
+                    app.iconUrl
+                }
                 AsyncImage(
-                    model = app.iconUrl,
+                    model = iconModel,
                     contentDescription = "${app.appName} icon",
+                    placeholder = painterResource(id = R.drawable.img_launcher_icon_1795021165006),
+                    error = painterResource(id = R.drawable.img_launcher_icon_1795021165006),
                     modifier = Modifier
                         .size(56.dp)
                         .clip(RoundedCornerShape(14.dp))
@@ -1176,7 +1194,12 @@ private fun FeaturedAppSpotlightCard(
                 Text(
                     text = "v${app.versionName} • ${app.apkFileSize} • ${app.downloadCount} DLs",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 8.dp)
                 )
                 PackageInstallStatusBadge(installedStatus = installedStatus)
             }
@@ -1207,9 +1230,19 @@ private fun CompactMarketplaceAppCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Top
             ) {
+                val iconModel: Any = if (
+                    app.packageName == "com.zayaanapps.store" &&
+                    (app.iconUrl.isBlank() || app.iconUrl.contains("/web/icons/Icon-192.png"))
+                ) {
+                    R.drawable.img_launcher_icon_1795021165006
+                } else {
+                    app.iconUrl
+                }
                 AsyncImage(
-                    model = app.iconUrl,
+                    model = iconModel,
                     contentDescription = "${app.appName} icon",
+                    placeholder = painterResource(id = R.drawable.img_launcher_icon_1795021165006),
+                    error = painterResource(id = R.drawable.img_launcher_icon_1795021165006),
                     modifier = Modifier
                         .size(48.dp)
                         .clip(RoundedCornerShape(12.dp))
@@ -1243,12 +1276,17 @@ private fun CompactMarketplaceAppCard(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 6.dp)
                 )
                 Text(
                     text = app.apkFileSize,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    softWrap = false
                 )
             }
         }
@@ -1278,9 +1316,19 @@ fun StoreAppListRowCard(
                 .padding(14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            val iconModel: Any = if (
+                app.packageName == "com.zayaanapps.store" &&
+                (app.iconUrl.isBlank() || app.iconUrl.contains("/web/icons/Icon-192.png"))
+            ) {
+                R.drawable.img_launcher_icon_1795021165006
+            } else {
+                app.iconUrl
+            }
             AsyncImage(
-                model = app.iconUrl,
+                model = iconModel,
                 contentDescription = "${app.appName} icon",
+                placeholder = painterResource(id = R.drawable.img_launcher_icon_1795021165006),
+                error = painterResource(id = R.drawable.img_launcher_icon_1795021165006),
                 modifier = Modifier
                     .size(60.dp)
                     .clip(RoundedCornerShape(14.dp))
@@ -1336,28 +1384,36 @@ fun StoreAppListRowCard(
                 Spacer(modifier = Modifier.height(4.dp))
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
                         text = "v${app.versionName}",
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        softWrap = false
                     )
                     Text(
                         text = "• ${app.apkFileSize}",
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        softWrap = false
                     )
                     Text(
-                        text = "• ${app.downloadCount} downloads",
+                        text = "• ${app.downloadCount} DLs",
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     if (app.reviewCount > 0) {
                         Text(
                             text = "• ★ ${String.format(Locale.US, "%.1f", app.averageRating)}",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.tertiary
+                            color = MaterialTheme.colorScheme.tertiary,
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
                 }
@@ -1390,7 +1446,9 @@ fun PackageInstallStatusBadge(installedStatus: InstalledPackageStatus?) {
                     Text(
                         text = "Get APK",
                         style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        softWrap = false
                     )
                 }
             }
@@ -1415,7 +1473,9 @@ fun PackageInstallStatusBadge(installedStatus: InstalledPackageStatus?) {
                     Text(
                         text = "Update",
                         style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onTertiaryContainer
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                        maxLines = 1,
+                        softWrap = false
                     )
                 }
             }
@@ -1440,7 +1500,9 @@ fun PackageInstallStatusBadge(installedStatus: InstalledPackageStatus?) {
                     Text(
                         text = "Installed",
                         style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        maxLines = 1,
+                        softWrap = false
                     )
                 }
             }

@@ -1,5 +1,6 @@
 package com.example.data
 
+import com.example.BuildConfig
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
@@ -1173,17 +1174,17 @@ class StoreRepository(
                 developerName = "Zayaan Apps Official",
                 shortDescription = "Official Zayaan Apps Android marketplace & GitHub Releases distribution client.",
                 description = "The official Zayaan Apps Android App Store & Web Distribution client. Discover, download, verify, and update official Zayaan Android applications directly from GitHub Releases with real-time version tracking.",
-                iconUrl = "https://raw.githubusercontent.com/zayaanapps/zayaan-apps/main/web/icons/Icon-192.png",
+                iconUrl = "https://raw.githubusercontent.com/zayaanapps/zayaan-apps/main/app/src/main/res/drawable/img_launcher_icon_1795021165006.jpg",
                 screenshots = listOf(
                     "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&q=80",
                     "https://images.unsplash.com/photo-1551650975-87deedd944c3?w=800&q=80",
                     "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=800&q=80"
                 ),
-                versionName = "1.0.0.1",
-                versionCode = 1,
-                apkDownloadUrl = "https://github.com/zayaanapps/zayaan-apps/releases/latest/download/zayaan-apps.apk",
-                apkFileSize = "14.2 MB",
-                releaseNotes = "v1.0.0.1 Marketplace Release:\n• Google Play Store-inspired discovery sections & curated collections\n• Advanced search with instant suggestions, history, filters & sorting\n• Rich app detail sheets with related apps & developer specs\n• Automatic Store Self-Update notification & 1-tap APK upgrade",
+                versionName = BuildConfig.VERSION_NAME,
+                versionCode = BuildConfig.VERSION_CODE.toLong(),
+                apkDownloadUrl = "https://github.com/zayaanapps/zayaan-apps/releases/latest/download/zayaan-apps-release.apk",
+                apkFileSize = "16.8 MB",
+                releaseNotes = "v${BuildConfig.VERSION_NAME} Marketplace Release:\n• Google Play Store-inspired discovery sections & curated collections\n• Advanced search with instant suggestions, history, filters & sorting\n• Rich app detail sheets with related apps & developer specs\n• Automatic Store Self-Update notification & 1-tap APK upgrade",
                 featured = true,
                 editorsChoice = true,
                 essential = true,

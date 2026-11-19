@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:http/http.dart' as http;
 import 'models/store_app.dart';
 import 'services/installer_service.dart';
 
@@ -110,6 +112,90 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
   String _draftReviewComment = '';
   bool _notifyUpdates = true;
 
+  @override
+  void initState() {
+    super.initState();
+    _syncLatestGitHubRelease();
+  }
+
+  Future<void> _syncLatestGitHubRelease() async {
+    try {
+      final response = await http.get(
+        Uri.parse('https://api.github.com/repos/zayaanapps/zayaan-apps/releases/latest'),
+        headers: const {'Accept': 'application/vnd.github+json'},
+      );
+      if (response.statusCode != 200) return;
+      final jsonMap = jsonDecode(response.body) as Map<String, dynamic>;
+      final rawTag = (jsonMap['tag_name'] as String?) ?? '';
+      final versionName = rawTag.replaceFirst(RegExp(r'^v'), '').trim();
+      if (versionName.isEmpty) return;
+
+      final assets = (jsonMap['assets'] as List<dynamic>?) ?? const [];
+      String apkUrl = '';
+      String sizeFormatted = '16.8 MB';
+      for (final item in assets) {
+        if (item is Map<String, dynamic>) {
+          final name = (item['name'] as String?) ?? '';
+          final url = (item['browser_download_url'] as String?) ?? '';
+          if (name.endsWith('.apk') || url.endsWith('.apk')) {
+            apkUrl = url;
+            final bytes = (item['size'] as num?)?.toInt() ?? 0;
+            if (bytes > 0) {
+              sizeFormatted = '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+            }
+            if (name.contains('release')) break;
+          }
+        }
+      }
+
+      final parsedCode = int.tryParse(versionName.split('.').last) ?? 1;
+      final notes = ((jsonMap['body'] as String?) ?? '').trim();
+
+      if (!mounted) return;
+      setState(() {
+        final idx = _catalog.indexWhere((a) => a.appId == 'zayaan-apps-store');
+        if (idx >= 0) {
+          final existing = _catalog[idx];
+          _catalog[idx] = StoreAppModel(
+            appId: existing.appId,
+            appName: existing.appName,
+            packageName: existing.packageName,
+            category: existing.category,
+            developerName: existing.developerName,
+            shortDescription: existing.shortDescription,
+            description: existing.description,
+            iconUrl: existing.iconUrl,
+            screenshots: existing.screenshots,
+            versionName: versionName,
+            versionCode: parsedCode > 0 ? parsedCode : existing.versionCode,
+            apkDownloadUrl: apkUrl.isNotEmpty ? apkUrl : existing.apkDownloadUrl,
+            apkFileSize: sizeFormatted,
+            releaseNotes: notes.isNotEmpty ? notes : existing.releaseNotes,
+            featured: existing.featured,
+            editorsChoice: existing.editorsChoice,
+            essential: existing.essential,
+            published: existing.published,
+            downloadCount: existing.downloadCount,
+            ratingSum: existing.ratingSum,
+            reviewCount: existing.reviewCount,
+            minAndroidSdk: existing.minAndroidSdk,
+            targetAndroidSdk: existing.targetAndroidSdk,
+            architecture: existing.architecture,
+            permissionsList: existing.permissionsList,
+            offlineCapable: existing.offlineCapable,
+            pageViews: existing.pageViews,
+            authorUid: existing.authorUid,
+          );
+          if (_selectedApp?.appId == 'zayaan-apps-store') {
+            _selectedApp = _catalog[idx];
+          }
+        }
+      });
+    } catch (_) {
+      // Keep bundled fallback catalog cleanly when offline.
+    }
+  }
+
   // Complete 8-app Official Zayaan Apps Catalog (100% identical to AI Studio Android Preview)
   late final List<StoreAppModel> _catalog = [
     const StoreAppModel(
@@ -123,7 +209,7 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
       description:
           'The official Zayaan Apps Android App Store & Web Distribution client. Discover, download, verify, and update official Zayaan Android applications directly from GitHub Releases with real-time version tracking.',
       iconUrl:
-          'https://raw.githubusercontent.com/zayaanapps/zayaan-apps/main/web/icons/Icon-192.png',
+          'https://raw.githubusercontent.com/zayaanapps/zayaan-apps/main/app/src/main/res/drawable/img_launcher_icon_1795021165006.jpg',
       screenshots: [
         'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&q=80',
         'https://images.unsplash.com/photo-1551650975-87deedd944c3?w=800&q=80',

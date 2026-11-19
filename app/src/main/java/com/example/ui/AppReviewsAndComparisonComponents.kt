@@ -52,10 +52,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.example.R
 import com.example.data.AppReview
 import com.example.data.InstalledPackageStatus
 import com.example.data.StoreApp
@@ -558,6 +560,8 @@ fun AppComparisonSectionCard(
                                     AsyncImage(
                                         model = app.iconUrl,
                                         contentDescription = "${app.appName} icon",
+                                        placeholder = painterResource(id = R.drawable.img_launcher_icon_1795021165006),
+                                        error = painterResource(id = R.drawable.img_launcher_icon_1795021165006),
                                         modifier = Modifier
                                             .size(44.dp)
                                             .clip(RoundedCornerShape(10.dp))
