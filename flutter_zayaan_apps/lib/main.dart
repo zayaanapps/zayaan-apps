@@ -886,28 +886,134 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
     }
   }
 
+  IconData _webCategoryIcon(String category) => switch (category) {
+        'All' => Icons.apps,
+        'Games' => Icons.sports_esports,
+        'Tools' => Icons.build,
+        'AI Apps' => Icons.auto_awesome,
+        'Entertainment' => Icons.movie_outlined,
+        'Productivity' => Icons.work_outline,
+        'Education' => Icons.school_outlined,
+        'Utilities' => Icons.build_circle_outlined,
+        'Business' => Icons.storefront_outlined,
+        'Social & Communication' => Icons.forum_outlined,
+        _ => Icons.category_outlined,
+      };
+
+  IconData _webSubcategoryIcon(String sub) => switch (sub) {
+        "Editor's Choice" => Icons.workspace_premium_outlined,
+        'Essential Apps' => Icons.verified_outlined,
+        'Offline Ready' => Icons.offline_bolt_outlined,
+        'Under 15 MB' => Icons.sd_storage_outlined,
+        'Latest v1.0.0.x' => Icons.new_releases_outlined,
+        _ => Icons.apps,
+      };
+
+  Widget _buildHomeAppIcon(StoreAppModel app, ColorScheme cs,
+      {double size = 48, double radius = 12}) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: cs.primaryContainer,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: cs.outline.withValues(alpha: 0.28)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: app.iconUrl.isNotEmpty
+          ? Image.network(
+              app.iconUrl,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Center(
+                child: Text(
+                  app.appName.substring(0, 1),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: cs.onPrimaryContainer,
+                  ),
+                ),
+              ),
+            )
+          : Center(
+              child: Text(
+                app.appName.substring(0, 1),
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: cs.onPrimaryContainer,
+                ),
+              ),
+            ),
+    );
+  }
+
+  Widget _buildHomeSectionHeader({
+    required ColorScheme cs,
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+  }) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: iconColor.withValues(alpha: 0.14),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: iconColor.withValues(alpha: 0.30)),
+          ),
+          child: Icon(icon, size: 17, color: iconColor),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style:
+                    const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              Text(
+                subtitle,
+                style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildStoreHomeTab(
       List<String> categories, List<StoreAppModel> filteredApps) {
+    final cs = Theme.of(context).colorScheme;
     final featuredApps = _catalog.where((a) => a.featured).toList();
     final editorsChoiceApps = _catalog.where((a) => a.editorsChoice).toList();
     final trendingApps = [..._catalog]
       ..sort((a, b) => b.downloadCount.compareTo(a.downloadCount));
+    final totalDownloads =
+        _catalog.fold<int>(0, (sum, a) => sum + a.downloadCount);
 
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       children: [
-        // 1. Hero Marketplace Banner (Matches AI Studio Preview)
+        // 1. Compact Bordered Hero Marketplace Banner
         Container(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(15),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(20),
             gradient: const LinearGradient(
-              colors: [Color(0xFF005236), Color(0xFF0E1E38)],
+              colors: [Color(0xFF005236), Color(0xFF0C2235), Color(0xFF0E1E38)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
             border: Border.all(
-              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.35),
+              color: const Color(0xFF6EDBA9).withValues(alpha: 0.42),
             ),
           ),
           child: Column(
@@ -918,72 +1024,156 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
                 children: [
                   Container(
                     padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF6EDBA9),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Text(
-                      'OFFICIAL ZAYAAN APPS MARKETPLACE',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF003824),
+                      color: const Color(0xFF6EDBA9).withValues(alpha: 0.22),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: const Color(0xFF6EDBA9).withValues(alpha: 0.50),
                       ),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.verified,
+                            size: 12, color: Color(0xFF6EDBA9)),
+                        SizedBox(width: 4),
+                        Text(
+                          'GITHUB RELEASES',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF8BF8C4),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   ActionChip(
+                    visualDensity: VisualDensity.compact,
                     avatar: Icon(
                       switch (widget.themeMode) {
                         ThemeMode.system => Icons.brightness_auto,
                         ThemeMode.light => Icons.light_mode,
                         ThemeMode.dark => Icons.dark_mode,
                       },
-                      size: 16,
+                      size: 15,
                       color: const Color(0xFF6EDBA9),
                     ),
                     label: Text(
                       _themeModeLabel(widget.themeMode),
                       style: const TextStyle(
-                        fontSize: 12,
+                        fontSize: 11.5,
                         color: Colors.white,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                     backgroundColor: Colors.white.withValues(alpha: 0.12),
                     side: BorderSide(
-                      color: const Color(0xFF6EDBA9).withValues(alpha: 0.4),
+                      color: const Color(0xFF6EDBA9).withValues(alpha: 0.45),
                     ),
                     onPressed: _cycleThemeMode,
                     tooltip: 'Switch Theme (System / Light / Dark)',
                   ),
                 ],
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
               const Text(
                 'Zayaan Apps Store',
                 style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
                   color: Colors.white,
                 ),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 2),
               const Text(
-                'Discover, verify, and install official Android APKs powered by GitHub Releases & Cloud Firestore.',
+                'Verified Android APKs powered by GitHub Releases & Cloud Firestore.',
                 style: TextStyle(
+                  fontSize: 12.5,
                   color: Color(0xFFD6E4F0),
                 ),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 10),
+              // Compact bordered 3-metric bar inside hero
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.28),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.20),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.apps,
+                            size: 13, color: Color(0xFF6EDBA9)),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${_catalog.length} Apps',
+                          style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white),
+                        ),
+                      ],
+                    ),
+                    Container(
+                        width: 1,
+                        height: 12,
+                        color: Colors.white.withValues(alpha: 0.22)),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.download,
+                            size: 13, color: Color(0xFF68D3FF)),
+                        const SizedBox(width: 4),
+                        Text(
+                          '$totalDownloads DLs',
+                          style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white),
+                        ),
+                      ],
+                    ),
+                    Container(
+                        width: 1,
+                        height: 12,
+                        color: Colors.white.withValues(alpha: 0.22)),
+                    const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.public,
+                            size: 13, color: Color(0xFFADC6FF)),
+                        SizedBox(width: 4),
+                        Text(
+                          'Android & Web',
+                          style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
               Wrap(
-                spacing: 10,
-                runSpacing: 8,
+                spacing: 8,
+                runSpacing: 6,
                 children: [
                   FilledButton.icon(
                     onPressed: () => _handleDownload(_catalog.first),
-                    icon: const Icon(Icons.download, size: 18),
-                    label: const Text('Download Latest Store APK'),
+                    icon: const Icon(Icons.download, size: 17),
+                    label: const Text('Download Store APK'),
                   ),
                   OutlinedButton.icon(
                     onPressed: () => _openAppDetail(_catalog.first),
@@ -993,177 +1183,277 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
                         color: const Color(0xFF6EDBA9).withValues(alpha: 0.65),
                       ),
                     ),
-                    icon: const Icon(Icons.verified_user_outlined, size: 18),
-                    label: const Text('Inspect Store Release'),
+                    icon: const Icon(Icons.verified_user_outlined, size: 17),
+                    label: const Text('Inspect Release'),
                   ),
                 ],
               ),
             ],
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
 
-        // 2. Search Bar, Subcategories & Sorting
+        // 2. Compact Search Bar, Category/Subcategory Chips with Icons & Borders
         TextField(
           decoration: InputDecoration(
+            isDense: true,
             hintText: 'Search Zayaan Apps, packages, or developers...',
-            prefixIcon: const Icon(Icons.search),
+            prefixIcon: const Icon(Icons.search, size: 20),
             suffixIcon: _searchQuery.isNotEmpty
                 ? IconButton(
-                    icon: const Icon(Icons.clear),
+                    icon: const Icon(Icons.clear, size: 18),
                     onPressed: () => setState(() => _searchQuery = ''),
                   )
                 : null,
             filled: true,
+            fillColor: cs.surface,
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(color: cs.outline.withValues(alpha: 0.35)),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(color: cs.outline.withValues(alpha: 0.35)),
             ),
           ),
           onChanged: (v) => setState(() => _searchQuery = v),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
 
-        // Category Chips
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: Row(
             children: categories.map((cat) {
+              final selected = _selectedCategory == cat;
               return Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: ChoiceChip(
-                  label: Text(cat),
-                  selected: _selectedCategory == cat,
+                padding: const EdgeInsets.only(right: 6),
+                child: FilterChip(
+                  visualDensity: VisualDensity.compact,
+                  avatar: Icon(_webCategoryIcon(cat), size: 15),
+                  label: Text(cat, style: const TextStyle(fontSize: 12)),
+                  selected: selected,
+                  side: BorderSide(
+                    color: selected
+                        ? cs.primary.withValues(alpha: 0.55)
+                        : cs.outline.withValues(alpha: 0.28),
+                  ),
                   onSelected: (_) => setState(() => _selectedCategory = cat),
                 ),
               );
             }).toList(),
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
 
-        // Subcategory Filter & Sort Row
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: Row(
             children: [
               ...kMarketplaceSubcategories.map((sub) {
+                final selected = _selectedSubcategory == sub;
                 return Padding(
-                  padding: const EdgeInsets.only(right: 8),
+                  padding: const EdgeInsets.only(right: 6),
                   child: FilterChip(
-                    label: Text(sub),
-                    selected: _selectedSubcategory == sub,
+                    visualDensity: VisualDensity.compact,
+                    avatar: Icon(_webSubcategoryIcon(sub), size: 14),
+                    label: Text(sub, style: const TextStyle(fontSize: 11.5)),
+                    selected: selected,
+                    side: BorderSide(
+                      color: selected
+                          ? cs.secondary.withValues(alpha: 0.55)
+                          : cs.outline.withValues(alpha: 0.26),
+                    ),
                     onSelected: (_) =>
                         setState(() => _selectedSubcategory = sub),
                   ),
                 );
               }),
-              const SizedBox(width: 8),
-              DropdownButton<MarketplaceSortOption>(
-                value: _selectedSort,
-                onChanged: (opt) {
-                  if (opt != null) setState(() => _selectedSort = opt);
-                },
-                items: MarketplaceSortOption.values
-                    .map((opt) => DropdownMenuItem(
-                          value: opt,
-                          child: Text('Sort: ${opt.label}'),
-                        ))
-                    .toList(),
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                decoration: BoxDecoration(
+                  color: cs.surface,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: cs.outline.withValues(alpha: 0.28)),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<MarketplaceSortOption>(
+                    isDense: true,
+                    value: _selectedSort,
+                    onChanged: (opt) {
+                      if (opt != null) setState(() => _selectedSort = opt);
+                    },
+                    items: MarketplaceSortOption.values
+                        .map((opt) => DropdownMenuItem(
+                              value: opt,
+                              child: Text('Sort: ${opt.label}',
+                                  style: const TextStyle(fontSize: 12)),
+                            ))
+                        .toList(),
+                  ),
+                ),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 14),
 
-        // 3. Featured Spotlight Carousel (when not actively filtering)
+        // 3. Featured Spotlight Carousel (compact & bordered)
         if (_searchQuery.isEmpty && _selectedCategory == 'All') ...[
-          const Text(
-            'Featured Applications',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          _buildHomeSectionHeader(
+            cs: cs,
+            icon: Icons.star,
+            iconColor: cs.tertiary,
+            title: 'Featured Applications',
+            subtitle: 'Official flagship releases hosted on GitHub Releases',
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           SizedBox(
-            height: 185,
+            height: 176,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: featuredApps.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 12),
+              separatorBuilder: (_, __) => const SizedBox(width: 10),
               itemBuilder: (context, index) {
                 final app = featuredApps[index];
                 return SizedBox(
-                  width: 300,
+                  width: 274,
                   child: Card(
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20)),
+                      borderRadius: BorderRadius.circular(18),
+                      side: BorderSide(
+                          color: cs.outline.withValues(alpha: 0.28)),
+                    ),
                     child: InkWell(
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(18),
                       onTap: () => _openAppDetail(app),
                       child: Padding(
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(12),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
                               children: [
-                                CircleAvatar(
-                                  backgroundColor: Theme.of(context)
-                                      .colorScheme
-                                      .primaryContainer,
-                                  child: Text(
-                                    app.appName.substring(0, 1),
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.bold),
-                                  ),
-                                ),
+                                _buildHomeAppIcon(app, cs,
+                                    size: 48, radius: 12),
                                 const SizedBox(width: 10),
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
-                                      Text(
-                                        app.appName,
-                                        style: const TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 16),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
+                                      Row(
+                                        children: [
+                                          Flexible(
+                                            child: Text(
+                                              app.appName,
+                                              style: const TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 14.5),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                          if (app.editorsChoice) ...[
+                                            const SizedBox(width: 4),
+                                            Icon(Icons.verified,
+                                                size: 14, color: cs.primary),
+                                          ],
+                                        ],
                                       ),
-                                      Text(
-                                        '${app.category} • v${app.versionName}',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .primary,
-                                        ),
+                                      const SizedBox(height: 2),
+                                      _buildBorderedBadge(
+                                        icon: _webCategoryIcon(app.category),
+                                        label: app.category,
+                                        bgColor: cs.primaryContainer,
+                                        fgColor: cs.onPrimaryContainer,
+                                        borderColor:
+                                            cs.primary.withValues(alpha: 0.25),
                                       ),
                                     ],
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 10),
+                            const SizedBox(height: 8),
                             Expanded(
                               child: Text(
                                 app.shortDescription,
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontSize: 13),
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  color: cs.onSurfaceVariant,
+                                ),
                               ),
                             ),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  '★ ${app.averageRating.toStringAsFixed(1)} • ${app.apkFileSize}',
-                                  style: const TextStyle(fontSize: 12),
-                                ),
-                                FilledButton.tonal(
-                                  onPressed: () => _handleDownload(app),
-                                  child: const Text('Get APK'),
-                                ),
-                              ],
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: cs.surfaceContainerHighest
+                                    .withValues(alpha: 0.35),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                    color: cs.outline.withValues(alpha: 0.22)),
+                              ),
+                              child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(Icons.new_releases_outlined,
+                                          size: 12, color: cs.primary),
+                                      const SizedBox(width: 3),
+                                      Text('v${app.versionName}',
+                                          style: const TextStyle(
+                                              fontSize: 10.5,
+                                              fontWeight: FontWeight.w600)),
+                                      const SizedBox(width: 6),
+                                      Icon(Icons.sd_storage_outlined,
+                                          size: 12, color: cs.secondary),
+                                      const SizedBox(width: 3),
+                                      Text(app.apkFileSize,
+                                          style: const TextStyle(
+                                              fontSize: 10.5,
+                                              fontWeight: FontWeight.w600)),
+                                    ],
+                                  ),
+                                  InkWell(
+                                    borderRadius: BorderRadius.circular(8),
+                                    onTap: () => _handleDownload(app),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color:
+                                            cs.primary.withValues(alpha: 0.14),
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(
+                                            color: cs.primary
+                                                .withValues(alpha: 0.35)),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.cloud_download,
+                                              size: 12, color: cs.primary),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            'Get APK',
+                                            style: TextStyle(
+                                              fontSize: 10.5,
+                                              fontWeight: FontWeight.w600,
+                                              color: cs.primary,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ],
                         ),
@@ -1174,54 +1464,96 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
               },
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 14),
 
-          // 4. Editor's Choice Section
-          const Text(
-            "Editor's Choice & Essential Releases",
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          // 4. Editor's Choice Section (compact & bordered)
+          _buildHomeSectionHeader(
+            cs: cs,
+            icon: Icons.verified,
+            iconColor: cs.primary,
+            title: "Editor's Choice & Essential Releases",
+            subtitle: 'Verified architecture, clean Material 3 UI & zero ads',
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           SizedBox(
-            height: 145,
+            height: 136,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: editorsChoiceApps.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 12),
+              separatorBuilder: (_, __) => const SizedBox(width: 10),
               itemBuilder: (context, index) {
                 final app = editorsChoiceApps[index];
                 return SizedBox(
-                  width: 250,
+                  width: 236,
                   child: Card(
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(18)),
+                      borderRadius: BorderRadius.circular(16),
+                      side: BorderSide(
+                          color: cs.outline.withValues(alpha: 0.26)),
+                    ),
                     child: InkWell(
-                      borderRadius: BorderRadius.circular(18),
+                      borderRadius: BorderRadius.circular(16),
                       onTap: () => _openAppDetail(app),
                       child: Padding(
-                        padding: const EdgeInsets.all(14),
+                        padding: const EdgeInsets.all(11),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
-                              app.appName,
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.bold, fontSize: 15),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                            Row(
+                              children: [
+                                _buildHomeAppIcon(app, cs,
+                                    size: 34, radius: 9),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    app.appName,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13.5),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
                             ),
                             Text(
                               app.shortDescription,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                            Text(
-                              'v${app.versionName} • ${app.downloadCount} downloads',
                               style: TextStyle(
-                                fontSize: 11,
-                                color: Theme.of(context).colorScheme.primary,
+                                fontSize: 11.5,
+                                color: cs.onSurfaceVariant,
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 7, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: cs.surfaceContainerHighest
+                                    .withValues(alpha: 0.40),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                    color: cs.outline.withValues(alpha: 0.20)),
+                              ),
+                              child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    'v${app.versionName}',
+                                    style: TextStyle(
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.w600,
+                                        color: cs.primary),
+                                  ),
+                                  Text(
+                                    '${app.downloadCount} DLs • ${app.apkFileSize}',
+                                    style: TextStyle(
+                                        fontSize: 10.5,
+                                        color: cs.onSurfaceVariant),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
@@ -1233,74 +1565,190 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
               },
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 14),
         ],
 
-        // 5. All Catalog / Trending Applications List
-        Text(
-          _searchQuery.isEmpty && _selectedCategory == 'All'
-              ? 'All Zayaan Applications (${filteredApps.length})'
-              : 'Filtered Results (${filteredApps.length})',
-          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        // 5. All Catalog / Filtered Applications List (compact bordered header + row cards)
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerHighest.withValues(alpha: 0.30),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: cs.outline.withValues(alpha: 0.24)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: cs.primaryContainer,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: cs.primary.withValues(alpha: 0.25)),
+                ),
+                child:
+                    Icon(Icons.apps, size: 16, color: cs.onPrimaryContainer),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _searchQuery.isEmpty && _selectedCategory == 'All'
+                          ? 'All Zayaan Applications (${filteredApps.length})'
+                          : 'Filtered Results (${filteredApps.length})',
+                      style: const TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.bold),
+                    ),
+                    Text(
+                      '$_selectedSubcategory • ${_selectedSort.label}',
+                      style:
+                          TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 10),
         ...(filteredApps.isEmpty ? trendingApps : filteredApps).map(
           (app) => Card(
-            margin: const EdgeInsets.only(bottom: 12),
+            margin: const EdgeInsets.only(bottom: 10),
             shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(18)),
-            child: ListTile(
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              leading: CircleAvatar(
-                radius: 24,
-                backgroundColor:
-                    Theme.of(context).colorScheme.primaryContainer,
-                child: Text(
-                  app.appName.substring(0, 1),
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(color: cs.outline.withValues(alpha: 0.26)),
+            ),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(16),
+              onTap: () => _openAppDetail(app),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    _buildHomeAppIcon(app, cs, size: 50, radius: 13),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  app.appName,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14.5),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (app.editorsChoice) ...[
+                                const SizedBox(width: 5),
+                                Icon(Icons.verified,
+                                    size: 14, color: cs.primary),
+                              ],
+                              if (app.offlineCapable) ...[
+                                const SizedBox(width: 4),
+                                Icon(Icons.offline_bolt,
+                                    size: 14, color: cs.tertiary),
+                              ],
+                            ],
+                          ),
+                          const SizedBox(height: 1),
+                          Text(
+                            '${app.developerName} • ${app.category}',
+                            style: TextStyle(
+                                fontSize: 11.5, color: cs.onSurfaceVariant),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 4),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 2,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.new_releases_outlined,
+                                      size: 11.5, color: cs.primary),
+                                  const SizedBox(width: 3),
+                                  Text('v${app.versionName}',
+                                      style: const TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600)),
+                                ],
+                              ),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.sd_storage_outlined,
+                                      size: 11.5, color: cs.secondary),
+                                  const SizedBox(width: 3),
+                                  Text(app.apkFileSize,
+                                      style: const TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600)),
+                                ],
+                              ),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.download_outlined,
+                                      size: 11.5, color: cs.onSurfaceVariant),
+                                  const SizedBox(width: 2),
+                                  Text('${app.downloadCount}',
+                                      style: TextStyle(
+                                          fontSize: 11,
+                                          color: cs.onSurfaceVariant)),
+                                ],
+                              ),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.star,
+                                      size: 11.5, color: cs.tertiary),
+                                  const SizedBox(width: 2),
+                                  Text(app.averageRating.toStringAsFixed(1),
+                                      style: const TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600)),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    IconButton(
+                      tooltip: 'Compare App',
+                      visualDensity: VisualDensity.compact,
+                      icon: Icon(
+                        Icons.compare_arrows,
+                        size: 20,
+                        color: _comparisonIds.contains(app.appId)
+                            ? cs.primary
+                            : cs.onSurfaceVariant,
+                      ),
+                      onPressed: () => _toggleCompare(app.appId),
+                    ),
+                    FilledButton.tonalIcon(
+                      onPressed: () => _openAppDetail(app),
+                      icon: const Icon(Icons.download, size: 15),
+                      label: Text(
+                        PlatformApkInstaller.isAndroidPlatform
+                            ? 'Install'
+                            : 'Get APK',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              title: Row(
-                children: [
-                  Flexible(
-                    child: Text(
-                      app.appName,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                  if (app.editorsChoice) ...[
-                    const SizedBox(width: 6),
-                    const Icon(Icons.verified, size: 16, color: Color(0xFF6EDBA9)),
-                  ],
-                ],
-              ),
-              subtitle: Text(
-                '${app.developerName} • ${app.category} • v${app.versionName} (${app.apkFileSize}) • ★ ${app.averageRating.toStringAsFixed(1)} • ${app.downloadCount} DLs',
-              ),
-              trailing: Wrap(
-                spacing: 6,
-                children: [
-                  IconButton(
-                    tooltip: 'Compare App',
-                    icon: Icon(
-                      Icons.compare_arrows,
-                      color: _comparisonIds.contains(app.appId)
-                          ? Theme.of(context).colorScheme.primary
-                          : null,
-                    ),
-                    onPressed: () => _toggleCompare(app.appId),
-                  ),
-                  FilledButton.icon(
-                    onPressed: () => _openAppDetail(app),
-                    icon: const Icon(Icons.download, size: 16),
-                    label: Text(PlatformApkInstaller.isAndroidPlatform
-                        ? 'Install'
-                        : 'Get APK'),
-                  ),
-                ],
-              ),
-              onTap: () => _openAppDetail(app),
             ),
           ),
         ),

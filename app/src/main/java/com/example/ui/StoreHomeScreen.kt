@@ -1,7 +1,9 @@
 package com.example.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,25 +23,39 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Sort
+import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Campaign
+import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.NewReleases
 import androidx.compose.material.icons.filled.OfflineBolt
+import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.School
+import androidx.compose.material.icons.filled.SdStorage
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SearchOff
+import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.Verified
+import androidx.compose.material.icons.filled.WorkOutline
+import androidx.compose.material.icons.filled.WorkspacePremium
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
@@ -51,6 +67,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -60,12 +77,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.BuildConfig
 import com.example.R
@@ -332,8 +351,8 @@ fun StoreHomeScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .testTag("store_home_list"),
-                contentPadding = PaddingValues(bottom = 104.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                contentPadding = PaddingValues(bottom = 100.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 // 1. Promotional Hero Banner
                 item {
@@ -393,10 +412,12 @@ fun StoreHomeScreen(
                                 }
                             },
                             singleLine = true,
-                            shape = RoundedCornerShape(18.dp),
+                            shape = RoundedCornerShape(14.dp),
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedBorderColor = MaterialTheme.colorScheme.primary,
-                                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f),
+                                focusedContainerColor = MaterialTheme.colorScheme.surface,
+                                unfocusedContainerColor = MaterialTheme.colorScheme.surface
                             )
                         )
 
@@ -474,21 +495,41 @@ fun StoreHomeScreen(
 
                 // 3. Primary Category Filter Bar + Subcategory & Sort Bar
                 item {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         LazyRow(
                             contentPadding = PaddingValues(horizontal = 16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(7.dp)
                         ) {
                             items(categories) { category ->
                                 val isSelected = category.equals(selectedCategory, ignoreCase = true)
                                 FilterChip(
                                     selected = isSelected,
                                     onClick = { onCategorySelect(category) },
-                                    label = { Text(category) },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = categoryIconFor(category),
+                                            contentDescription = null,
+                                            modifier = Modifier.size(15.dp)
+                                        )
+                                    },
+                                    label = {
+                                        Text(
+                                            text = category,
+                                            fontSize = 12.sp,
+                                            maxLines = 1
+                                        )
+                                    },
+                                    border = FilterChipDefaults.filterChipBorder(
+                                        enabled = true,
+                                        selected = isSelected,
+                                        borderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.30f),
+                                        selectedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
+                                    ),
                                     modifier = Modifier.testTag("category_chip_${category.lowercase().replace(" ", "_")}"),
                                     colors = FilterChipDefaults.filterChipColors(
                                         selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimaryContainer
                                     )
                                 )
                             }
@@ -497,18 +538,38 @@ fun StoreHomeScreen(
                         // Subcategories & Collection Filters
                         LazyRow(
                             contentPadding = PaddingValues(horizontal = 16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(7.dp)
                         ) {
                             items(MARKETPLACE_SUBCATEGORIES) { subcat ->
                                 val isSelected = subcat.equals(selectedSubcategory, ignoreCase = true)
                                 FilterChip(
                                     selected = isSelected,
                                     onClick = { onSubcategorySelect(subcat) },
-                                    label = { Text(subcat) },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = subcategoryIconFor(subcat),
+                                            contentDescription = null,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    },
+                                    label = {
+                                        Text(
+                                            text = subcat,
+                                            fontSize = 11.5.sp,
+                                            maxLines = 1
+                                        )
+                                    },
+                                    border = FilterChipDefaults.filterChipBorder(
+                                        enabled = true,
+                                        selected = isSelected,
+                                        borderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.28f),
+                                        selectedBorderColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.55f)
+                                    ),
                                     modifier = Modifier.testTag("subcat_chip_${subcat.lowercase().replace(" ", "_")}"),
                                     colors = FilterChipDefaults.filterChipColors(
                                         selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                        selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                        selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                        selectedLeadingIconColor = MaterialTheme.colorScheme.onSecondaryContainer
                                     )
                                 )
                             }
@@ -517,26 +578,33 @@ fun StoreHomeScreen(
                         // Sort Options Bar
                         LazyRow(
                             contentPadding = PaddingValues(horizontal = 16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(7.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             item {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(end = 4.dp)
+                                Surface(
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                                    shape = RoundedCornerShape(8.dp),
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.24f))
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Filled.Sort,
-                                        contentDescription = "Sort by",
-                                        modifier = Modifier.size(16.dp),
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = "Sort:",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Filled.Sort,
+                                            contentDescription = "Sort by",
+                                            modifier = Modifier.size(14.dp),
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = "Sort",
+                                            fontSize = 11.5.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
                                 }
                             }
                             items(SortOption.entries) { option ->
@@ -546,9 +614,19 @@ fun StoreHomeScreen(
                                     label = {
                                         Text(
                                             text = option.label,
-                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                            fontSize = 11.5.sp,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                            maxLines = 1
                                         )
                                     },
+                                    border = AssistChipDefaults.assistChipBorder(
+                                        enabled = true,
+                                        borderColor = if (isSelected) {
+                                            MaterialTheme.colorScheme.tertiary.copy(alpha = 0.55f)
+                                        } else {
+                                            MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
+                                        }
+                                    ),
                                     modifier = Modifier.testTag("sort_chip_${option.name.lowercase()}"),
                                     colors = AssistChipDefaults.assistChipColors(
                                         containerColor = if (isSelected) {
@@ -615,7 +693,7 @@ fun StoreHomeScreen(
                                     items(notifications.take(6), key = { "notif_${it.id}" }) { notif ->
                                         Card(
                                             modifier = Modifier
-                                                .width(270.dp)
+                                                .width(256.dp)
                                                 .clickable {
                                                     val target = allApps.firstOrNull {
                                                         (it.appId.ifBlank { it.docId }) == notif.targetAppId
@@ -623,27 +701,57 @@ fun StoreHomeScreen(
                                                     if (target != null) onAppClick(target)
                                                 },
                                             shape = RoundedCornerShape(16.dp),
+                                            border = BorderStroke(
+                                                1.dp,
+                                                MaterialTheme.colorScheme.tertiary.copy(alpha = 0.30f)
+                                            ),
                                             colors = CardDefaults.cardColors(
-                                                containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.65f)
+                                                containerColor = MaterialTheme.colorScheme.surface
                                             )
                                         ) {
-                                            Column(modifier = Modifier.padding(14.dp)) {
-                                                Text(
-                                                    text = notif.category,
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.primary
-                                                )
-                                                Spacer(modifier = Modifier.height(4.dp))
+                                            Column(
+                                                modifier = Modifier.padding(12.dp),
+                                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                Surface(
+                                                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                                                    shape = RoundedCornerShape(7.dp),
+                                                    border = BorderStroke(
+                                                        1.dp,
+                                                        MaterialTheme.colorScheme.tertiary.copy(alpha = 0.25f)
+                                                    )
+                                                ) {
+                                                    Row(
+                                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.Campaign,
+                                                            contentDescription = null,
+                                                            tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                                                            modifier = Modifier.size(11.dp)
+                                                        )
+                                                        Text(
+                                                            text = notif.category,
+                                                            fontSize = 10.sp,
+                                                            fontWeight = FontWeight.SemiBold,
+                                                            color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                                            maxLines = 1
+                                                        )
+                                                    }
+                                                }
                                                 Text(
                                                     text = notif.title,
                                                     style = MaterialTheme.typography.titleSmall,
+                                                    fontWeight = FontWeight.Bold,
                                                     maxLines = 1,
                                                     overflow = TextOverflow.Ellipsis
                                                 )
-                                                Spacer(modifier = Modifier.height(4.dp))
                                                 Text(
                                                     text = notif.body,
-                                                    style = MaterialTheme.typography.bodySmall,
+                                                    fontSize = 11.5.sp,
+                                                    lineHeight = 15.sp,
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                     maxLines = 2,
                                                     overflow = TextOverflow.Ellipsis
@@ -844,34 +952,75 @@ fun StoreHomeScreen(
 
                 // 5. Full Catalog Header & Active Filter Summary
                 item {
-                    Row(
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.30f),
+                        shape = RoundedCornerShape(14.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.24f)),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                            .padding(horizontal = 16.dp)
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = if (selectedCategory == "All") {
-                                    "All Applications (${filteredApps.size})"
-                                } else {
-                                    "$selectedCategory (${filteredApps.size})"
-                                },
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            Text(
-                                text = "Subcategory: $selectedSubcategory • Sorted by ${selectedSortOption.label}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        if (!isDefaultDiscoveryView) {
-                            OutlinedButton(
-                                onClick = onResetFilters,
-                                modifier = Modifier.testTag("reset_filters_button")
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                modifier = Modifier.weight(1f),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Text("Reset Filters")
+                                Surface(
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    shape = RoundedCornerShape(8.dp),
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f))
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Apps,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        modifier = Modifier
+                                            .padding(6.dp)
+                                            .size(16.dp)
+                                    )
+                                }
+                                Column {
+                                    Text(
+                                        text = if (selectedCategory == "All") {
+                                            "All Applications (${filteredApps.size})"
+                                        } else {
+                                            "$selectedCategory (${filteredApps.size})"
+                                        },
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = "$selectedSubcategory • ${selectedSortOption.label}",
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                            if (!isDefaultDiscoveryView) {
+                                OutlinedButton(
+                                    onClick = onResetFilters,
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                    modifier = Modifier.testTag("reset_filters_button")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Clear,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Reset", fontSize = 11.5.sp)
+                                }
                             }
                         }
                     }
@@ -883,28 +1032,38 @@ fun StoreHomeScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp),
+                            shape = RoundedCornerShape(18.dp),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.28f)),
                             colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                                containerColor = MaterialTheme.colorScheme.surface
                             )
                         ) {
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(24.dp),
+                                    .padding(20.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
+                                Icon(
+                                    imageVector = Icons.Default.SearchOff,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(32.dp)
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
                                 Text(
                                     text = "No matching apps found",
-                                    style = MaterialTheme.typography.titleMedium
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
                                 )
-                                Spacer(modifier = Modifier.height(6.dp))
+                                Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = "Try adjusting your search query, category, subcategory, or seed the official Zayaan Apps starter catalog.",
-                                    style = MaterialTheme.typography.bodyMedium,
+                                    text = "Adjust your search or filter, or load the starter catalog.",
+                                    style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
-                                Spacer(modifier = Modifier.height(14.dp))
-                                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                     if (!isDefaultDiscoveryView) {
                                         OutlinedButton(onClick = onResetFilters) {
                                             Text("Clear Filters")
@@ -934,32 +1093,73 @@ fun StoreHomeScreen(
     }
 }
 
+private fun categoryIconFor(category: String): ImageVector = when (category) {
+    "All" -> Icons.Default.Apps
+    "Games" -> Icons.Default.SportsEsports
+    "Tools" -> Icons.Default.Build
+    "AI Apps" -> Icons.Default.AutoAwesome
+    "Entertainment" -> Icons.Default.Movie
+    "Productivity" -> Icons.Default.WorkOutline
+    "Education" -> Icons.Default.School
+    "Utilities" -> Icons.Default.Build
+    "Business" -> Icons.Default.Storefront
+    "Social & Communication" -> Icons.Default.Forum
+    else -> Icons.Default.Category
+}
+
+private fun subcategoryIconFor(subcat: String): ImageVector = when (subcat) {
+    "Editor's Choice" -> Icons.Default.WorkspacePremium
+    "Essential Apps" -> Icons.Default.Verified
+    "Offline Ready" -> Icons.Default.OfflineBolt
+    "Under 15 MB" -> Icons.Default.SdStorage
+    "Latest v1.0.0.x" -> Icons.Default.NewReleases
+    else -> Icons.Default.Apps
+}
+
 @Composable
 private fun SectionHeaderRow(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     iconTint: Color,
     title: String,
     subtitle: String
 ) {
-    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Surface(
+            color = iconTint.copy(alpha = 0.14f),
+            shape = RoundedCornerShape(10.dp),
+            border = BorderStroke(1.dp, iconTint.copy(alpha = 0.30f))
+        ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
                 tint = iconTint,
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium
+                modifier = Modifier
+                    .padding(6.dp)
+                    .size(17.dp)
             )
         }
-        Text(
-            text = subtitle,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = subtitle,
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }
 
@@ -972,74 +1172,177 @@ private fun StoreHeroBanner(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .height(176.dp),
-        shape = RoundedCornerShape(24.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.42f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
     ) {
-        Box(modifier = Modifier.fillMaxSize()) {
+        Box(modifier = Modifier.fillMaxWidth()) {
             Image(
                 painter = painterResource(id = R.drawable.img_store_hero_banner_1795021164708),
                 contentDescription = "Zayaan Apps Store Banner",
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.matchParentSize()
             )
             Box(
                 modifier = Modifier
-                    .fillMaxSize()
+                    .fillMaxWidth()
                     .background(
                         Brush.horizontalGradient(
                             colors = listOf(
-                                Color(0xEE070B14),
-                                Color(0xBB0F172A),
-                                Color(0x550F172A)
+                                Color(0xF0071224),
+                                Color(0xCC0C2235),
+                                Color(0x99063327)
                             )
                         )
                     )
-                    .padding(20.dp)
+                    .padding(14.dp)
             ) {
-                Column(
-                    modifier = Modifier.align(Alignment.CenterStart),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Surface(
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.28f),
-                            shape = RoundedCornerShape(8.dp)
+                            color = Color(0xFF6EDBA9).copy(alpha = 0.20f),
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(1.dp, Color(0xFF6EDBA9).copy(alpha = 0.45f))
                         ) {
-                            Text(
-                                text = "GITHUB RELEASES MARKETPLACE",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = Color(0xFF67E8F9),
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                            )
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Verified,
+                                    contentDescription = null,
+                                    tint = Color(0xFF6EDBA9),
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Text(
+                                    text = "GITHUB RELEASES",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF8BF8C4),
+                                    maxLines = 1
+                                )
+                            }
                         }
                         Surface(
                             color = Color.White.copy(alpha = 0.14f),
-                            shape = RoundedCornerShape(8.dp)
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.25f))
                         ) {
-                            Text(
-                                text = "v$storeVersionName",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = Color.White,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.NewReleases,
+                                    contentDescription = null,
+                                    tint = Color(0xFF67E8F9),
+                                    modifier = Modifier.size(11.dp)
+                                )
+                                Text(
+                                    text = "v$storeVersionName",
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color.White,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+                    }
+
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            text = "Zayaan Apps",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color.White
+                        )
+                        Text(
+                            text = "Verified Android APKs with live GitHub Releases & Cloud sync",
+                            fontSize = 12.sp,
+                            color = Color(0xFFD6E4F0),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    // Compact bordered 3-metric telemetry bar
+                    Surface(
+                        color = Color.Black.copy(alpha = 0.28f),
+                        shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            HeroMetricPill(
+                                icon = Icons.Default.Apps,
+                                label = "$totalAppsCount Apps",
+                                tint = Color(0xFF6EDBA9)
+                            )
+                            VerticalDivider(
+                                modifier = Modifier.height(12.dp),
+                                thickness = 1.dp,
+                                color = Color.White.copy(alpha = 0.20f)
+                            )
+                            HeroMetricPill(
+                                icon = Icons.Default.Download,
+                                label = "$totalDownloads DLs",
+                                tint = Color(0xFF68D3FF)
+                            )
+                            VerticalDivider(
+                                modifier = Modifier.height(12.dp),
+                                thickness = 1.dp,
+                                color = Color.White.copy(alpha = 0.20f)
+                            )
+                            HeroMetricPill(
+                                icon = Icons.Default.Public,
+                                label = "Android & Web",
+                                tint = Color(0xFFADC6FF)
                             )
                         }
                     }
-                    Text(
-                        text = "Zayaan Apps",
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = Color.White
-                    )
-                    Text(
-                        text = "$totalAppsCount Verified Android Packages • $totalDownloads Total Downloads • Android & Web Parity",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color(0xFFCBD5E1),
-                        maxLines = 2
-                    )
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun HeroMetricPill(
+    icon: ImageVector,
+    label: String,
+    tint: Color
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = tint,
+            modifier = Modifier.size(13.dp)
+        )
+        Text(
+            text = label,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = Color.White,
+            maxLines = 1,
+            softWrap = false
+        )
     }
 }
 
@@ -1048,42 +1351,59 @@ private fun CuratedCollectionCard(
     collection: CuratedCollectionBanner,
     onClick: () -> Unit
 ) {
-    ElevatedCard(
+    Card(
         modifier = Modifier
-            .width(265.dp)
+            .width(246.dp)
             .clickable(onClick = onClick)
             .testTag("collection_card_${collection.id}"),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.elevatedCardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.30f)),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f)
         )
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp)
         ) {
             Surface(
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
-                shape = RoundedCornerShape(6.dp)
+                color = MaterialTheme.colorScheme.surface,
+                shape = RoundedCornerShape(7.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.28f))
             ) {
-                Text(
-                    text = collection.badge,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                )
+                Row(
+                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AutoAwesome,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(11.dp)
+                    )
+                    Text(
+                        text = collection.badge,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1
+                    )
+                }
             }
             Text(
                 text = collection.title,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
             Text(
                 text = collection.subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.85f),
+                fontSize = 11.5.sp,
+                lineHeight = 15.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
@@ -1097,17 +1417,21 @@ private fun FeaturedAppSpotlightCard(
     installedStatus: InstalledPackageStatus?,
     onClick: () -> Unit
 ) {
-    ElevatedCard(
+    Card(
         modifier = Modifier
-            .width(288.dp)
+            .width(272.dp)
             .clickable(onClick = onClick)
             .testTag("featured_card_${app.appId.ifBlank { app.docId }}"),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.elevatedCardColors(
+        shape = RoundedCornerShape(18.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.28f)),
+        colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         )
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 val iconModel: Any = if (
                     app.packageName == "com.zayaanapps.store" &&
@@ -1123,85 +1447,166 @@ private fun FeaturedAppSpotlightCard(
                     placeholder = painterResource(id = R.drawable.img_launcher_icon_1795021165006),
                     error = painterResource(id = R.drawable.img_launcher_icon_1795021165006),
                     modifier = Modifier
-                        .size(56.dp)
-                        .clip(RoundedCornerShape(14.dp))
+                        .size(52.dp)
+                        .clip(RoundedCornerShape(13.dp))
+                        .border(
+                            width = 1.dp,
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.28f),
+                            shape = RoundedCornerShape(13.dp)
+                        )
                         .background(MaterialTheme.colorScheme.surfaceVariant),
                     contentScale = ContentScale.Crop
                 )
-                Spacer(modifier = Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = app.appName,
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = app.developerName,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.width(10.dp))
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = app.appName,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        if (app.editorsChoice) {
+                            Icon(
+                                imageVector = Icons.Default.Verified,
+                                contentDescription = "Verified",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Storefront,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Text(
+                            text = app.developerName,
+                            fontSize = 11.5.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Surface(
                             color = MaterialTheme.colorScheme.primaryContainer,
-                            shape = RoundedCornerShape(6.dp)
+                            shape = RoundedCornerShape(6.dp),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f))
                         ) {
-                            Text(
-                                text = app.category,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                            )
+                            Row(
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(3.dp)
+                            ) {
+                                Icon(
+                                    imageVector = categoryIconFor(app.category),
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.size(10.dp)
+                                )
+                                Text(
+                                    text = app.category,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    maxLines = 1
+                                )
+                            }
                         }
                         if (app.editorsChoice) {
                             Surface(
                                 color = MaterialTheme.colorScheme.tertiaryContainer,
-                                shape = RoundedCornerShape(6.dp)
+                                shape = RoundedCornerShape(6.dp),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = 0.25f))
                             ) {
-                                Text(
-                                    text = "Editor's Choice",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onTertiaryContainer,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.WorkspacePremium,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                                        modifier = Modifier.size(10.dp)
+                                    )
+                                    Text(
+                                        text = "Editor's",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                        maxLines = 1
+                                    )
+                                }
                             }
                         }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
             Text(
                 text = app.shortDescription.ifBlank { app.description },
-                style = MaterialTheme.typography.bodyMedium,
+                fontSize = 11.5.sp,
+                lineHeight = 15.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
-            Spacer(modifier = Modifier.height(12.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                shape = RoundedCornerShape(10.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.22f)),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Text(
-                    text = "v${app.versionName} • ${app.apkFileSize} • ${app.downloadCount} DLs",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                Row(
                     modifier = Modifier
-                        .weight(1f)
-                        .padding(end = 8.dp)
-                )
-                PackageInstallStatusBadge(installedStatus = installedStatus)
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        InlineHomeMetric(
+                            icon = Icons.Default.NewReleases,
+                            value = "v${app.versionName}",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        InlineHomeMetric(
+                            icon = Icons.Default.SdStorage,
+                            value = app.apkFileSize,
+                            tint = MaterialTheme.colorScheme.secondary
+                        )
+                        InlineHomeMetric(
+                            icon = Icons.Default.Download,
+                            value = "${app.downloadCount}",
+                            tint = MaterialTheme.colorScheme.tertiary
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(6.dp))
+                    PackageInstallStatusBadge(installedStatus = installedStatus)
+                }
             }
         }
     }
@@ -1216,15 +1621,16 @@ private fun CompactMarketplaceAppCard(
 ) {
     Card(
         modifier = Modifier
-            .width(176.dp)
+            .width(170.dp)
             .clickable(onClick = onClick)
             .testTag("compact_app_card_${app.appId.ifBlank { app.docId }}"),
         shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.26f)),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         )
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
+        Column(modifier = Modifier.padding(11.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1244,50 +1650,62 @@ private fun CompactMarketplaceAppCard(
                     placeholder = painterResource(id = R.drawable.img_launcher_icon_1795021165006),
                     error = painterResource(id = R.drawable.img_launcher_icon_1795021165006),
                     modifier = Modifier
-                        .size(48.dp)
+                        .size(44.dp)
                         .clip(RoundedCornerShape(12.dp))
+                        .border(
+                            width = 1.dp,
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.26f),
+                            shape = RoundedCornerShape(12.dp)
+                        )
                         .background(MaterialTheme.colorScheme.surfaceVariant),
                     contentScale = ContentScale.Crop
                 )
                 PackageInstallStatusBadge(installedStatus = installedStatus)
             }
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = app.appName,
                 style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
             Text(
                 text = app.developerName,
-                style = MaterialTheme.typography.labelSmall,
+                fontSize = 11.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            Spacer(modifier = Modifier.height(6.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            Spacer(modifier = Modifier.height(7.dp))
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f),
+                shape = RoundedCornerShape(8.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.20f)),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Text(
-                    text = badgeText,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(end = 6.dp)
-                )
-                Text(
-                    text = app.apkFileSize,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    softWrap = false
-                )
+                Row(
+                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = badgeText,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 4.dp)
+                    )
+                    InlineHomeMetric(
+                        icon = Icons.Default.SdStorage,
+                        value = app.apkFileSize,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }
@@ -1306,6 +1724,7 @@ fun StoreAppListRowCard(
             .clickable(onClick = onClick)
             .testTag("app_row_card_${app.appId.ifBlank { app.docId }}"),
         shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.26f)),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         )
@@ -1313,7 +1732,7 @@ fun StoreAppListRowCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
+                .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             val iconModel: Any = if (
@@ -1330,20 +1749,29 @@ fun StoreAppListRowCard(
                 placeholder = painterResource(id = R.drawable.img_launcher_icon_1795021165006),
                 error = painterResource(id = R.drawable.img_launcher_icon_1795021165006),
                 modifier = Modifier
-                    .size(60.dp)
-                    .clip(RoundedCornerShape(14.dp))
+                    .size(54.dp)
+                    .clip(RoundedCornerShape(13.dp))
+                    .border(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.28f),
+                        shape = RoundedCornerShape(13.dp)
+                    )
                     .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentScale = ContentScale.Crop
             )
-            Spacer(modifier = Modifier.width(14.dp))
-            Column(modifier = Modifier.weight(1f)) {
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
                 ) {
                     Text(
                         text = app.appName,
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false)
@@ -1353,7 +1781,7 @@ fun StoreAppListRowCard(
                             imageVector = Icons.Default.Verified,
                             contentDescription = "Editor's Choice",
                             tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(14.dp)
                         )
                     }
                     if (app.offlineCapable) {
@@ -1361,13 +1789,13 @@ fun StoreAppListRowCard(
                             imageVector = Icons.Default.OfflineBolt,
                             contentDescription = "Offline Ready",
                             tint = MaterialTheme.colorScheme.tertiary,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(14.dp)
                         )
                     }
                 }
                 Text(
                     text = "${app.developerName} • ${app.category}",
-                    style = MaterialTheme.typography.bodyMedium,
+                    fontSize = 11.5.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -1375,45 +1803,37 @@ fun StoreAppListRowCard(
                 if (app.shortDescription.isNotBlank()) {
                     Text(
                         text = app.shortDescription,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.88f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(2.dp))
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text(
-                        text = "v${app.versionName}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        maxLines = 1,
-                        softWrap = false
+                    InlineHomeMetric(
+                        icon = Icons.Default.NewReleases,
+                        value = "v${app.versionName}",
+                        tint = MaterialTheme.colorScheme.primary
                     )
-                    Text(
-                        text = "• ${app.apkFileSize}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        softWrap = false
+                    InlineHomeMetric(
+                        icon = Icons.Default.SdStorage,
+                        value = app.apkFileSize,
+                        tint = MaterialTheme.colorScheme.secondary
                     )
-                    Text(
-                        text = "• ${app.downloadCount} DLs",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                    InlineHomeMetric(
+                        icon = Icons.Default.Download,
+                        value = "${app.downloadCount}",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     if (app.reviewCount > 0) {
-                        Text(
-                            text = "• ★ ${String.format(Locale.US, "%.1f", app.averageRating)}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.tertiary,
-                            maxLines = 1,
-                            softWrap = false
+                        InlineHomeMetric(
+                            icon = Icons.Default.Star,
+                            value = String.format(Locale.US, "%.1f", app.averageRating),
+                            tint = MaterialTheme.colorScheme.tertiary
                         )
                     }
                 }
@@ -1425,27 +1845,56 @@ fun StoreAppListRowCard(
 }
 
 @Composable
+private fun InlineHomeMetric(
+    icon: ImageVector,
+    value: String,
+    tint: Color
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = tint,
+            modifier = Modifier.size(11.dp)
+        )
+        Text(
+            text = value,
+            fontSize = 10.5.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            softWrap = false
+        )
+    }
+}
+
+@Composable
 fun PackageInstallStatusBadge(installedStatus: InstalledPackageStatus?) {
     when {
         installedStatus == null || !installedStatus.isInstalled -> {
             Surface(
                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
-                shape = RoundedCornerShape(10.dp)
+                shape = RoundedCornerShape(9.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
                         imageVector = Icons.Default.CloudDownload,
                         contentDescription = "Get APK",
                         tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(15.dp)
+                        modifier = Modifier.size(13.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         text = "Get APK",
-                        style = MaterialTheme.typography.labelMedium,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.primary,
                         maxLines = 1,
                         softWrap = false
@@ -1457,22 +1906,24 @@ fun PackageInstallStatusBadge(installedStatus: InstalledPackageStatus?) {
         installedStatus.updateAvailable -> {
             Surface(
                 color = MaterialTheme.colorScheme.tertiaryContainer,
-                shape = RoundedCornerShape(10.dp)
+                shape = RoundedCornerShape(9.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = 0.35f))
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
                         imageVector = Icons.Default.SystemUpdate,
                         contentDescription = "Update available",
                         tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                        modifier = Modifier.size(15.dp)
+                        modifier = Modifier.size(13.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         text = "Update",
-                        style = MaterialTheme.typography.labelMedium,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onTertiaryContainer,
                         maxLines = 1,
                         softWrap = false
@@ -1484,22 +1935,24 @@ fun PackageInstallStatusBadge(installedStatus: InstalledPackageStatus?) {
         else -> {
             Surface(
                 color = MaterialTheme.colorScheme.secondaryContainer,
-                shape = RoundedCornerShape(10.dp)
+                shape = RoundedCornerShape(9.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.35f))
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
                         imageVector = Icons.Default.CheckCircle,
                         contentDescription = "Installed",
                         tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.size(15.dp)
+                        modifier = Modifier.size(13.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         text = "Installed",
-                        style = MaterialTheme.typography.labelMedium,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSecondaryContainer,
                         maxLines = 1,
                         softWrap = false
