@@ -503,7 +503,7 @@ fun AuthScreen(onAuthSuccess: () -> Unit) {
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
-                        text = "Sign in with Google to browse the live Firestore catalog, download & install verified GitHub Release APKs, check installed app updates, and access the Admin Dashboard.",
+                        text = "Sign in with Google to browse the live Firestore catalog, download & install verified GitHub Release APKs, sync installed apps & updates across Web and Android, and manage your library.",
                         style = MaterialTheme.typography.bodyMedium,
                         textAlign = TextAlign.Center,
                         color = MaterialTheme.colorScheme.onSurfaceVariant

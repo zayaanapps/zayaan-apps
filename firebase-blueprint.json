@@ -145,6 +145,10 @@
           "type": "boolean",
           "description": "Optional indicator whether the application works offline."
         },
+        "pageViews": {
+          "type": "integer",
+          "description": "Optional count of app details views."
+        },
         "authorUid": {
           "type": "string",
           "description": "Firebase Auth UID of the administrator who created/registered the app."
@@ -259,6 +263,15 @@
         "searchHistory": {
           "type": "array",
           "description": "Optional bounded list of recent search queries (max 20)."
+        },
+        "themeMode": {
+          "type": "string",
+          "description": "Optional preferred theme mode (SYSTEM, LIGHT, or DARK).",
+          "enum": ["SYSTEM", "LIGHT", "DARK"]
+        },
+        "email": {
+          "type": "string",
+          "description": "Optional signed-in Google account email."
         },
         "createdAt": {
           "type": "string",
@@ -750,6 +763,68 @@
         "actorEmail",
         "createdAt"
       ]
+    },
+    "UserInstalledApp": {
+      "title": "UserInstalledApp",
+      "description": "Per-user synced Android device PackageManager installation & update status.",
+      "type": "object",
+      "properties": {
+        "appId": { "type": "string" },
+        "appName": { "type": "string" },
+        "packageName": { "type": "string" },
+        "installed": { "type": "boolean" },
+        "installedVersionName": { "type": "string" },
+        "installedVersionCode": { "type": "integer" },
+        "remoteVersionName": { "type": "string" },
+        "remoteVersionCode": { "type": "integer" },
+        "updateAvailable": { "type": "boolean" },
+        "deviceModel": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "appId",
+        "appName",
+        "packageName",
+        "installed",
+        "installedVersionName",
+        "installedVersionCode",
+        "remoteVersionName",
+        "remoteVersionCode",
+        "updateAvailable",
+        "deviceModel",
+        "updatedAt"
+      ]
+    },
+    "DeviceDownloadCommand": {
+      "title": "DeviceDownloadCommand",
+      "description": "Cross-platform download or update command dispatched from Web or Android to the user's logged-in Android Store device.",
+      "type": "object",
+      "properties": {
+        "commandId": { "type": "string" },
+        "appId": { "type": "string" },
+        "appName": { "type": "string" },
+        "packageName": { "type": "string" },
+        "action": { "type": "string", "enum": ["DOWNLOAD", "UPDATE"] },
+        "status": { "type": "string", "enum": ["PENDING", "PROCESSING", "COMPLETED", "FAILED"] },
+        "sourcePlatform": { "type": "string", "enum": ["WEB", "ANDROID"] },
+        "requestedVersionCode": { "type": "integer" },
+        "message": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "commandId",
+        "appId",
+        "appName",
+        "packageName",
+        "action",
+        "status",
+        "sourcePlatform",
+        "requestedVersionCode",
+        "message",
+        "createdAt",
+        "updatedAt"
+      ]
     }
   },
   "firestore": {
@@ -770,6 +845,18 @@
         "$ref": "#/entities/UserPreference"
       },
       "description": "User-scoped preferences, wishlist, favorites, search history, and download history."
+    },
+    "/users/{userId}/installed_apps/{appId}": {
+      "schema": {
+        "$ref": "#/entities/UserInstalledApp"
+      },
+      "description": "Per-user synced Android device installed app versions and available updates."
+    },
+    "/users/{userId}/device_commands/{commandId}": {
+      "schema": {
+        "$ref": "#/entities/DeviceDownloadCommand"
+      },
+      "description": "Per-user remote download/update command queue synced between Web and the Android Store app."
     },
     "/reviews/{reviewId}": {
       "schema": {

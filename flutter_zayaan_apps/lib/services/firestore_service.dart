@@ -183,15 +183,20 @@ class ZayaanFirestoreService {
   Future<void> saveUserPreferences(UserPreferenceModel pref) async {
     final ref = _db.collection('users').doc(pref.userId);
     final snap = await ref.get();
+    final cleanTheme = {'SYSTEM', 'LIGHT', 'DARK'}.contains(pref.themeMode)
+        ? pref.themeMode
+        : 'SYSTEM';
     final payload = <String, dynamic>{
       'userId': pref.userId,
+      'email': pref.email.trim(),
       'darkMode': pref.darkMode,
+      'themeMode': cleanTheme,
       'notifyUpdates': pref.notifyUpdates,
-      'bookmarkedAppIds': pref.bookmarkedAppIds.take(50).toList(),
-      'favoriteAppIds': pref.favoriteAppIds.take(50).toList(),
-      'recentlyViewedAppIds': pref.recentlyViewedAppIds.take(30).toList(),
-      'downloadedAppIds': pref.downloadedAppIds.take(50).toList(),
-      'searchHistory': pref.searchHistory.take(20).toList(),
+      'bookmarkedAppIds': pref.bookmarkedAppIds.toSet().take(50).toList(),
+      'favoriteAppIds': pref.favoriteAppIds.toSet().take(50).toList(),
+      'recentlyViewedAppIds': pref.recentlyViewedAppIds.toSet().take(30).toList(),
+      'downloadedAppIds': pref.downloadedAppIds.toSet().take(50).toList(),
+      'searchHistory': pref.searchHistory.toSet().take(20).toList(),
       'updatedAt': FieldValue.serverTimestamp(),
     };
     if (!snap.exists) {
@@ -200,6 +205,69 @@ class ZayaanFirestoreService {
     } else {
       await ref.set(payload, SetOptions(merge: true));
     }
+  }
+
+  Stream<List<UserInstalledAppModel>> observeUserInstalledApps(String uid) {
+    return _db
+        .collection('users')
+        .doc(uid)
+        .collection('installed_apps')
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((d) => UserInstalledAppModel.fromFirestore(d))
+            .toList());
+  }
+
+  Stream<List<DeviceCommandModel>> observeDeviceCommands(String uid) {
+    return _db
+        .collection('users')
+        .doc(uid)
+        .collection('device_commands')
+        .snapshots()
+        .map((snap) {
+      final list =
+          snap.docs.map((d) => DeviceCommandModel.fromFirestore(d)).toList();
+      list.sort((a, b) => (b.createdAt?.millisecondsSinceEpoch ?? 0)
+          .compareTo(a.createdAt?.millisecondsSinceEpoch ?? 0));
+      return list;
+    });
+  }
+
+  Future<void> enqueueDeviceCommand({
+    required String uid,
+    required StoreAppModel app,
+    required String action,
+    String sourcePlatform = 'WEB',
+    String message = '',
+  }) async {
+    final cleanAction = action == 'UPDATE' ? 'UPDATE' : 'DOWNLOAD';
+    final cleanPlatform = sourcePlatform == 'ANDROID' ? 'ANDROID' : 'WEB';
+    final cleanAppId =
+        app.appId.replaceAll(RegExp(r'[^a-zA-Z0-9_\-]'), '-');
+    final commandId =
+        'cmd_${cleanAppId}_${DateTime.now().millisecondsSinceEpoch}';
+    await _db
+        .collection('users')
+        .doc(uid)
+        .collection('device_commands')
+        .doc(commandId)
+        .set({
+      'commandId': commandId,
+      'appId': app.appId,
+      'appName': app.appName.isNotEmpty ? app.appName : app.appId,
+      'packageName': app.packageName.isNotEmpty
+          ? app.packageName
+          : 'com.zayaanapps.app',
+      'action': cleanAction,
+      'status': 'PENDING',
+      'sourcePlatform': cleanPlatform,
+      'requestedVersionCode': app.versionCode > 0 ? app.versionCode : 1,
+      'message': message.isNotEmpty
+          ? message
+          : 'Queued $cleanAction for ${app.appName} from $cleanPlatform.',
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
   }
 
   Stream<List<StoreNotificationModel>> observeNotifications() {

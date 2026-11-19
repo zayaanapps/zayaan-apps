@@ -35,6 +35,8 @@ import java.util.concurrent.TimeUnit
 class AndroidPackageController(private val context: Context) {
 
     private val appContext = context.applicationContext
+    val applicationContext: Context
+        get() = appContext
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)

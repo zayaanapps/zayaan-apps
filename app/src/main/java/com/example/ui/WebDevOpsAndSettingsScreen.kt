@@ -82,6 +82,7 @@ fun WebDevOpsAndSettingsScreen(
     themeMode: AppThemeMode,
     notifyUpdates: Boolean,
     currentUserEmail: String?,
+    isAdminUser: Boolean = false,
     canInstallUnknownApps: Boolean = true,
     notificationsPermissionGranted: Boolean = true,
     onThemeModeChange: (AppThemeMode) -> Unit,
@@ -580,7 +581,9 @@ fun WebDevOpsAndSettingsScreen(
                                     )
                                 )
                                 Text(
-                                    text = currentUserEmail ?: "Open Store Mode (Sign-In disabled for now)",
+                                    text = currentUserEmail?.let {
+                                        "$it • ${if (isAdminUser) "Administrator" else "Standard User"}"
+                                    } ?: "Not signed in",
                                     style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
                                     color = cs.onSurfaceVariant,
                                     maxLines = 1,

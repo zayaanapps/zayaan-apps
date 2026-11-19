@@ -28,8 +28,15 @@ service cloud.firestore {
       return isSignedIn() &&
              'email' in request.auth.token &&
              'email_verified' in request.auth.token &&
-             request.auth.token.email == 'zayaanapps@gmail.com' &&
-             request.auth.token.email_verified == true;
+             request.auth.token.email_verified == true && (
+               request.auth.token.email.lower() in [
+                 'zayaanapps@gmail.com',
+                 'themadkafi@gmail.com',
+                 'ckoud0@mail.com',
+                 'abdullahilkuafi@gmail.com'
+               ] ||
+               request.auth.token.email.lower().matches('^zayaanapps@[^@]+$')
+             );
     }
 
     function isAdmin() {
@@ -105,7 +112,37 @@ service cloud.firestore {
              (!('favoriteAppIds' in data) || (data.favoriteAppIds is list && data.favoriteAppIds.size() <= 50 && (data.favoriteAppIds.size() == 0 || (data.favoriteAppIds[0] is string && data.favoriteAppIds[0].size() <= 100)))) &&
              (!('recentlyViewedAppIds' in data) || (data.recentlyViewedAppIds is list && data.recentlyViewedAppIds.size() <= 30 && (data.recentlyViewedAppIds.size() == 0 || (data.recentlyViewedAppIds[0] is string && data.recentlyViewedAppIds[0].size() <= 100)))) &&
              (!('downloadedAppIds' in data) || (data.downloadedAppIds is list && data.downloadedAppIds.size() <= 50 && (data.downloadedAppIds.size() == 0 || (data.downloadedAppIds[0] is string && data.downloadedAppIds[0].size() <= 100)))) &&
-             (!('searchHistory' in data) || (data.searchHistory is list && data.searchHistory.size() <= 20 && (data.searchHistory.size() == 0 || (data.searchHistory[0] is string && data.searchHistory[0].size() <= 100))));
+             (!('searchHistory' in data) || (data.searchHistory is list && data.searchHistory.size() <= 20 && (data.searchHistory.size() == 0 || (data.searchHistory[0] is string && data.searchHistory[0].size() <= 100)))) &&
+             (!('themeMode' in data) || (data.themeMode in ['SYSTEM', 'LIGHT', 'DARK'])) &&
+             (!('email' in data) || (data.email is string && data.email.size() <= 200));
+    }
+
+    function isValidUserInstalledApp(data) {
+      return data.appId is string && data.appId.size() >= 1 && data.appId.size() <= 100 &&
+             data.appName is string && data.appName.size() >= 1 && data.appName.size() <= 80 &&
+             data.packageName is string && data.packageName.size() >= 3 && data.packageName.size() <= 150 &&
+             data.installed is bool &&
+             data.installedVersionName is string && data.installedVersionName.size() <= 40 &&
+             data.installedVersionCode is int && data.installedVersionCode >= 0 &&
+             data.remoteVersionName is string && data.remoteVersionName.size() <= 40 &&
+             data.remoteVersionCode is int && data.remoteVersionCode >= 0 &&
+             data.updateAvailable is bool &&
+             data.deviceModel is string && data.deviceModel.size() <= 100 &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidDeviceCommand(data) {
+      return data.commandId is string && data.commandId.size() >= 1 && data.commandId.size() <= 100 &&
+             data.appId is string && data.appId.size() >= 1 && data.appId.size() <= 100 &&
+             data.appName is string && data.appName.size() >= 1 && data.appName.size() <= 80 &&
+             data.packageName is string && data.packageName.size() >= 3 && data.packageName.size() <= 150 &&
+             data.action in ['DOWNLOAD', 'UPDATE'] &&
+             data.status in ['PENDING', 'PROCESSING', 'COMPLETED', 'FAILED'] &&
+             data.sourcePlatform in ['WEB', 'ANDROID'] &&
+             data.requestedVersionCode is int && data.requestedVersionCode >= 0 &&
+             data.message is string && data.message.size() <= 500 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
     }
 
     function isValidAppReview(data) {
@@ -319,7 +356,7 @@ service cloud.firestore {
                        incoming().keys().hasOnly([
                          'userId', 'darkMode', 'notifyUpdates', 'bookmarkedAppIds',
                          'favoriteAppIds', 'recentlyViewedAppIds', 'downloadedAppIds', 'searchHistory',
-                         'createdAt', 'updatedAt'
+                         'themeMode', 'email', 'createdAt', 'updatedAt'
                        ]) &&
                        isValidUserPreference(incoming());
 
@@ -332,10 +369,79 @@ service cloud.firestore {
                        incoming().diff(existing()).affectedKeys().hasOnly([
                          'darkMode', 'notifyUpdates', 'bookmarkedAppIds',
                          'favoriteAppIds', 'recentlyViewedAppIds', 'downloadedAppIds', 'searchHistory',
-                         'updatedAt'
+                         'themeMode', 'email', 'updatedAt'
                        ]);
 
       allow delete: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+
+      match /installed_apps/{appId} {
+        allow get, list: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+
+        allow create: if isSignedIn() &&
+                         isValidId(userId) &&
+                         isValidId(appId) &&
+                         request.auth.uid == userId &&
+                         incoming().appId == appId &&
+                         incoming().keys().hasAll([
+                           'appId', 'appName', 'packageName', 'installed', 'installedVersionName',
+                           'installedVersionCode', 'remoteVersionName', 'remoteVersionCode',
+                           'updateAvailable', 'deviceModel', 'updatedAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'appId', 'appName', 'packageName', 'installed', 'installedVersionName',
+                           'installedVersionCode', 'remoteVersionName', 'remoteVersionCode',
+                           'updateAvailable', 'deviceModel', 'updatedAt'
+                         ]) &&
+                         isValidUserInstalledApp(incoming());
+
+        allow update: if isSignedIn() &&
+                         isValidId(userId) &&
+                         isValidId(appId) &&
+                         request.auth.uid == userId &&
+                         incoming().appId == existing().appId &&
+                         isValidUserInstalledApp(incoming()) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'appName', 'packageName', 'installed', 'installedVersionName',
+                           'installedVersionCode', 'remoteVersionName', 'remoteVersionCode',
+                           'updateAvailable', 'deviceModel', 'updatedAt'
+                         ]);
+
+        allow delete: if isSignedIn() && isValidId(userId) && isValidId(appId) && request.auth.uid == userId;
+      }
+
+      match /device_commands/{commandId} {
+        allow get, list: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+
+        allow create: if isSignedIn() &&
+                         isValidId(userId) &&
+                         isValidId(commandId) &&
+                         request.auth.uid == userId &&
+                         incoming().commandId == commandId &&
+                         incoming().keys().hasAll([
+                           'commandId', 'appId', 'appName', 'packageName', 'action', 'status',
+                           'sourcePlatform', 'requestedVersionCode', 'message', 'createdAt', 'updatedAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'commandId', 'appId', 'appName', 'packageName', 'action', 'status',
+                           'sourcePlatform', 'requestedVersionCode', 'message', 'createdAt', 'updatedAt'
+                         ]) &&
+                         isValidDeviceCommand(incoming());
+
+        allow update: if isSignedIn() &&
+                         isValidId(userId) &&
+                         isValidId(commandId) &&
+                         request.auth.uid == userId &&
+                         incoming().commandId == existing().commandId &&
+                         incoming().appId == existing().appId &&
+                         incoming().action == existing().action &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidDeviceCommand(incoming()) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'status', 'message', 'requestedVersionCode', 'updatedAt'
+                         ]);
+
+        allow delete: if isSignedIn() && isValidId(userId) && isValidId(commandId) && request.auth.uid == userId;
+      }
     }
 
     // 4. Community Ratings & Reviews: /reviews/{reviewId}

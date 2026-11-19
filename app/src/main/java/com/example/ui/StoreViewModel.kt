@@ -1,6 +1,7 @@
 package com.example.ui
 
 import android.content.Context
+import android.os.Build
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -15,6 +16,7 @@ import com.example.data.AppThemeMode
 import com.example.data.AppVersionRecord
 import com.example.data.AuditLogRecord
 import com.example.data.DeveloperSubmission
+import com.example.data.DeviceDownloadCommand
 import com.example.data.DownloadState
 import com.example.data.InstalledPackageStatus
 import com.example.data.SortOption
@@ -22,7 +24,9 @@ import com.example.data.StoreApp
 import com.example.data.StoreCategory
 import com.example.data.StoreNotification
 import com.example.data.StoreRepository
+import com.example.data.UserInstalledAppRecord
 import com.example.data.UserPreference
+import com.example.data.isAdminEmail
 import com.google.firebase.Timestamp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -55,7 +59,7 @@ class StoreViewModel(
 ) : ViewModel() {
 
     private val isBootstrappedAdmin: Boolean =
-        isAuthenticated && currentUserEmail?.equals("zayaanapps@gmail.com", ignoreCase = true) == true
+        isAuthenticated && isAdminEmail(currentUserEmail)
 
     private val _publishedAppsState = MutableStateFlow<UiState<List<StoreApp>>>(UiState.Loading)
     val publishedAppsState: StateFlow<UiState<List<StoreApp>>> = _publishedAppsState.asStateFlow()
@@ -141,6 +145,11 @@ class StoreViewModel(
     private var hasAutoSeededEmptyStore = false
     private var notifiedUpdatePackages = mutableSetOf<String>()
     private var notifiedAnnouncementIds = mutableSetOf<String>()
+    private var lastSyncedInstalledMap: Map<String, String> = emptyMap()
+    private val processingCommandIds = mutableSetOf<String>()
+    private var isObservingAdminCatalog = false
+    private var lastLocalThemeChangeMs = 0L
+    private var hasInitializedUserPrefsDoc = false
 
     init {
         if (isAuthenticated) {
@@ -292,18 +301,10 @@ class StoreViewModel(
                 }
         }
 
-        viewModelScope.launch {
-            repository.observeAllAppsForAdmin()
-                .catch { e ->
-                    Log.e("StoreViewModel", "Error observing admin apps", e)
-                }
-                .collect { result ->
-                    result.onSuccess { apps ->
-                        _adminAppsState.value = UiState.Success(enrichCatalogWithLiveStoreRelease(apps))
-                    }.onFailure { e ->
-                        _adminAppsState.value = UiState.Error(e.localizedMessage ?: "Admin access restricted")
-                    }
-                }
+        if (isBootstrappedAdmin) {
+            startObservingAdminCatalog()
+        } else {
+            _adminAppsState.value = UiState.Success(emptyList())
         }
 
         viewModelScope.launch {
@@ -407,7 +408,11 @@ class StoreViewModel(
                 .collect { result ->
                     result.onSuccess { records ->
                         _adminRecordsState.value = records
-                        _isTrustedAdmin.value = isBootstrappedAdmin || records.any { it.userId == currentUserId }
+                        val trusted = isBootstrappedAdmin || records.any { it.userId == currentUserId }
+                        _isTrustedAdmin.value = trusted
+                        if (trusted) {
+                            startObservingAdminCatalog()
+                        }
                     }
                 }
         }
@@ -432,8 +437,156 @@ class StoreViewModel(
                 .collect { result ->
                     result.onSuccess { pref ->
                         _userPreferencesState.value = pref
+                        if (pref.createdAt == null && !hasInitializedUserPrefsDoc) {
+                            hasInitializedUserPrefsDoc = true
+                            val currentMode = _themeMode.value
+                            syncCurrentPreferences(
+                                pref.copy(
+                                    email = currentUserEmail ?: "",
+                                    darkMode = currentMode == AppThemeMode.DARK,
+                                    themeMode = currentMode.name
+                                )
+                            )
+                        } else if (pref.createdAt != null) {
+                            val remoteMode = AppThemeMode.entries.firstOrNull {
+                                it.name.equals(pref.themeMode, ignoreCase = true)
+                            }
+                            val withinDebounce = (System.currentTimeMillis() - lastLocalThemeChangeMs) < 2000L
+                            if (remoteMode != null && remoteMode != _themeMode.value && !withinDebounce) {
+                                _themeMode.value = remoteMode
+                                packageController.saveThemeMode(remoteMode)
+                            }
+                        }
                     }
                 }
+        }
+
+        viewModelScope.launch {
+            repository.observeDeviceCommands(currentUserId)
+                .catch { e ->
+                    Log.e("StoreViewModel", "Error observing remote device commands", e)
+                }
+                .collect { result ->
+                    result.onSuccess { commands ->
+                        commands.forEach { cmd ->
+                            if (cmd.status == "PENDING" && processingCommandIds.add(cmd.commandId)) {
+                                viewModelScope.launch {
+                                    executeRemoteDeviceCommand(cmd)
+                                }
+                            }
+                        }
+                    }
+                }
+        }
+    }
+
+    private fun startObservingAdminCatalog() {
+        if (isObservingAdminCatalog) return
+        isObservingAdminCatalog = true
+        viewModelScope.launch {
+            repository.observeAllAppsForAdmin()
+                .catch { e ->
+                    Log.e("StoreViewModel", "Error observing admin apps", e)
+                }
+                .collect { result ->
+                    result.onSuccess { apps ->
+                        _adminAppsState.value = UiState.Success(enrichCatalogWithLiveStoreRelease(apps))
+                    }.onFailure { e ->
+                        _adminAppsState.value = UiState.Error(e.localizedMessage ?: "Admin access restricted")
+                    }
+                }
+        }
+    }
+
+    private suspend fun executeRemoteDeviceCommand(cmd: DeviceDownloadCommand) {
+        try {
+            repository.updateDeviceCommandStatus(
+                userId = currentUserId,
+                commandId = cmd.commandId,
+                status = "PROCESSING",
+                message = "Downloading ${cmd.appName} on Android device..."
+            )
+            val publishedList = (_publishedAppsState.value as? UiState.Success)?.data ?: emptyList()
+            val rawApp = publishedList.firstOrNull {
+                it.appId == cmd.appId || it.docId == cmd.appId ||
+                    (cmd.packageName.isNotBlank() && it.packageName.equals(cmd.packageName, ignoreCase = true))
+            } ?: StoreRepository.officialStarterApps().firstOrNull {
+                it.appId == cmd.appId || (cmd.packageName.isNotBlank() && it.packageName.equals(cmd.packageName, ignoreCase = true))
+            } ?: StoreApp(
+                docId = cmd.appId,
+                appId = cmd.appId,
+                appName = cmd.appName,
+                packageName = cmd.packageName,
+                versionCode = maxOf(1L, cmd.requestedVersionCode),
+                apkDownloadUrl = "https://github.com/zayaanapps/zayaan-apps/releases/latest/download/zayaan-apps-release.apk",
+                githubRepoUrl = "https://github.com/zayaanapps/zayaan-apps"
+            )
+
+            val repoCandidate = rawApp.githubRepoUrl.ifBlank {
+                if (rawApp.apkDownloadUrl.contains("github.com/", ignoreCase = true)) {
+                    rawApp.apkDownloadUrl
+                } else {
+                    "https://github.com/zayaanapps/zayaan-apps"
+                }
+            }
+            val resolved = packageController.resolveLatestGitHubReleaseAsset(repoCandidate)
+                ?: packageController.resolveLatestGitHubReleaseAsset(rawApp.apkDownloadUrl)
+            val targetApp = if (resolved != null) {
+                rawApp.copy(
+                    versionName = resolved.tagName.ifBlank { rawApp.versionName },
+                    versionCode = maxOf(rawApp.versionCode, resolved.versionCode),
+                    apkDownloadUrl = resolved.browserDownloadUrl,
+                    apkFileSize = resolved.fileSizeFormatted.ifBlank { rawApp.apkFileSize },
+                    releaseNotes = resolved.releaseNotes.ifBlank { rawApp.releaseNotes },
+                    sha256Checksum = resolved.sha256Checksum.ifBlank { rawApp.sha256Checksum }
+                )
+            } else {
+                rawApp
+            }
+
+            val key = targetApp.appId.ifBlank { targetApp.docId }
+            recordDownloadedAppId(key)
+            if (isAuthenticated) {
+                repository.incrementDownloadCount(targetApp.docId.ifBlank { targetApp.appId }, targetApp.downloadCount)
+            }
+            _statusBannerMessage.value = "Remote ${cmd.action.lowercase()} queued from ${cmd.sourcePlatform}: downloading ${targetApp.appName}..."
+            packageController.downloadApkWithProgress(targetApp, forceRedownload = true).collect { state ->
+                _downloadStates.value = _downloadStates.value + (key to state)
+                if (state is DownloadState.ReadyToInstall) {
+                    refreshCachedApks()
+                    installDownloadedApk(
+                        context = packageController.applicationContext,
+                        apkFilePath = state.apkFilePath,
+                        appId = key,
+                        appName = targetApp.appName
+                    )
+                    val completionMsg = if (packageController.canRequestPackageInstalls()) {
+                        "Downloaded ${targetApp.appName} v${targetApp.versionName} & opened Android installer."
+                    } else {
+                        "Downloaded ${targetApp.appName} APK on Android device. Allow 'Install Unknown Apps' in Zayaan Apps to complete install."
+                    }
+                    repository.updateDeviceCommandStatus(
+                        userId = currentUserId,
+                        commandId = cmd.commandId,
+                        status = "COMPLETED",
+                        message = completionMsg
+                    )
+                } else if (state is DownloadState.Failed) {
+                    repository.updateDeviceCommandStatus(
+                        userId = currentUserId,
+                        commandId = cmd.commandId,
+                        status = "FAILED",
+                        message = state.errorMessage
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            repository.updateDeviceCommandStatus(
+                userId = currentUserId,
+                commandId = cmd.commandId,
+                status = "FAILED",
+                message = e.localizedMessage ?: "Failed to execute command on Android device."
+            )
         }
     }
 
@@ -567,7 +720,9 @@ class StoreViewModel(
                 favoriteAppIds = updatedPref.favoriteAppIds,
                 recentlyViewedAppIds = updatedPref.recentlyViewedAppIds,
                 downloadedAppIds = updatedPref.downloadedAppIds,
-                searchHistory = updatedPref.searchHistory
+                searchHistory = updatedPref.searchHistory,
+                themeMode = updatedPref.themeMode.ifBlank { _themeMode.value.name },
+                email = updatedPref.email.ifBlank { currentUserEmail ?: "" }
             )
         }
     }
@@ -789,6 +944,35 @@ class StoreViewModel(
                 if (updatable.isNotEmpty()) {
                     updatable.forEach { notifiedUpdatePackages.add(it.packageName) }
                     packageController.notifyAvailableUpdates(updatable)
+                }
+            }
+
+            if (isAuthenticated && apps.isNotEmpty()) {
+                val deviceLabel = "${Build.MANUFACTURER} ${Build.MODEL}".trim().take(100)
+                val records = apps.mapNotNull { app ->
+                    val appId = app.appId.ifBlank { app.docId }.trim()
+                    if (appId.isBlank()) return@mapNotNull null
+                    val st = statusMap[app.packageName]
+                    UserInstalledAppRecord(
+                        id = appId,
+                        appId = appId,
+                        appName = app.appName,
+                        packageName = app.packageName,
+                        installed = st?.installed == true,
+                        installedVersionName = st?.installedVersionName ?: "",
+                        installedVersionCode = st?.installedVersionCode ?: 0L,
+                        remoteVersionName = app.versionName,
+                        remoteVersionCode = app.versionCode,
+                        updateAvailable = st?.updateAvailable == true,
+                        deviceModel = deviceLabel
+                    )
+                }
+                val sigMap = records.associate {
+                    it.appId to "${it.installed}|${it.installedVersionCode}|${it.remoteVersionCode}|${it.updateAvailable}"
+                }
+                if (sigMap != lastSyncedInstalledMap) {
+                    lastSyncedInstalledMap = sigMap
+                    repository.syncInstalledAppsStatus(currentUserId, records)
                 }
             }
         }
@@ -1031,12 +1215,17 @@ class StoreViewModel(
     }
 
     fun updateThemeMode(mode: AppThemeMode) {
+        lastLocalThemeChangeMs = System.currentTimeMillis()
         _themeMode.value = mode
         packageController.saveThemeMode(mode)
-        if (mode != AppThemeMode.SYSTEM) {
-            val currentPref = _userPreferencesState.value ?: UserPreference(userId = currentUserId)
-            syncCurrentPreferences(currentPref.copy(darkMode = mode == AppThemeMode.DARK))
-        }
+        val currentPref = _userPreferencesState.value ?: UserPreference(userId = currentUserId)
+        syncCurrentPreferences(
+            currentPref.copy(
+                darkMode = mode == AppThemeMode.DARK,
+                themeMode = mode.name,
+                email = currentUserEmail ?: currentPref.email
+            )
+        )
     }
 
     fun updateDarkModePreference(enabled: Boolean) {

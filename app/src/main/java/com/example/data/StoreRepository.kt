@@ -126,13 +126,17 @@ class StoreRepository(
                         ?: emptyList()
                     val pref = UserPreference(
                         userId = snapshot.getString("userId") ?: userId,
+                        email = snapshot.getString("email") ?: "",
                         darkMode = snapshot.getBoolean("darkMode") ?: true,
+                        themeMode = snapshot.getString("themeMode") ?: "SYSTEM",
                         notifyUpdates = snapshot.getBoolean("notifyUpdates") ?: true,
                         bookmarkedAppIds = bookmarked,
                         favoriteAppIds = favorites,
                         recentlyViewedAppIds = recentlyViewed,
                         downloadedAppIds = downloaded,
-                        searchHistory = history
+                        searchHistory = history,
+                        createdAt = snapshot.getTimestamp("createdAt"),
+                        updatedAt = snapshot.getTimestamp("updatedAt")
                     )
                     trySend(Result.success(pref))
                 }
@@ -148,13 +152,18 @@ class StoreRepository(
         favoriteAppIds: List<String> = emptyList(),
         recentlyViewedAppIds: List<String> = emptyList(),
         downloadedAppIds: List<String> = emptyList(),
-        searchHistory: List<String> = emptyList()
+        searchHistory: List<String> = emptyList(),
+        themeMode: String = "SYSTEM",
+        email: String = ""
     ): Result<Unit> = runCatching {
         val docRef = db.collection("users").document(userId)
         val snap = docRef.get().await()
+        val cleanTheme = if (themeMode in setOf("SYSTEM", "LIGHT", "DARK")) themeMode else "SYSTEM"
         val payload = hashMapOf<String, Any>(
             "userId" to userId,
+            "email" to email.trim().take(200),
             "darkMode" to darkMode,
+            "themeMode" to cleanTheme,
             "notifyUpdates" to notifyUpdates,
             "bookmarkedAppIds" to bookmarkedAppIds.distinct().take(50),
             "favoriteAppIds" to favoriteAppIds.distinct().take(50),
@@ -169,6 +178,115 @@ class StoreRepository(
         } else {
             docRef.set(payload, SetOptions.merge()).await()
         }
+        Unit
+    }.onFailure { e ->
+        handleFirestoreError(e, OperationType.WRITE, "users/$userId")
+    }
+
+    /**
+     * Syncs per-user Android installed/update status to `/users/{userId}/installed_apps/{appId}`
+     * so signed-in Web and Android portals reflect identical device install/update states.
+     */
+    suspend fun syncInstalledAppsStatus(
+        userId: String,
+        records: List<UserInstalledAppRecord>
+    ): Result<Unit> = runCatching {
+        if (userId.isBlank() || records.isEmpty()) return@runCatching
+        val colRef = db.collection("users").document(userId).collection("installed_apps")
+        records.chunked(400).forEach { chunk ->
+            val batch = db.batch()
+            chunk.forEach { rec ->
+                val cleanAppId = rec.appId.trim().replace(Regex("[^a-zA-Z0-9_\\-]"), "-").take(100)
+                if (cleanAppId.isNotBlank()) {
+                    val payload = mapOf<String, Any>(
+                        "appId" to cleanAppId,
+                        "appName" to rec.appName.trim().take(80).ifBlank { cleanAppId },
+                        "packageName" to rec.packageName.trim().take(150).ifBlank { "com.zayaanapps.unknown" },
+                        "installed" to rec.installed,
+                        "installedVersionName" to rec.installedVersionName.trim().take(40),
+                        "installedVersionCode" to rec.installedVersionCode.coerceAtLeast(0L),
+                        "remoteVersionName" to rec.remoteVersionName.trim().take(40),
+                        "remoteVersionCode" to rec.remoteVersionCode.coerceAtLeast(0L),
+                        "updateAvailable" to rec.updateAvailable,
+                        "deviceModel" to rec.deviceModel.trim().take(100),
+                        "updatedAt" to FieldValue.serverTimestamp()
+                    )
+                    batch.set(colRef.document(cleanAppId), payload, SetOptions.merge())
+                }
+            }
+            batch.commit().await()
+        }
+    }.onFailure { e ->
+        handleFirestoreError(e, OperationType.WRITE, "users/$userId/installed_apps")
+    }
+
+    /**
+     * Real-time stream of pending remote download/update commands queued for the user's Android device.
+     */
+    fun observeDeviceCommands(userId: String): Flow<Result<List<DeviceDownloadCommand>>> = callbackFlow {
+        if (userId.isBlank()) {
+            trySend(Result.success(emptyList()))
+            awaitClose {}
+            return@callbackFlow
+        }
+        val registration: ListenerRegistration = db.collection("users")
+            .document(userId)
+            .collection("device_commands")
+            .whereEqualTo("status", "PENDING")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    handleFirestoreError(error, OperationType.LIST, "users/$userId/device_commands")
+                    trySend(Result.failure(error))
+                    return@addSnapshotListener
+                }
+                val list = snapshot?.documents
+                    ?.mapNotNull { doc ->
+                        val appId = doc.getString("appId") ?: return@mapNotNull null
+                        DeviceDownloadCommand(
+                            id = doc.id,
+                            commandId = doc.getString("commandId") ?: doc.id,
+                            appId = appId,
+                            appName = doc.getString("appName") ?: appId,
+                            packageName = doc.getString("packageName") ?: "",
+                            action = doc.getString("action") ?: "DOWNLOAD",
+                            status = doc.getString("status") ?: "PENDING",
+                            sourcePlatform = doc.getString("sourcePlatform") ?: "WEB",
+                            requestedVersionCode = (doc.getLong("requestedVersionCode") ?: 0L).coerceAtLeast(0L),
+                            message = doc.getString("message") ?: "",
+                            createdAt = doc.getTimestamp("createdAt"),
+                            updatedAt = doc.getTimestamp("updatedAt")
+                        )
+                    }
+                    ?.sortedBy { it.createdAt?.toDate()?.time ?: 0L }
+                    ?: emptyList()
+                trySend(Result.success(list))
+            }
+        awaitClose { registration.remove() }
+    }
+
+    suspend fun updateDeviceCommandStatus(
+        userId: String,
+        commandId: String,
+        status: String,
+        message: String
+    ): Result<Unit> = runCatching {
+        if (userId.isBlank() || commandId.isBlank()) return@runCatching
+        val cleanStatus = if (status in setOf("PENDING", "PROCESSING", "COMPLETED", "FAILED")) status else "COMPLETED"
+        db.collection("users")
+            .document(userId)
+            .collection("device_commands")
+            .document(commandId)
+            .update(
+                mapOf(
+                    "status" to cleanStatus,
+                    "message" to message.trim().take(500),
+                    "updatedAt" to FieldValue.serverTimestamp()
+                )
+            )
+            .await()
+        Unit
+    }.onFailure { e ->
+        handleFirestoreError(e, OperationType.UPDATE, "users/$userId/device_commands/$commandId")
     }
 
     /**

@@ -98,18 +98,69 @@ data class StoreCategory(
         get() = id
 }
 
+private val ADMIN_EXACT_EMAILS = setOf(
+    "zayaanapps@gmail.com",
+    "themadkafi@gmail.com",
+    "ckoud0@mail.com",
+    "abdullahilkuafi@gmail.com"
+)
+
+fun isAdminEmail(email: String?): Boolean {
+    val normalized = email?.trim()?.lowercase()?.takeIf { it.contains("@") } ?: return false
+    if (normalized in ADMIN_EXACT_EMAILS) return true
+    val localPart = normalized.substringBefore("@")
+    val domainPart = normalized.substringAfter("@")
+    return localPart == "zayaanapps" && domainPart.isNotBlank() && !domainPart.contains("@")
+}
+
 @Keep
 @IgnoreExtraProperties
 data class UserPreference(
     @DocumentId val id: String = "",
     val userId: String = "",
+    val email: String = "",
     val darkMode: Boolean = true,
+    val themeMode: String = "SYSTEM",
     val notifyUpdates: Boolean = true,
     val bookmarkedAppIds: List<String> = emptyList(),
     val favoriteAppIds: List<String> = emptyList(),
     val recentlyViewedAppIds: List<String> = emptyList(),
     val downloadedAppIds: List<String> = emptyList(),
     val searchHistory: List<String> = emptyList(),
+    @ServerTimestamp val createdAt: Timestamp? = null,
+    @ServerTimestamp val updatedAt: Timestamp? = null
+)
+
+@Keep
+@IgnoreExtraProperties
+data class UserInstalledAppRecord(
+    @DocumentId val id: String = "",
+    val appId: String = "",
+    val appName: String = "",
+    val packageName: String = "",
+    val installed: Boolean = false,
+    val installedVersionName: String = "",
+    val installedVersionCode: Long = 0L,
+    val remoteVersionName: String = "",
+    val remoteVersionCode: Long = 0L,
+    val updateAvailable: Boolean = false,
+    val deviceModel: String = "",
+    @ServerTimestamp val updatedAt: Timestamp? = null
+)
+
+@Keep
+@IgnoreExtraProperties
+data class DeviceDownloadCommand(
+    @DocumentId val id: String = "",
+    val commandId: String = "",
+    val appId: String = "",
+    val appName: String = "",
+    val packageName: String = "",
+    val action: String = "DOWNLOAD",
+    val status: String = "PENDING",
+    val sourcePlatform: String = "WEB",
+    val requestedVersionCode: Long = 0L,
+    val message: String = "",
     @ServerTimestamp val createdAt: Timestamp? = null,
     @ServerTimestamp val updatedAt: Timestamp? = null
 )

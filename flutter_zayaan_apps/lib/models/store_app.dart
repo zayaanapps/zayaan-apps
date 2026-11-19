@@ -13,6 +13,25 @@ const List<String> kStoreCategories = [
   'Other',
 ];
 
+const Set<String> _kAdminExactEmails = {
+  'zayaanapps@gmail.com',
+  'themadkafi@gmail.com',
+  'ckoud0@mail.com',
+  'abdullahilkuafi@gmail.com',
+};
+
+bool isAdminEmail(String? email) {
+  final normalized = (email ?? '').trim().toLowerCase();
+  if (!normalized.contains('@')) return false;
+  if (_kAdminExactEmails.contains(normalized)) return true;
+  final atIdx = normalized.indexOf('@');
+  final localPart = normalized.substring(0, atIdx);
+  final domainPart = normalized.substring(atIdx + 1);
+  return localPart == 'zayaanapps' &&
+      domainPart.isNotEmpty &&
+      !domainPart.contains('@');
+}
+
 const List<String> kMarketplaceSubcategories = [
   'All',
   "Editor's Choice",
@@ -194,7 +213,7 @@ class StoreAppModel {
       'minAndroidSdk': minAndroidSdk,
       'targetAndroidSdk': targetAndroidSdk,
       'architecture': architecture,
-      'permissionsList': permissionsList.take(30).toList(),
+      'permissionsList': permissionsList.take(15).toList(),
       'privacyPolicyUrl': privacyPolicyUrl,
       'websiteUrl': websiteUrl,
       'supportEmail': supportEmail,
@@ -232,7 +251,7 @@ class StoreAppModel {
       'minAndroidSdk': minAndroidSdk,
       'targetAndroidSdk': targetAndroidSdk,
       'architecture': architecture,
-      'permissionsList': permissionsList.take(30).toList(),
+      'permissionsList': permissionsList.take(15).toList(),
       'privacyPolicyUrl': privacyPolicyUrl,
       'websiteUrl': websiteUrl,
       'supportEmail': supportEmail,
@@ -294,31 +313,39 @@ class AppReviewModel {
 
 class UserPreferenceModel {
   final String userId;
+  final String email;
   final bool darkMode;
+  final String themeMode;
   final bool notifyUpdates;
   final List<String> bookmarkedAppIds;
   final List<String> favoriteAppIds;
   final List<String> recentlyViewedAppIds;
   final List<String> downloadedAppIds;
   final List<String> searchHistory;
+  final bool existsInCloud;
 
   const UserPreferenceModel({
     required this.userId,
+    this.email = '',
     this.darkMode = true,
+    this.themeMode = 'SYSTEM',
     this.notifyUpdates = true,
     this.bookmarkedAppIds = const [],
     this.favoriteAppIds = const [],
     this.recentlyViewedAppIds = const [],
     this.downloadedAppIds = const [],
     this.searchHistory = const [],
+    this.existsInCloud = false,
   });
 
   factory UserPreferenceModel.fromFirestore(
       String uid, Map<String, dynamic>? data) {
-    if (data == null) return UserPreferenceModel(userId: uid);
+    if (data == null) return UserPreferenceModel(userId: uid, existsInCloud: false);
     return UserPreferenceModel(
       userId: (data['userId'] as String?) ?? uid,
+      email: (data['email'] as String?) ?? '',
       darkMode: (data['darkMode'] as bool?) ?? true,
+      themeMode: (data['themeMode'] as String?) ?? 'SYSTEM',
       notifyUpdates: (data['notifyUpdates'] as bool?) ?? true,
       bookmarkedAppIds: (data['bookmarkedAppIds'] as List<dynamic>?)
               ?.map((e) => e.toString())
@@ -340,6 +367,101 @@ class UserPreferenceModel {
               ?.map((e) => e.toString())
               .toList() ??
           const [],
+      existsInCloud: true,
+    );
+  }
+}
+
+class UserInstalledAppModel {
+  final String appId;
+  final String appName;
+  final String packageName;
+  final bool installed;
+  final String installedVersionName;
+  final int installedVersionCode;
+  final String remoteVersionName;
+  final int remoteVersionCode;
+  final bool updateAvailable;
+  final String deviceModel;
+  final DateTime? updatedAt;
+
+  const UserInstalledAppModel({
+    required this.appId,
+    required this.appName,
+    required this.packageName,
+    this.installed = false,
+    this.installedVersionName = '',
+    this.installedVersionCode = 0,
+    this.remoteVersionName = '',
+    this.remoteVersionCode = 0,
+    this.updateAvailable = false,
+    this.deviceModel = '',
+    this.updatedAt,
+  });
+
+  factory UserInstalledAppModel.fromFirestore(
+      DocumentSnapshot<Map<String, dynamic>> doc) {
+    final data = doc.data() ?? <String, dynamic>{};
+    return UserInstalledAppModel(
+      appId: (data['appId'] as String?) ?? doc.id,
+      appName: (data['appName'] as String?) ?? '',
+      packageName: (data['packageName'] as String?) ?? '',
+      installed: (data['installed'] as bool?) ?? false,
+      installedVersionName: (data['installedVersionName'] as String?) ?? '',
+      installedVersionCode:
+          (data['installedVersionCode'] as num?)?.toInt() ?? 0,
+      remoteVersionName: (data['remoteVersionName'] as String?) ?? '',
+      remoteVersionCode: (data['remoteVersionCode'] as num?)?.toInt() ?? 0,
+      updateAvailable: (data['updateAvailable'] as bool?) ?? false,
+      deviceModel: (data['deviceModel'] as String?) ?? '',
+      updatedAt: (data['updatedAt'] as Timestamp?)?.toDate(),
+    );
+  }
+}
+
+class DeviceCommandModel {
+  final String commandId;
+  final String appId;
+  final String appName;
+  final String packageName;
+  final String action;
+  final String status;
+  final String sourcePlatform;
+  final int requestedVersionCode;
+  final String message;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+
+  const DeviceCommandModel({
+    required this.commandId,
+    required this.appId,
+    required this.appName,
+    required this.packageName,
+    this.action = 'DOWNLOAD',
+    this.status = 'PENDING',
+    this.sourcePlatform = 'WEB',
+    this.requestedVersionCode = 0,
+    this.message = '',
+    this.createdAt,
+    this.updatedAt,
+  });
+
+  factory DeviceCommandModel.fromFirestore(
+      DocumentSnapshot<Map<String, dynamic>> doc) {
+    final data = doc.data() ?? <String, dynamic>{};
+    return DeviceCommandModel(
+      commandId: (data['commandId'] as String?) ?? doc.id,
+      appId: (data['appId'] as String?) ?? '',
+      appName: (data['appName'] as String?) ?? '',
+      packageName: (data['packageName'] as String?) ?? '',
+      action: (data['action'] as String?) ?? 'DOWNLOAD',
+      status: (data['status'] as String?) ?? 'PENDING',
+      sourcePlatform: (data['sourcePlatform'] as String?) ?? 'WEB',
+      requestedVersionCode:
+          (data['requestedVersionCode'] as num?)?.toInt() ?? 0,
+      message: (data['message'] as String?) ?? '',
+      createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
+      updatedAt: (data['updatedAt'] as Timestamp?)?.toDate(),
     );
   }
 }

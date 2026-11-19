@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -10,12 +11,27 @@ import 'models/store_app.dart';
 import 'services/firestore_service.dart';
 import 'services/installer_service.dart';
 
+enum _WebTab { store, myApps, admin, webDevOps }
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
-    await Firebase.initializeApp();
+    if (kIsWeb) {
+      await Firebase.initializeApp(
+        options: const FirebaseOptions(
+          apiKey: 'AIzaSyB2vHQJpjC7LNb2HRbDqVM3QZr1z9rwqwI',
+          appId: '1:244416837755:web:zayaanapps6fb94416',
+          messagingSenderId: '244416837755',
+          projectId: 'gen-lang-client-0726674621',
+          authDomain: 'gen-lang-client-0726674621.firebaseapp.com',
+          storageBucket: 'gen-lang-client-0726674621.firebasestorage.app',
+        ),
+      );
+    } else {
+      await Firebase.initializeApp();
+    }
   } catch (_) {
-    // Allows running local preview tests before Firebase web options are injected.
+    // Allows running local preview tests if Firebase initialization fails.
   }
   runApp(const ZayaanAppsStoreApp());
 }
@@ -111,7 +127,7 @@ class ZayaanResponsiveShell extends StatefulWidget {
 }
 
 class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
-  int _selectedIndex = 0;
+  _WebTab _activeTab = _WebTab.store;
   String _searchQuery = '';
   String _selectedCategory = 'All';
   String _selectedSubcategory = 'All';
@@ -119,6 +135,20 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
   StoreAppModel? _selectedApp;
   String? _statusBanner;
   double? _downloadProgress;
+
+  // Auth & Cross-device sync state
+  User? _currentUser;
+  bool _isSigningIn = false;
+  StreamSubscription<User?>? _authSubscription;
+  StreamSubscription<List<StoreAppModel>>? _catalogSubscription;
+  StreamSubscription<UserPreferenceModel>? _prefsSubscription;
+  StreamSubscription<List<UserInstalledAppModel>>? _installedAppsSubscription;
+  StreamSubscription<List<DeviceCommandModel>>? _deviceCommandsSubscription;
+  final Map<String, UserInstalledAppModel> _installedByAppId =
+      <String, UserInstalledAppModel>{};
+  List<DeviceCommandModel> _deviceCommands = const <DeviceCommandModel>[];
+  bool _hasInitializedCloudPrefs = false;
+  DateTime _lastLocalThemeChange = DateTime.fromMillisecondsSinceEpoch(0);
 
   // Phase 2 & Phase 3 synchronized state
   final Set<String> _wishlistIds = <String>{};
@@ -137,14 +167,18 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
   StreamSubscription<List<AppReviewModel>>? _reviewsSubscription;
   final List<TapGestureRecognizer> _linkRecognizers = <TapGestureRecognizer>[];
 
-  String get _currentUserId {
-    try {
-      if (Firebase.apps.isNotEmpty) {
-        return FirebaseAuth.instance.currentUser?.uid ?? 'web_user';
-      }
-    } catch (_) {}
-    return 'web_user';
-  }
+  bool get _isSignedIn => _currentUser != null;
+  bool get _isAdminUser => _isSignedIn && isAdminEmail(_currentUser?.email);
+
+  List<_WebTab> get _visibleTabs => _isAdminUser
+      ? const [_WebTab.store, _WebTab.myApps, _WebTab.admin, _WebTab.webDevOps]
+      : const [_WebTab.store, _WebTab.myApps, _WebTab.webDevOps];
+
+  String get _currentUserId => _currentUser?.uid ?? 'guest_web';
+
+  bool _isStoreAppModel(StoreAppModel app) =>
+      app.appId == 'zayaan-apps-store' ||
+      app.packageName == 'com.zayaanapps.store';
 
   ZayaanFirestoreService? _tryFirestore() {
     try {
@@ -158,11 +192,319 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
   @override
   void initState() {
     super.initState();
+    _initAuthListeners();
     _syncLatestGitHubRelease();
+  }
+
+  void _initAuthListeners() {
+    try {
+      if (Firebase.apps.isNotEmpty) {
+        final auth = FirebaseAuth.instance;
+        _currentUser = auth.currentUser;
+        _onAuthStateUpdated(_currentUser);
+        _authSubscription = auth.authStateChanges().listen((user) {
+          if (!mounted) return;
+          setState(() {
+            _currentUser = user;
+          });
+          _onAuthStateUpdated(user);
+        });
+      }
+    } catch (_) {}
+  }
+
+  void _onAuthStateUpdated(User? user) {
+    _catalogSubscription?.cancel();
+    _prefsSubscription?.cancel();
+    _installedAppsSubscription?.cancel();
+    _deviceCommandsSubscription?.cancel();
+
+    if (user == null) {
+      if (mounted) {
+        setState(() {
+          _installedByAppId.clear();
+          _deviceCommands = const <DeviceCommandModel>[];
+          _hasInitializedCloudPrefs = false;
+          if (_activeTab == _WebTab.admin) {
+            _activeTab = _WebTab.store;
+          }
+        });
+      }
+      return;
+    }
+
+    if (!_isAdminUser && _activeTab == _WebTab.admin && mounted) {
+      setState(() => _activeTab = _WebTab.store);
+    }
+
+    final fs = _tryFirestore();
+    if (fs == null) return;
+
+    _catalogSubscription = fs.observePublishedApps().listen(
+      (cloudApps) {
+        if (!mounted || cloudApps.isEmpty) return;
+        setState(() {
+          final storeMatches =
+              _catalog.where((a) => a.appId == 'zayaan-apps-store');
+          final currentStore = storeMatches.isEmpty ? null : storeMatches.first;
+          final merged = cloudApps.map((app) {
+            if (app.appId == 'zayaan-apps-store' &&
+                currentStore != null &&
+                currentStore.versionCode > app.versionCode) {
+              return StoreAppModel(
+                appId: app.appId,
+                appName: app.appName,
+                packageName: app.packageName,
+                category: app.category,
+                developerName: app.developerName,
+                shortDescription: app.shortDescription,
+                description: app.description,
+                iconUrl: app.iconUrl,
+                screenshots: app.screenshots,
+                versionName: currentStore.versionName,
+                versionCode: currentStore.versionCode,
+                apkDownloadUrl: currentStore.apkDownloadUrl,
+                apkFileSize: currentStore.apkFileSize,
+                releaseNotes: currentStore.releaseNotes.isNotEmpty
+                    ? currentStore.releaseNotes
+                    : app.releaseNotes,
+                featured: app.featured,
+                editorsChoice: app.editorsChoice,
+                essential: app.essential,
+                published: app.published,
+                downloadCount: app.downloadCount,
+                ratingSum: app.ratingSum,
+                reviewCount: app.reviewCount,
+                minAndroidSdk: app.minAndroidSdk,
+                targetAndroidSdk: app.targetAndroidSdk,
+                architecture: app.architecture,
+                permissionsList: app.permissionsList,
+                privacyPolicyUrl: app.privacyPolicyUrl,
+                websiteUrl: app.websiteUrl,
+                supportEmail: app.supportEmail,
+                githubRepoUrl: app.githubRepoUrl,
+                sha256Checksum: currentStore.sha256Checksum.isNotEmpty
+                    ? currentStore.sha256Checksum
+                    : app.sha256Checksum,
+                promoVideoUrl: app.promoVideoUrl,
+                offlineCapable: app.offlineCapable,
+                pageViews: app.pageViews,
+                authorUid: app.authorUid,
+                createdAt: app.createdAt,
+                updatedAt: app.updatedAt,
+              );
+            }
+            return app;
+          }).toList();
+          _catalog
+            ..clear()
+            ..addAll(merged);
+          if (_selectedApp != null) {
+            final selectedMatches =
+                _catalog.where((a) => a.appId == _selectedApp!.appId);
+            if (selectedMatches.isNotEmpty) {
+              _selectedApp = selectedMatches.first;
+            }
+          }
+        });
+      },
+      onError: (_) {},
+    );
+
+    _prefsSubscription = fs.observeUserPreferences(user.uid).listen(
+      (pref) {
+        if (!mounted) return;
+        if (!pref.existsInCloud && !_hasInitializedCloudPrefs) {
+          _hasInitializedCloudPrefs = true;
+          _syncPrefsToCloud();
+          return;
+        }
+        setState(() {
+          _notifyUpdates = pref.notifyUpdates;
+          _wishlistIds
+            ..clear()
+            ..addAll(pref.bookmarkedAppIds);
+          _favoriteIds
+            ..clear()
+            ..addAll(pref.favoriteAppIds);
+          _recentlyViewedIds
+            ..clear()
+            ..addAll(pref.recentlyViewedAppIds);
+          _downloadHistoryIds
+            ..clear()
+            ..addAll(pref.downloadedAppIds);
+          if (pref.searchHistory.isNotEmpty) {
+            _searchHistory
+              ..clear()
+              ..addAll(pref.searchHistory);
+          }
+        });
+        final withinDebounce =
+            DateTime.now().difference(_lastLocalThemeChange).inMilliseconds <
+                2000;
+        if (!withinDebounce) {
+          final remoteMode = switch (pref.themeMode.toUpperCase()) {
+            'LIGHT' => ThemeMode.light,
+            'DARK' => ThemeMode.dark,
+            _ => ThemeMode.system,
+          };
+          if (remoteMode != widget.themeMode) {
+            widget.onThemeModeChanged(remoteMode);
+          }
+        }
+      },
+      onError: (_) {},
+    );
+
+    _installedAppsSubscription = fs.observeUserInstalledApps(user.uid).listen(
+      (records) {
+        if (!mounted) return;
+        setState(() {
+          _installedByAppId
+            ..clear()
+            ..addEntries(records.map((r) => MapEntry(r.appId, r)));
+        });
+      },
+      onError: (_) {},
+    );
+
+    _deviceCommandsSubscription = fs.observeDeviceCommands(user.uid).listen(
+      (commands) {
+        if (!mounted) return;
+        setState(() {
+          _deviceCommands = commands;
+        });
+      },
+      onError: (_) {},
+    );
+  }
+
+  Future<void> _syncPrefsToCloud() async {
+    final user = _currentUser;
+    if (user == null) return;
+    final fs = _tryFirestore();
+    if (fs == null) return;
+    final themeStr = switch (widget.themeMode) {
+      ThemeMode.light => 'LIGHT',
+      ThemeMode.dark => 'DARK',
+      ThemeMode.system => 'SYSTEM',
+    };
+    try {
+      await fs.saveUserPreferences(
+        UserPreferenceModel(
+          userId: user.uid,
+          email: user.email ?? '',
+          darkMode: widget.themeMode == ThemeMode.dark,
+          themeMode: themeStr,
+          notifyUpdates: _notifyUpdates,
+          bookmarkedAppIds: _wishlistIds.toList(),
+          favoriteAppIds: _favoriteIds.toList(),
+          recentlyViewedAppIds: _recentlyViewedIds.toList(),
+          downloadedAppIds: _downloadHistoryIds.toList(),
+          searchHistory: _searchHistory.toList(),
+        ),
+      );
+    } catch (_) {}
+  }
+
+  Future<void> _signInWithGoogle() async {
+    if (Firebase.apps.isEmpty) {
+      setState(() {
+        _statusBanner = 'Firebase is not initialized in this browser session.';
+      });
+      return;
+    }
+    setState(() => _isSigningIn = true);
+    try {
+      final provider = GoogleAuthProvider();
+      provider.setCustomParameters({'prompt': 'select_account'});
+      try {
+        await FirebaseAuth.instance.signInWithPopup(provider);
+      } on FirebaseAuthException catch (e) {
+        if (e.code == 'popup-blocked' ||
+            e.code == 'operation-not-supported-in-this-environment') {
+          await FirebaseAuth.instance.signInWithRedirect(provider);
+          return;
+        }
+        rethrow;
+      }
+      if (!mounted) return;
+      final email = FirebaseAuth.instance.currentUser?.email ?? 'Google Account';
+      setState(() {
+        _isSigningIn = false;
+        _statusBanner =
+            'Signed in as $email. Cloud library & Android device sync active.';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isSigningIn = false;
+        _statusBanner = 'Google Sign-In failed: $e';
+      });
+    }
+  }
+
+  Future<void> _signOut() async {
+    try {
+      if (Firebase.apps.isNotEmpty) {
+        await FirebaseAuth.instance.signOut();
+      }
+      if (!mounted) return;
+      setState(() {
+        _statusBanner =
+            'Signed out. Only Zayaan Apps Store is downloadable without signing in.';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _statusBanner = 'Sign out failed: $e');
+    }
+  }
+
+  Future<void> _showSignInRequiredDialog(
+    StoreAppModel? app, {
+    String? customReason,
+  }) async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        final cs = Theme.of(dialogContext).colorScheme;
+        return AlertDialog(
+          icon: Icon(Icons.lock_outline, color: cs.primary, size: 28),
+          title: const Text(
+            'Google Sign-In Required',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          content: Text(
+            customReason ??
+                'Sign in with Google to download "${app?.appName ?? "this app"}" and sync installs & updates directly with your signed-in Android device.\n\nWithout signing in, only the official Zayaan Apps Store APK is available to download.',
+            style: const TextStyle(fontSize: 13),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton.icon(
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+                _signInWithGoogle();
+              },
+              icon: const Icon(Icons.login, size: 16),
+              label: const Text('Sign in with Google'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
   void dispose() {
+    _authSubscription?.cancel();
+    _catalogSubscription?.cancel();
+    _prefsSubscription?.cancel();
+    _installedAppsSubscription?.cancel();
+    _deviceCommandsSubscription?.cancel();
     _reviewsSubscription?.cancel();
     _reviewCommentController.dispose();
     for (final recognizer in _linkRecognizers) {
@@ -589,22 +931,97 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
       _recentlyViewedIds.remove(app.appId);
       _recentlyViewedIds.insert(0, app.appId);
     });
+    _syncPrefsToCloud();
   }
 
-  Future<void> _handleDownload(StoreAppModel app) async {
+  Future<void> _handleDownload(
+    StoreAppModel app, {
+    bool isRemoteUpdate = false,
+  }) async {
+    if (!_isSignedIn && !_isStoreAppModel(app)) {
+      await _showSignInRequiredDialog(app);
+      return;
+    }
+
     setState(() {
       _downloadProgress = 0.0;
       if (!_downloadHistoryIds.contains(app.appId)) {
         _downloadHistoryIds.insert(0, app.appId);
       }
     });
+
+    if (_isSignedIn) {
+      _syncPrefsToCloud();
+      final fs = _tryFirestore();
+      if (fs != null) {
+        try {
+          await fs.incrementDownloadCount(app.appId);
+        } catch (_) {}
+        final installedInfo = _installedByAppId[app.appId];
+        final action =
+            (isRemoteUpdate || installedInfo?.updateAvailable == true)
+                ? 'UPDATE'
+                : 'DOWNLOAD';
+        try {
+          await fs.enqueueDeviceCommand(
+            uid: _currentUser!.uid,
+            app: app,
+            action: action,
+            sourcePlatform: 'WEB',
+          );
+        } catch (_) {}
+      }
+    }
+
     await PlatformApkInstaller.downloadAndInstallOrOpen(
       app: app,
       onProgress: (p) => setState(() => _downloadProgress = p),
-      onStatus: (msg) => setState(() => _statusBanner = msg),
+      onStatus: (msg) => setState(() => _statusBanner = _isSignedIn
+          ? 'Synced ${appNameActionLabel(app, isRemoteUpdate)} to your signed-in Android device & $msg'
+          : msg),
     );
+    if (!mounted) return;
     setState(() {
       _downloadProgress = null;
+    });
+  }
+
+  String appNameActionLabel(StoreAppModel app, bool isRemoteUpdate) {
+    final installedInfo = _installedByAppId[app.appId];
+    return (isRemoteUpdate || installedInfo?.updateAvailable == true)
+        ? 'update for ${app.appName}'
+        : 'download for ${app.appName}';
+  }
+
+  Future<void> _handleUpdateAllOnWeb(List<StoreAppModel> updatableApps) async {
+    if (!_isSignedIn) {
+      await _showSignInRequiredDialog(
+        null,
+        customReason:
+            'Sign in with Google to send Update All commands to your signed-in Android device.',
+      );
+      return;
+    }
+    if (updatableApps.isEmpty) return;
+    final fs = _tryFirestore();
+    if (fs == null) return;
+    int queued = 0;
+    for (final app in updatableApps) {
+      try {
+        await fs.enqueueDeviceCommand(
+          uid: _currentUser!.uid,
+          app: app,
+          action: 'UPDATE',
+          sourcePlatform: 'WEB',
+        );
+        queued++;
+      } catch (_) {}
+    }
+    if (!mounted) return;
+    setState(() {
+      _statusBanner = queued > 0
+          ? 'Queued Update All ($queued app(s)) on your signed-in Android device!'
+          : 'Could not queue Update All right now.';
     });
   }
 
@@ -641,6 +1058,14 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
     required int stars,
     required String comment,
   }) async {
+    if (!_isSignedIn) {
+      await _showSignInRequiredDialog(
+        app,
+        customReason:
+            'Sign in with Google to submit or edit a community review in Cloud Firestore.',
+      );
+      return;
+    }
     final cleanStars = stars.clamp(1, 5);
     final cleanComment =
         comment.trim().isEmpty ? 'Rated $cleanStars stars.' : comment.trim();
@@ -732,13 +1157,21 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
     });
   }
 
+  void _updateThemeModeAndSync(ThemeMode mode) {
+    _lastLocalThemeChange = DateTime.now();
+    widget.onThemeModeChanged(mode);
+    if (_isSignedIn) {
+      Future.microtask(_syncPrefsToCloud);
+    }
+  }
+
   void _cycleThemeMode() {
     final next = switch (widget.themeMode) {
       ThemeMode.system => ThemeMode.light,
       ThemeMode.light => ThemeMode.dark,
       ThemeMode.dark => ThemeMode.system,
     };
-    widget.onThemeModeChanged(next);
+    _updateThemeModeAndSync(next);
   }
 
   String _themeModeLabel(ThemeMode mode) => switch (mode) {
@@ -785,53 +1218,60 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
     final isWide = MediaQuery.of(context).size.width >= 760;
     final categories = ['All', ...kStoreCategories];
     final filteredApps = _getFilteredApps();
+    final visibleTabs = _visibleTabs;
+    final rawIdx = visibleTabs.indexOf(_activeTab);
+    final selectedIdx = rawIdx >= 0 ? rawIdx : 0;
+
+    NavigationDestination destinationFor(_WebTab tab) => switch (tab) {
+          _WebTab.store => const NavigationDestination(
+              icon: Icon(Icons.shop), label: 'Store'),
+          _WebTab.myApps => const NavigationDestination(
+              icon: Icon(Icons.apps), label: 'My Apps'),
+          _WebTab.admin => const NavigationDestination(
+              icon: Icon(Icons.admin_panel_settings), label: 'Admin'),
+          _WebTab.webDevOps => const NavigationDestination(
+              icon: Icon(Icons.public), label: 'Web & DevOps'),
+        };
+
+    NavigationRailDestination railDestinationFor(_WebTab tab) => switch (tab) {
+          _WebTab.store => const NavigationRailDestination(
+              icon: Icon(Icons.shop), label: Text('Store')),
+          _WebTab.myApps => const NavigationRailDestination(
+              icon: Icon(Icons.apps), label: Text('My Apps')),
+          _WebTab.admin => const NavigationRailDestination(
+              icon: Icon(Icons.admin_panel_settings), label: Text('Admin')),
+          _WebTab.webDevOps => const NavigationRailDestination(
+              icon: Icon(Icons.public), label: Text('Web & DevOps')),
+        };
 
     return Scaffold(
       bottomNavigationBar: isWide
           ? null
           : NavigationBar(
-              selectedIndex: _selectedIndex,
+              selectedIndex: selectedIdx,
               onDestinationSelected: (idx) {
                 setState(() {
                   _selectedApp = null;
-                  _selectedIndex = idx;
+                  _activeTab = visibleTabs[idx.clamp(0, visibleTabs.length - 1)];
                 });
               },
-              destinations: const [
-                NavigationDestination(
-                    icon: Icon(Icons.shop), label: 'Store'),
-                NavigationDestination(
-                    icon: Icon(Icons.apps), label: 'My Apps'),
-                NavigationDestination(
-                    icon: Icon(Icons.admin_panel_settings), label: 'Admin'),
-                NavigationDestination(
-                    icon: Icon(Icons.public), label: 'Web & DevOps'),
-              ],
+              destinations: visibleTabs.map(destinationFor).toList(),
             ),
       body: SafeArea(
         child: Row(
           children: [
             if (isWide)
               NavigationRail(
-                selectedIndex: _selectedIndex,
+                selectedIndex: selectedIdx,
                 onDestinationSelected: (idx) {
                   setState(() {
                     _selectedApp = null;
-                    _selectedIndex = idx;
+                    _activeTab =
+                        visibleTabs[idx.clamp(0, visibleTabs.length - 1)];
                   });
                 },
                 labelType: NavigationRailLabelType.all,
-                destinations: const [
-                  NavigationRailDestination(
-                      icon: Icon(Icons.shop), label: Text('Store')),
-                  NavigationRailDestination(
-                      icon: Icon(Icons.apps), label: Text('My Apps')),
-                  NavigationRailDestination(
-                      icon: Icon(Icons.admin_panel_settings),
-                      label: Text('Admin')),
-                  NavigationRailDestination(
-                      icon: Icon(Icons.public), label: Text('Web & DevOps')),
-                ],
+                destinations: visibleTabs.map(railDestinationFor).toList(),
               ),
             Expanded(
               child: Column(
@@ -883,16 +1323,15 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
 
   Widget _buildTabContent(
       List<String> categories, List<StoreAppModel> filteredApps) {
-    switch (_selectedIndex) {
-      case 0:
-        return _buildStoreHomeTab(categories, filteredApps);
-      case 1:
-        return _buildMyAppsTab();
-      case 2:
-        return _buildAdminTab();
-      default:
-        return _buildWebDevOpsTab();
-    }
+    final tab = (_activeTab == _WebTab.admin && !_isAdminUser)
+        ? _WebTab.store
+        : _activeTab;
+    return switch (tab) {
+      _WebTab.store => _buildStoreHomeTab(categories, filteredApps),
+      _WebTab.myApps => _buildMyAppsTab(),
+      _WebTab.admin => _buildAdminTab(),
+      _WebTab.webDevOps => _buildWebDevOpsTab(),
+    };
   }
 
   IconData _webCategoryIcon(String category) => switch (category) {
@@ -1100,42 +1539,137 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  ActionChip(
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    visualDensity:
-                        const VisualDensity(horizontal: -2, vertical: -3),
-                    padding: const EdgeInsets.symmetric(horizontal: 6),
-                    labelPadding: const EdgeInsets.only(right: 4),
-                    avatar: Icon(
-                      switch (widget.themeMode) {
-                        ThemeMode.system => Icons.brightness_auto,
-                        ThemeMode.light => Icons.light_mode,
-                        ThemeMode.dark => Icons.dark_mode,
-                      },
-                      size: 14,
-                      color: isDark ? const Color(0xFF6EDBA9) : cs.primary,
-                    ),
-                    label: Text(
-                      _themeModeLabel(widget.themeMode),
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: heroTitleColor,
-                        fontWeight: FontWeight.w600,
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      if (!_isSignedIn)
+                        ActionChip(
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
+                          visualDensity: const VisualDensity(
+                              horizontal: -2, vertical: -3),
+                          padding: const EdgeInsets.symmetric(horizontal: 6),
+                          labelPadding: const EdgeInsets.only(right: 4),
+                          avatar: _isSigningIn
+                              ? SizedBox(
+                                  width: 12,
+                                  height: 12,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: cs.primary,
+                                  ),
+                                )
+                              : Icon(
+                                  Icons.login,
+                                  size: 14,
+                                  color: isDark
+                                      ? const Color(0xFF6EDBA9)
+                                      : cs.primary,
+                                ),
+                          label: Text(
+                            _isSigningIn ? 'Signing in...' : 'Sign In',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: heroTitleColor,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          backgroundColor: isDark
+                              ? Colors.white.withValues(alpha: 0.12)
+                              : cs.surface.withValues(alpha: 0.90),
+                          side: BorderSide(
+                            color: isDark
+                                ? const Color(0xFF6EDBA9).withValues(alpha: 0.40)
+                                : cs.primary.withValues(alpha: 0.25),
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(9),
+                          ),
+                          onPressed: _isSigningIn ? null : _signInWithGoogle,
+                          tooltip: 'Sign in with Google',
+                        )
+                      else
+                        ActionChip(
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
+                          visualDensity: const VisualDensity(
+                              horizontal: -2, vertical: -3),
+                          padding: const EdgeInsets.symmetric(horizontal: 6),
+                          labelPadding: const EdgeInsets.only(right: 4),
+                          avatar: Icon(
+                            _isAdminUser
+                                ? Icons.admin_panel_settings
+                                : Icons.account_circle,
+                            size: 14,
+                            color:
+                                isDark ? const Color(0xFF6EDBA9) : cs.primary,
+                          ),
+                          label: Text(
+                            (_currentUser?.email ?? 'Account')
+                                .split('@')
+                                .first,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: heroTitleColor,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          backgroundColor: isDark
+                              ? Colors.white.withValues(alpha: 0.12)
+                              : cs.surface.withValues(alpha: 0.90),
+                          side: BorderSide(
+                            color: isDark
+                                ? const Color(0xFF6EDBA9).withValues(alpha: 0.40)
+                                : cs.primary.withValues(alpha: 0.25),
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(9),
+                          ),
+                          onPressed: () =>
+                              setState(() => _activeTab = _WebTab.webDevOps),
+                          tooltip:
+                              '${_currentUser?.email ?? ""} • ${_isAdminUser ? "Administrator" : "Standard User"}',
+                        ),
+                      ActionChip(
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        visualDensity: const VisualDensity(
+                            horizontal: -2, vertical: -3),
+                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        labelPadding: const EdgeInsets.only(right: 4),
+                        avatar: Icon(
+                          switch (widget.themeMode) {
+                            ThemeMode.system => Icons.brightness_auto,
+                            ThemeMode.light => Icons.light_mode,
+                            ThemeMode.dark => Icons.dark_mode,
+                          },
+                          size: 14,
+                          color: isDark ? const Color(0xFF6EDBA9) : cs.primary,
+                        ),
+                        label: Text(
+                          _themeModeLabel(widget.themeMode),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: heroTitleColor,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        backgroundColor: isDark
+                            ? Colors.white.withValues(alpha: 0.12)
+                            : cs.surface.withValues(alpha: 0.90),
+                        side: BorderSide(
+                          color: isDark
+                              ? const Color(0xFF6EDBA9).withValues(alpha: 0.40)
+                              : cs.primary.withValues(alpha: 0.25),
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(9),
+                        ),
+                        onPressed: _cycleThemeMode,
+                        tooltip: 'Switch Theme (System / Light / Dark)',
                       ),
-                    ),
-                    backgroundColor: isDark
-                        ? Colors.white.withValues(alpha: 0.12)
-                        : cs.surface.withValues(alpha: 0.90),
-                    side: BorderSide(
-                      color: isDark
-                          ? const Color(0xFF6EDBA9).withValues(alpha: 0.40)
-                          : cs.primary.withValues(alpha: 0.25),
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(9),
-                    ),
-                    onPressed: _cycleThemeMode,
-                    tooltip: 'Switch Theme (System / Light / Dark)',
+                    ],
                   ),
                 ],
               ),
@@ -2036,6 +2570,12 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
         _catalog.where((a) => _wishlistIds.contains(a.appId)).toList();
     final downloadedApps =
         _catalog.where((a) => _downloadHistoryIds.contains(a.appId)).toList();
+    final installedApps = _catalog
+        .where((a) => _installedByAppId[a.appId]?.installed == true)
+        .toList();
+    final updatableApps = _catalog
+        .where((a) => _installedByAppId[a.appId]?.updateAvailable == true)
+        .toList();
 
     return ListView(
       padding: const EdgeInsets.all(14),
@@ -2084,7 +2624,9 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
                           overflow: TextOverflow.ellipsis,
                         ),
                         Text(
-                          'Updates, downloads, comparison & saved apps',
+                          _isSignedIn
+                              ? 'Synced with your Android device (${_currentUser?.email ?? ""})'
+                              : 'Sign in with Google to sync Android installs & updates',
                           style: TextStyle(
                               fontSize: 11, color: cs.onSurfaceVariant),
                           maxLines: 1,
@@ -2094,27 +2636,41 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
                     ),
                   ),
                   const SizedBox(width: 6),
-                  OutlinedButton.icon(
-                    onPressed: () {
-                      setState(() {
-                        _statusBanner =
-                            'Scanned catalog packages and checked GitHub Releases for latest v1.0.0.X updates.';
-                      });
-                    },
-                    style: OutlinedButton.styleFrom(
-                      visualDensity: VisualDensity.compact,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 6),
-                      textStyle: const TextStyle(
-                          fontSize: 11.5, fontWeight: FontWeight.w600),
-                      side:
-                          BorderSide(color: cs.primary.withValues(alpha: 0.35)),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(9)),
+                  if (!_isSignedIn)
+                    FilledButton.tonalIcon(
+                      onPressed: _isSigningIn ? null : _signInWithGoogle,
+                      style: FilledButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 6),
+                        textStyle: const TextStyle(
+                            fontSize: 11.5, fontWeight: FontWeight.w600),
+                      ),
+                      icon: const Icon(Icons.login, size: 14),
+                      label: const Text('Sign In'),
+                    )
+                  else
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        setState(() {
+                          _statusBanner =
+                              'Synced ${installedApps.length} installed app(s) and ${updatableApps.length} update(s) from your Android device.';
+                        });
+                      },
+                      style: OutlinedButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 6),
+                        textStyle: const TextStyle(
+                            fontSize: 11.5, fontWeight: FontWeight.w600),
+                        side: BorderSide(
+                            color: cs.primary.withValues(alpha: 0.35)),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(9)),
+                      ),
+                      icon: const Icon(Icons.refresh, size: 14),
+                      label: const Text('Sync'),
                     ),
-                    icon: const Icon(Icons.refresh, size: 14),
-                    label: const Text('Scan'),
-                  ),
                 ],
               ),
               const SizedBox(height: 8),
@@ -2132,9 +2688,24 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.apps, size: 12, color: cs.primary),
+                        Icon(Icons.phone_android, size: 12, color: cs.primary),
                         const SizedBox(width: 4),
-                        Text('${_catalog.length} Apps',
+                        Text('${installedApps.length} Installed',
+                            style: const TextStyle(
+                                fontSize: 10.5, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                    Container(
+                        width: 1,
+                        height: 11,
+                        color: cs.outline.withValues(alpha: 0.22)),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.system_update,
+                            size: 12, color: cs.tertiary),
+                        const SizedBox(width: 4),
+                        Text('${updatableApps.length} Updates',
                             style: const TextStyle(
                                 fontSize: 10.5, fontWeight: FontWeight.w600)),
                       ],
@@ -2160,23 +2731,9 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.bookmark, size: 12, color: cs.tertiary),
+                        Icon(Icons.bookmark, size: 12, color: cs.primary),
                         const SizedBox(width: 4),
                         Text('${wishlistApps.length} Saved',
-                            style: const TextStyle(
-                                fontSize: 10.5, fontWeight: FontWeight.w600)),
-                      ],
-                    ),
-                    Container(
-                        width: 1,
-                        height: 11,
-                        color: cs.outline.withValues(alpha: 0.22)),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.history, size: 12, color: cs.primary),
-                        const SizedBox(width: 4),
-                        Text('${downloadedApps.length} DLs',
                             style: const TextStyle(
                                 fontSize: 10.5, fontWeight: FontWeight.w600)),
                       ],
@@ -2189,74 +2746,340 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
         ),
         const SizedBox(height: 10),
 
-        // Section 1: Available Updates & Release Actions
+        // Section 1: Available Updates & Remote Device Sync
         _buildMyAppsSectionHeader(
           cs: cs,
           icon: Icons.system_update,
           iconTint: cs.tertiary,
           title: 'Available Updates',
-          count: 0,
+          count: updatableApps.length,
+          trailing: (_isSignedIn && updatableApps.length > 1)
+              ? FilledButton.icon(
+                  onPressed: () => _handleUpdateAllOnWeb(updatableApps),
+                  style: FilledButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    textStyle: const TextStyle(
+                        fontSize: 11, fontWeight: FontWeight.w700),
+                  ),
+                  icon: const Icon(Icons.system_update, size: 14),
+                  label: Text('Update All (${updatableApps.length})'),
+                )
+              : null,
         ),
         const SizedBox(height: 8),
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: cs.surface,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: cs.primary.withValues(alpha: 0.26)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: cs.primary.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(9),
-                      border:
-                          Border.all(color: cs.primary.withValues(alpha: 0.26)),
+        if (!_isSignedIn)
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: cs.surface,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: cs.outline.withValues(alpha: 0.26)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.cloud_sync, size: 18, color: cs.primary),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        'Sign in with Google to Sync Your Android Device',
+                        style: TextStyle(
+                            fontSize: 12.5, fontWeight: FontWeight.w600),
+                      ),
                     ),
-                    child:
-                        Icon(Icons.check_circle, size: 17, color: cs.primary),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'See which Zayaan apps are installed or need updates on your phone, and trigger updates on your Android device directly from the Web.',
+                  style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: [
+                    FilledButton.icon(
+                      onPressed: _isSigningIn ? null : _signInWithGoogle,
+                      icon: const Icon(Icons.login, size: 15),
+                      label: const Text('Sign in with Google'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () => _handleDownload(_catalog.first),
+                      icon: const Icon(Icons.download, size: 15),
+                      label: const Text('Download Store APK'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          )
+        else if (updatableApps.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: cs.surface,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: cs.primary.withValues(alpha: 0.26)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: cs.primary.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(9),
+                    border:
+                        Border.all(color: cs.primary.withValues(alpha: 0.26)),
                   ),
-                  const SizedBox(width: 10),
+                  child: Icon(Icons.check_circle, size: 17, color: cs.primary),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'All Synced Apps Up to Date',
+                        style: TextStyle(
+                            fontSize: 12.5, fontWeight: FontWeight.w600),
+                      ),
+                      Text(
+                        installedApps.isEmpty
+                            ? 'Open Zayaan Apps on Android signed in with ${_currentUser?.email ?? "this account"} to sync installed packages.'
+                            : 'All ${installedApps.length} installed Zayaan app(s) on your Android device match the latest release.',
+                        style:
+                            TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          ...updatableApps.map((app) {
+            final info = _installedByAppId[app.appId];
+            return Card(
+              margin: const EdgeInsets.only(bottom: 8),
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+                side: BorderSide(color: cs.tertiary.withValues(alpha: 0.35)),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+                child: Row(
+                  children: [
+                    _buildHomeAppIcon(app, cs, size: 42, radius: 11),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            app.appName,
+                            style: const TextStyle(
+                                fontSize: 13.5, fontWeight: FontWeight.bold),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(
+                            'v${info?.installedVersionName ?? "?"} → v${app.versionName} • ${info?.deviceModel ?? "Android Device"}',
+                            style: TextStyle(
+                                fontSize: 11, color: cs.onSurfaceVariant),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton.icon(
+                      onPressed: () =>
+                          _handleDownload(app, isRemoteUpdate: true),
+                      style: FilledButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 6),
+                        textStyle: const TextStyle(
+                            fontSize: 11, fontWeight: FontWeight.w600),
+                      ),
+                      icon: const Icon(Icons.system_update, size: 14),
+                      label: const Text('Update'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
+        if (_isSignedIn && installedApps.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _buildMyAppsSectionHeader(
+            cs: cs,
+            icon: Icons.phone_android,
+            iconTint: cs.primary,
+            title: 'Installed on Your Android Device',
+            count: installedApps.length,
+          ),
+          const SizedBox(height: 8),
+          ...installedApps.map((app) {
+            final info = _installedByAppId[app.appId];
+            final needsUpdate = info?.updateAvailable == true;
+            return Card(
+              margin: const EdgeInsets.only(bottom: 8),
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+                side: BorderSide(color: cs.outline.withValues(alpha: 0.24)),
+              ),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(14),
+                onTap: () => _openAppDetail(app),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+                  child: Row(
+                    children: [
+                      _buildHomeAppIcon(app, cs, size: 40, radius: 10),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              app.appName,
+                              style: const TextStyle(
+                                  fontSize: 13, fontWeight: FontWeight.bold),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            Text(
+                              'Installed v${info?.installedVersionName ?? app.versionName} • ${info?.deviceModel.isNotEmpty == true ? info!.deviceModel : "Android"}',
+                              style: TextStyle(
+                                  fontSize: 11, color: cs.onSurfaceVariant),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      if (needsUpdate)
+                        FilledButton.tonal(
+                          onPressed: () =>
+                              _handleDownload(app, isRemoteUpdate: true),
+                          style: FilledButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(horizontal: 10),
+                          ),
+                          child: const Text('Update',
+                              style: TextStyle(fontSize: 11)),
+                        )
+                      else
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: cs.primary.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                                color: cs.primary.withValues(alpha: 0.28)),
+                          ),
+                          child: Text(
+                            'Up to date',
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w600,
+                              color: cs.primary,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }),
+        ],
+        if (_isSignedIn && _deviceCommands.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _buildMyAppsSectionHeader(
+            cs: cs,
+            icon: Icons.cloud_upload_outlined,
+            iconTint: cs.secondary,
+            title: 'Device Sync Queue',
+            count: _deviceCommands.length,
+          ),
+          const SizedBox(height: 8),
+          ..._deviceCommands.take(5).map((cmd) {
+            final statusColor = switch (cmd.status) {
+              'COMPLETED' => cs.primary,
+              'FAILED' => cs.error,
+              'PROCESSING' => cs.secondary,
+              _ => cs.tertiary,
+            };
+            return Container(
+              margin: const EdgeInsets.only(bottom: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+              decoration: BoxDecoration(
+                color: cs.surface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: cs.outline.withValues(alpha: 0.22)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.phonelink_setup, size: 16, color: statusColor),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'All Apps Up to Date',
-                          style: TextStyle(
-                              fontSize: 12.5, fontWeight: FontWeight.w600),
+                        Text(
+                          '${cmd.action} • ${cmd.appName}',
+                          style: const TextStyle(
+                              fontSize: 12, fontWeight: FontWeight.w600),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                         Text(
-                          'All Zayaan Apps packages are synced with the latest GitHub Releases.',
+                          cmd.message,
                           style: TextStyle(
-                              fontSize: 11, color: cs.onSurfaceVariant),
+                              fontSize: 10.5, color: cs.onSurfaceVariant),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
                   ),
+                  const SizedBox(width: 6),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: statusColor.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                          color: statusColor.withValues(alpha: 0.30)),
+                    ),
+                    child: Text(
+                      cmd.status,
+                      style: TextStyle(
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.bold,
+                        color: statusColor,
+                      ),
+                    ),
+                  ),
                 ],
               ),
-              const SizedBox(height: 10),
-              FilledButton.tonalIcon(
-                style: FilledButton.styleFrom(
-                  visualDensity: VisualDensity.compact,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  textStyle: const TextStyle(
-                      fontSize: 11.5, fontWeight: FontWeight.w600),
-                ),
-                onPressed: () => _handleDownload(_catalog.first),
-                icon: const Icon(Icons.system_update, size: 15),
-                label: const Text('Download Latest Store APK'),
-              ),
-            ],
-          ),
-        ),
+            );
+          }),
+        ],
         const SizedBox(height: 12),
 
         // Section 2: Side-by-Side Comparison
@@ -2496,7 +3319,7 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
                             const SizedBox(width: 4),
                             Expanded(
                               child: Text(
-                                'zayaanapps@gmail.com • Trusted Admin (RBAC Verified)',
+                                '${_currentUser?.email ?? "Administrator"} • Trusted Admin (RBAC Verified)',
                                 style: TextStyle(
                                     fontSize: 11, color: cs.onSurfaceVariant),
                                 maxLines: 1,
@@ -2970,7 +3793,7 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
                   selected: <ThemeMode>{widget.themeMode},
                   onSelectionChanged: (selected) {
                     if (selected.isNotEmpty) {
-                      widget.onThemeModeChanged(selected.first);
+                      _updateThemeModeAndSync(selected.first);
                     }
                   },
                 ),
@@ -3002,7 +3825,79 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
                   style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
                 ),
                 value: _notifyUpdates,
-                onChanged: (v) => setState(() => _notifyUpdates = v),
+                onChanged: (v) {
+                  setState(() => _notifyUpdates = v);
+                  _syncPrefsToCloud();
+                },
+              ),
+              Divider(
+                height: 18,
+                color: cs.outline.withValues(alpha: 0.18),
+              ),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: cs.secondary.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                          color: cs.secondary.withValues(alpha: 0.28)),
+                    ),
+                    child: Icon(Icons.account_circle,
+                        size: 15, color: cs.secondary),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Account Session',
+                          style: TextStyle(
+                              fontSize: 13, fontWeight: FontWeight.w600),
+                        ),
+                        Text(
+                          _isSignedIn
+                              ? '${_currentUser?.email ?? "Google Account"} • ${_isAdminUser ? "Administrator" : "Standard User"}'
+                              : 'Guest browsing (Sign in to download apps & sync with Android)',
+                          style: TextStyle(
+                              fontSize: 11, color: cs.onSurfaceVariant),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  if (_isSignedIn)
+                    OutlinedButton.icon(
+                      onPressed: _signOut,
+                      style: OutlinedButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        foregroundColor: cs.error,
+                        side:
+                            BorderSide(color: cs.error.withValues(alpha: 0.35)),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(9)),
+                      ),
+                      icon: const Icon(Icons.logout, size: 14),
+                      label: const Text('Sign Out',
+                          style: TextStyle(fontSize: 11)),
+                    )
+                  else
+                    FilledButton.tonalIcon(
+                      onPressed: _isSigningIn ? null : _signInWithGoogle,
+                      style: FilledButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(9)),
+                      ),
+                      icon: const Icon(Icons.login, size: 14),
+                      label: const Text('Sign In',
+                          style: TextStyle(fontSize: 11)),
+                    ),
+                ],
               ),
             ],
           ),
@@ -3071,13 +3966,16 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
                     isFav ? Icons.favorite : Icons.favorite_border,
                     color: isFav ? cs.error : null,
                   ),
-                  onPressed: () => setState(() {
-                    if (isFav) {
-                      _favoriteIds.remove(app.appId);
-                    } else {
-                      _favoriteIds.add(app.appId);
-                    }
-                  }),
+                  onPressed: () {
+                    setState(() {
+                      if (isFav) {
+                        _favoriteIds.remove(app.appId);
+                      } else {
+                        _favoriteIds.add(app.appId);
+                      }
+                    });
+                    _syncPrefsToCloud();
+                  },
                 ),
                 IconButton(
                   tooltip: 'Wishlist',
@@ -3085,13 +3983,16 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
                     isWish ? Icons.bookmark : Icons.bookmark_border,
                     color: isWish ? cs.primary : null,
                   ),
-                  onPressed: () => setState(() {
-                    if (isWish) {
-                      _wishlistIds.remove(app.appId);
-                    } else {
-                      _wishlistIds.add(app.appId);
-                    }
-                  }),
+                  onPressed: () {
+                    setState(() {
+                      if (isWish) {
+                        _wishlistIds.remove(app.appId);
+                      } else {
+                        _wishlistIds.add(app.appId);
+                      }
+                    });
+                    _syncPrefsToCloud();
+                  },
                 ),
               ],
             ),
@@ -3308,14 +4209,35 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
                 const SizedBox(height: 12),
                 SizedBox(
                   width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: () => _handleDownload(app),
-                    icon: const Icon(Icons.cloud_download, size: 18),
-                    label: Text(
-                      PlatformApkInstaller.isAndroidPlatform
-                          ? 'Install (v${app.versionName})'
-                          : 'Download APK (v${app.versionName})',
-                    ),
+                  child: Builder(
+                    builder: (context) {
+                      final installedInfo = _installedByAppId[app.appId];
+                      final isUpdate = installedInfo?.updateAvailable == true;
+                      final needsSignIn =
+                          !_isSignedIn && !_isStoreAppModel(app);
+                      final btnLabel = needsSignIn
+                          ? 'Sign in to Download (v${app.versionName})'
+                          : isUpdate
+                              ? 'Update on Device & Web (v${app.versionName})'
+                              : _isSignedIn
+                                  ? 'Download on Device & Web (v${app.versionName})'
+                                  : PlatformApkInstaller.isAndroidPlatform
+                                      ? 'Install (v${app.versionName})'
+                                      : 'Download APK (v${app.versionName})';
+                      return FilledButton.icon(
+                        onPressed: () =>
+                            _handleDownload(app, isRemoteUpdate: isUpdate),
+                        icon: Icon(
+                          needsSignIn
+                              ? Icons.lock_outline
+                              : isUpdate
+                                  ? Icons.system_update
+                                  : Icons.cloud_download,
+                          size: 18,
+                        ),
+                        label: Text(btnLabel),
+                      );
+                    },
                   ),
                 ),
               ],

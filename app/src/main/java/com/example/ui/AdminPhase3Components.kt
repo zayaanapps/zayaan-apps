@@ -1210,7 +1210,7 @@ fun UsersDevelopersAndRolesDialog(
                             Spacer(modifier = Modifier.width(8.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "zayaanapps@gmail.com (Primary Store Owner)",
+                                    text = "Bootstrapped Store Owner (RBAC Verified)",
                                     style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.Bold
                                 )

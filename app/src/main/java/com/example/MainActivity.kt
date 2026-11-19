@@ -93,8 +93,10 @@ import com.example.data.AppThemeMode
 import com.example.data.DownloadState
 import com.example.data.StoreApp
 import com.example.data.StoreRepository
+import com.example.data.isAdminEmail
 import com.example.ui.AdminDashboardScreen
 import com.example.ui.AppDetailScreen
+import com.example.ui.AuthScreen
 import com.example.ui.MyAppsScreen
 import com.example.ui.StoreHomeScreen
 import com.example.ui.StoreViewModel
@@ -157,17 +159,32 @@ fun ZayaanStoreRoot(auth: FirebaseAuth? = null) {
         }
     }
 
-    val activeUserId = currentUser?.uid ?: "guest-preview"
-    val activeUserEmail = currentUser?.email
-    val isAuthenticated = currentUser != null
-
-    key(activeUserId) {
-        AuthenticatedStoreShell(
-            currentUserId = activeUserId,
-            currentUserEmail = activeUserEmail,
-            isAuthenticated = isAuthenticated,
-            isFirebaseInitialized = isFirebaseInitialized
-        )
+    val user = currentUser
+    if (user == null) {
+        val localController = remember(context) { AndroidPackageController(context) }
+        val savedThemeMode = remember { localController.getSavedThemeMode() }
+        val systemDark = isSystemInDarkTheme()
+        val authDark = when (savedThemeMode) {
+            AppThemeMode.SYSTEM -> systemDark
+            AppThemeMode.LIGHT -> false
+            AppThemeMode.DARK -> true
+        }
+        ZayaanAppsTheme(darkTheme = authDark) {
+            AuthScreen(
+                onAuthSuccess = {
+                    currentUser = resolvedAuth?.currentUser
+                }
+            )
+        }
+    } else {
+        key(user.uid) {
+            AuthenticatedStoreShell(
+                currentUserId = user.uid,
+                currentUserEmail = user.email,
+                isAuthenticated = true,
+                isFirebaseInitialized = isFirebaseInitialized
+            )
+        }
     }
 }
 
@@ -244,9 +261,17 @@ fun AuthenticatedStoreShell(
     val downloadedAppIds = userPrefs?.downloadedAppIds ?: emptyList()
     val searchHistory = userPrefs?.searchHistory ?: emptyList()
     val recentlyViewedIds = userPrefs?.recentlyViewedAppIds ?: emptyList()
-    val isAdminUser = !isAuthenticated || isTrustedAdmin || currentUserEmail.equals("zayaanapps@gmail.com", ignoreCase = true)
+    val isAdminUser = isAuthenticated && (isTrustedAdmin || isAdminEmail(currentUserEmail))
+    val visibleTabs = remember(isAdminUser) {
+        ZayaanTab.entries.filter { it != ZayaanTab.ADMIN || isAdminUser }
+    }
 
     var currentTab by remember { mutableStateOf(ZayaanTab.STORE) }
+    LaunchedEffect(isAdminUser) {
+        if (!isAdminUser && currentTab == ZayaanTab.ADMIN) {
+            currentTab = ZayaanTab.STORE
+        }
+    }
     var selectedAppIdForDetail by remember { mutableStateOf<String?>(null) }
 
     val context = LocalContext.current
@@ -331,7 +356,7 @@ fun AuthenticatedStoreShell(
                 bottomBar = {
                     if (!isExpandedScreen) {
                         NavigationBar {
-                            ZayaanTab.entries.forEach { tab ->
+                            visibleTabs.forEach { tab ->
                                 NavigationBarItem(
                                     selected = currentTab == tab && selectedAppIdForDetail == null,
                                     onClick = {
@@ -366,7 +391,7 @@ fun AuthenticatedStoreShell(
                 ) {
                     if (isExpandedScreen) {
                         NavigationRail(modifier = Modifier.fillMaxHeight()) {
-                            ZayaanTab.entries.forEach { tab ->
+                            visibleTabs.forEach { tab ->
                                 NavigationRailItem(
                                     selected = currentTab == tab && selectedAppIdForDetail == null,
                                     onClick = {
@@ -642,7 +667,8 @@ fun AuthenticatedStoreShell(
                                     }
 
                                     ZayaanTab.ADMIN -> {
-                                        AdminDashboardScreen(
+                                        if (isAdminUser) {
+                                            AdminDashboardScreen(
                                             adminAppsState = adminAppsState,
                                             categoriesState = categoriesState,
                                             allReviews = allReviews,
@@ -722,6 +748,9 @@ fun AuthenticatedStoreShell(
                                             },
                                             onSeedOfficialCatalog = { viewModel.seedCatalogNow() }
                                         )
+                                        } else {
+                                            LaunchedEffect(Unit) { currentTab = ZayaanTab.STORE }
+                                        }
                                     }
 
                                     ZayaanTab.WEB_DEVOPS -> {
@@ -735,6 +764,7 @@ fun AuthenticatedStoreShell(
                                             themeMode = themeMode,
                                             notifyUpdates = notifyUpdates,
                                             currentUserEmail = currentUserEmail,
+                                            isAdminUser = isAdminUser,
                                             canInstallUnknownApps = canInstallUnknown,
                                             notificationsPermissionGranted = notificationsAllowed,
                                             onThemeModeChange = { viewModel.updateThemeMode(it) },

@@ -310,3 +310,140 @@ test("Phase 3 Admin Management: version history, reports moderation, admin RBAC,
     })
   );
 });
+
+test("Role-based Admin access: configured admins and zayaanapps@<anydomain> pass, unverified or standard users fail", async () => {
+  const adminEmails = [
+    "zayaanapps@gmail.com",
+    "zayaanapps@customstudio.org",
+    "ZayaanApps@proton.me",
+    "themadkafi@gmail.com",
+    "ckoud0@mail.com",
+    "abdullahilkuafi@gmail.com",
+  ];
+
+  for (let i = 0; i < adminEmails.length; i++) {
+    const uid = `verified_admin_${i}`;
+    const db = testEnv.authenticatedContext(uid, {
+      email: adminEmails[i],
+      email_verified: true,
+    }).firestore();
+    await assertSucceeds(
+      db.collection("admins").doc(uid).set({
+        userId: uid,
+        role: "superadmin",
+        createdAt: new Date(Date.now() - 1000),
+      })
+    );
+  }
+
+  // Unverified admin email must be rejected
+  const unverifiedDb = testEnv.authenticatedContext("unverified_admin", {
+    email: "zayaanapps@gmail.com",
+    email_verified: false,
+  }).firestore();
+  await assertFails(
+    unverifiedDb.collection("admins").doc("unverified_admin").set({
+      userId: "unverified_admin",
+      role: "admin",
+      createdAt: new Date(Date.now() - 1000),
+    })
+  );
+
+  // General user cannot write to /admins
+  const generalDb = testEnv.authenticatedContext("general_user", {
+    email: "regular.user@gmail.com",
+    email_verified: true,
+  }).firestore();
+  await assertFails(
+    generalDb.collection("admins").doc("general_user").set({
+      userId: "general_user",
+      role: "admin",
+      createdAt: new Date(Date.now() - 1000),
+    })
+  );
+});
+
+test("Cross-device User Sync: owner can sync installed_apps and device_commands, other users blocked", async () => {
+  const userDb = testEnv.authenticatedContext(USER_UID, {
+    email: "regular.user@gmail.com",
+    email_verified: true,
+  }).firestore();
+  const otherDb = testEnv.authenticatedContext(OTHER_UID, {
+    email: "other.user@gmail.com",
+    email_verified: true,
+  }).firestore();
+  const now = new Date(Date.now() - 1500);
+
+  await assertSucceeds(
+    userDb.collection("users").doc(USER_UID).set({
+      userId: USER_UID,
+      darkMode: false,
+      themeMode: "SYSTEM",
+      email: "regular.user@gmail.com",
+      notifyUpdates: true,
+      bookmarkedAppIds: ["zayaan-calc"],
+      createdAt: now,
+      updatedAt: now,
+    })
+  );
+
+  await assertSucceeds(
+    userDb.collection("users").doc(USER_UID).collection("installed_apps").doc("zayaan-calc").set({
+      appId: "zayaan-calc",
+      appName: "Zayaan Calculator",
+      packageName: "com.zayaanapps.calculator",
+      installed: true,
+      installedVersionName: "1.0.0.1",
+      installedVersionCode: 1,
+      remoteVersionName: "1.0.0.2",
+      remoteVersionCode: 2,
+      updateAvailable: true,
+      deviceModel: "Pixel 9",
+      updatedAt: now,
+    })
+  );
+
+  await assertSucceeds(
+    userDb.collection("users").doc(USER_UID).collection("device_commands").doc("cmd_1").set({
+      commandId: "cmd_1",
+      appId: "zayaan-calc",
+      appName: "Zayaan Calculator",
+      packageName: "com.zayaanapps.calculator",
+      action: "UPDATE",
+      status: "PENDING",
+      sourcePlatform: "WEB",
+      requestedVersionCode: 2,
+      message: "Queued from Web portal",
+      createdAt: now,
+      updatedAt: now,
+    })
+  );
+
+  await assertSucceeds(
+    userDb.collection("users").doc(USER_UID).collection("device_commands").doc("cmd_1").update({
+      status: "COMPLETED",
+      message: "Updated on Android device",
+      updatedAt: new Date(Date.now() - 500),
+    })
+  );
+
+  // Other user cannot read or write owner's installed_apps or device_commands
+  await assertFails(otherDb.collection("users").doc(USER_UID).collection("installed_apps").doc("zayaan-calc").get());
+  await assertFails(otherDb.collection("users").doc(USER_UID).collection("device_commands").doc("cmd_1").get());
+  await assertFails(
+    otherDb.collection("users").doc(USER_UID).collection("device_commands").doc("cmd_2").set({
+      commandId: "cmd_2",
+      appId: "zayaan-calc",
+      appName: "Zayaan Calculator",
+      packageName: "com.zayaanapps.calculator",
+      action: "DOWNLOAD",
+      status: "PENDING",
+      sourcePlatform: "WEB",
+      requestedVersionCode: 2,
+      message: "Unauthorized remote trigger",
+      createdAt: now,
+      updatedAt: now,
+    })
+  );
+});
+
