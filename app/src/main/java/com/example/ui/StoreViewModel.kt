@@ -530,6 +530,11 @@ class StoreViewModel(
         _statusBannerMessage.value = "Scanned device packages & checked GitHub for store updates."
     }
 
+    fun rescanInstalledPackagesSilently() {
+        val currentApps = (_publishedAppsState.value as? UiState.Success)?.data ?: return
+        refreshInstalledPackages(currentApps)
+    }
+
     private fun checkGitHubSelfUpdate() {
         viewModelScope.launch {
             val remoteRelease = packageController.fetchLatestGitHubStoreRelease()

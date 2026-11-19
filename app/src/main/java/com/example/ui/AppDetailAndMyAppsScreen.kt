@@ -424,7 +424,10 @@ fun AppDetailScreen(
                         Spacer(modifier = Modifier.height(14.dp))
                     }
 
-                    // Download & Package Installer Action Area
+                    // Package Action Area: Install only (if not installed) or Uninstall + Open/Update (if installed)
+                    val isAppInstalled = installedStatus?.isInstalled == true
+                    val hasAppUpdate = installedStatus?.updateAvailable == true
+
                     when (downloadState) {
                         is DownloadState.Downloading -> {
                             Column(modifier = Modifier.fillMaxWidth()) {
@@ -434,7 +437,7 @@ fun AppDetailScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        text = "Downloading APK package (${downloadState.downloadedBytes / 1024} KB)...",
+                                        text = "Downloading APK (${downloadState.downloadedBytes / 1024} KB)...",
                                         style = MaterialTheme.typography.labelMedium
                                     )
                                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -446,7 +449,7 @@ fun AppDetailScreen(
                                         IconButton(onClick = { onCancelDownload(appId) }) {
                                             Icon(
                                                 imageVector = Icons.Default.Close,
-                                                contentDescription = "Pause or Cancel Download",
+                                                contentDescription = "Cancel Download",
                                                 modifier = Modifier.size(18.dp)
                                             )
                                         }
@@ -464,15 +467,51 @@ fun AppDetailScreen(
                         }
 
                         is DownloadState.Paused -> {
-                            Button(
-                                onClick = { onStartDownload(app) },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("resume_apk_button")
-                            ) {
-                                Icon(imageVector = Icons.Default.CloudDownload, contentDescription = null)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Resume Download (${downloadState.progressPercent}%)")
+                            if (isAppInstalled) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    OutlinedButton(
+                                        onClick = { onUninstallApp(context, app.packageName) },
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .testTag("uninstall_app_button")
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Delete,
+                                            contentDescription = "Uninstall",
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Uninstall")
+                                    }
+                                    Button(
+                                        onClick = { onStartDownload(app) },
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .testTag("resume_apk_button")
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.SystemUpdate,
+                                            contentDescription = "Resume",
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Resume (${downloadState.progressPercent}%)")
+                                    }
+                                }
+                            } else {
+                                Button(
+                                    onClick = { onStartDownload(app) },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag("resume_apk_button")
+                                ) {
+                                    Icon(imageVector = Icons.Default.CloudDownload, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Resume Install (${downloadState.progressPercent}%)")
+                                }
                             }
                         }
 
@@ -490,22 +529,58 @@ fun AppDetailScreen(
                                         modifier = Modifier.padding(10.dp)
                                     )
                                 }
-                                Button(
-                                    onClick = { onDownloadLatestGitHubRelease(context, app) },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .testTag("retry_apk_button")
-                                ) {
-                                    Icon(imageVector = Icons.Default.Refresh, contentDescription = null)
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Auto-Resolve & Download Latest Release APK")
+                                if (isAppInstalled) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        OutlinedButton(
+                                            onClick = { onUninstallApp(context, app.packageName) },
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .testTag("uninstall_app_button")
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Delete,
+                                                contentDescription = "Uninstall",
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text("Uninstall")
+                                        }
+                                        Button(
+                                            onClick = { onDownloadLatestGitHubRelease(context, app) },
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .testTag("retry_apk_button")
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Refresh,
+                                                contentDescription = "Retry",
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text("Update")
+                                        }
+                                    }
+                                } else {
+                                    Button(
+                                        onClick = { onDownloadLatestGitHubRelease(context, app) },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .testTag("retry_apk_button")
+                                    ) {
+                                        Icon(imageVector = Icons.Default.Refresh, contentDescription = null)
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Install")
+                                    }
                                 }
                             }
                         }
 
                         is DownloadState.ReadyToInstall -> {
                             val apkVersionLabel = downloadState.versionName.ifBlank { app.versionName }
-                            val hasSignatureConflict = installedStatus?.isInstalled == true &&
+                            val hasSignatureConflict = isAppInstalled &&
                                 downloadState.signingCertSha256.isNotBlank() &&
                                 !downloadState.signatureMatchesInstalled
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -515,43 +590,65 @@ fun AppDetailScreen(
                                         shape = RoundedCornerShape(12.dp),
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
-                                        Column(
-                                            modifier = Modifier.padding(12.dp),
-                                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                                        ) {
-                                            Text(
-                                                text = "Signing Certificate Differs from Installed Build",
-                                                style = MaterialTheme.typography.titleSmall,
-                                                color = MaterialTheme.colorScheme.onErrorContainer
-                                            )
-                                            Text(
-                                                text = "Android blocks updating over an existing build signed with a different key ('package conflicts'). Tap 'Uninstall Old Build' once, then install v$apkVersionLabel.",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onErrorContainer
-                                            )
-                                            OutlinedButton(
-                                                onClick = { onUninstallApp(context, app.packageName) },
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .testTag("uninstall_conflicting_app_button")
-                                            ) {
-                                                Text("Uninstall Old Build (${app.packageName})")
-                                            }
-                                        }
+                                        Text(
+                                            text = "Signing certificate differs from installed build. Tap Uninstall first, then tap Install.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onErrorContainer,
+                                            modifier = Modifier.padding(12.dp)
+                                        )
                                     }
                                 }
-                                Button(
-                                    onClick = { onInstallApk(context, downloadState.apkFilePath) },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .testTag("install_apk_button"),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = MaterialTheme.colorScheme.secondary
-                                    )
-                                ) {
-                                    Icon(imageVector = Icons.Default.InstallMobile, contentDescription = null)
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Install APK Now (v$apkVersionLabel)")
+                                if (isAppInstalled) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        OutlinedButton(
+                                            onClick = { onUninstallApp(context, app.packageName) },
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .testTag("uninstall_app_button")
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Delete,
+                                                contentDescription = "Uninstall",
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text("Uninstall")
+                                        }
+                                        Button(
+                                            onClick = { onInstallApk(context, downloadState.apkFilePath) },
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .testTag("install_apk_button"),
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = MaterialTheme.colorScheme.secondary
+                                            )
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.InstallMobile,
+                                                contentDescription = "Install Update",
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text("Update (v$apkVersionLabel)")
+                                        }
+                                    }
+                                } else {
+                                    Button(
+                                        onClick = { onInstallApk(context, downloadState.apkFilePath) },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .testTag("install_apk_button"),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.secondary
+                                        )
+                                    ) {
+                                        Icon(imageVector = Icons.Default.InstallMobile, contentDescription = null)
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Install (v$apkVersionLabel)")
+                                    }
                                 }
                                 if (downloadState.computedSha256.isNotBlank()) {
                                     Text(
@@ -573,102 +670,78 @@ fun AppDetailScreen(
                                         }
                                     )
                                 }
-                                OutlinedButton(
-                                    onClick = { onDownloadLatestGitHubRelease(context, app) },
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text("Fetch Latest Release APK from GitHub")
-                                }
                             }
                         }
 
                         else -> {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Button(
-                                    onClick = { onStartDownload(app) },
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .testTag("download_apk_button")
+                            if (isAppInstalled) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
-                                    Icon(imageVector = Icons.Default.CloudDownload, contentDescription = null)
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    val buttonText = when {
-                                        installedStatus?.updateAvailable == true -> "Update APK (v${app.versionName})"
-                                        installedStatus?.isInstalled == true -> "Re-Download APK"
-                                        else -> "Download APK (${app.apkFileSize})"
-                                    }
-                                    Text(buttonText)
-                                }
-
-                                if (installedStatus?.isInstalled == true) {
                                     OutlinedButton(
-                                        onClick = { onOpenInstalledApp(context, app.packageName) },
-                                        modifier = Modifier.testTag("open_installed_app_button")
+                                        onClick = { onUninstallApp(context, app.packageName) },
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .testTag("uninstall_app_button")
                                     ) {
                                         Icon(
-                                            imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-                                            contentDescription = "Open Installed App"
+                                            imageVector = Icons.Default.Delete,
+                                            contentDescription = "Uninstall",
+                                            modifier = Modifier.size(18.dp)
                                         )
                                         Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Open")
+                                        Text("Uninstall")
+                                    }
+
+                                    if (hasAppUpdate) {
+                                        Button(
+                                            onClick = { onDownloadLatestGitHubRelease(context, app) },
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .testTag("update_app_button")
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.SystemUpdate,
+                                                contentDescription = "Update",
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text("Update")
+                                        }
+                                    } else {
+                                        Button(
+                                            onClick = { onOpenInstalledApp(context, app.packageName) },
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .testTag("open_installed_app_button")
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+                                                contentDescription = "Open",
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text("Open")
+                                        }
                                     }
                                 }
+                            } else {
+                                Button(
+                                    onClick = { onDownloadLatestGitHubRelease(context, app) },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag("install_apk_button")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.CloudDownload,
+                                        contentDescription = "Install",
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Install")
+                                }
                             }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    FilledTonalButton(
-                        onClick = { onDownloadLatestGitHubRelease(context, app) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("fetch_latest_github_release_apk_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.SystemUpdate,
-                            contentDescription = "Fetch Latest APK from GitHub Releases",
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Download Latest Version from GitHub Releases")
-                    }
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = { onOpenBrowserDownload(context, app) },
-                            modifier = Modifier
-                                .weight(1f)
-                                .testTag("browser_direct_download_button")
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-                                contentDescription = "Direct GitHub Releases APK Link",
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("GitHub Release Mirror")
-                        }
-
-                        FilledTonalButton(
-                            onClick = { onToggleCompare(appId) },
-                            modifier = Modifier.testTag("compare_toggle_action_button")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.CompareArrows,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(if (isInComparison) "In Compare" else "Compare")
                         }
                     }
                 }
