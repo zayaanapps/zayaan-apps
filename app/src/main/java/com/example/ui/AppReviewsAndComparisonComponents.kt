@@ -22,6 +22,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CompareArrows
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.filled.Forum
+import androidx.compose.material.icons.filled.RateReview
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.ThumbUp
@@ -57,6 +60,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.R
 import com.example.data.AppReview
@@ -108,48 +112,69 @@ fun RatingsAndReviewsSection(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.RateReview,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = "Ratings & Reviews",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                     Text(
-                        text = "Ratings & Community Reviews",
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                    Text(
-                        text = "Verified installs, helpful votes & developer replies",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = "Verified installs, helpful votes & replies",
+                        fontSize = 11.5.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
+                Spacer(modifier = Modifier.width(8.dp))
                 Surface(
                     color = MaterialTheme.colorScheme.primaryContainer,
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.28f))
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Star,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(14.dp)
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = if (totalReviews > 0 || app.reviewCount > 0) {
                                 "${String.format(Locale.US, "%.1f", calculatedAverage)} (${maxOf(totalReviews.toLong(), app.reviewCount)})"
                             } else {
-                                "5.0 ★ New"
+                                "5.0 New"
                             },
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
                 }
@@ -157,107 +182,171 @@ fun RatingsAndReviewsSection(
 
             // 5-Star Histogram Breakdown
             if (reviews.isNotEmpty()) {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    for (star in 5 downTo 1) {
-                        val countForStar = reviews.count { it.rating == star.toLong() }
-                        val ratio = countForStar.toFloat() / reviews.size.coerceAtLeast(1).toFloat()
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth()
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.20f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        for (star in 5 downTo 1) {
+                            val countForStar = reviews.count { it.rating == star.toLong() }
+                            val ratio = countForStar.toFloat() / reviews.size.coerceAtLeast(1).toFloat()
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = "$star ★",
+                                    fontSize = 11.sp,
+                                    modifier = Modifier.width(26.dp)
+                                )
+                                LinearProgressIndicator(
+                                    progress = { ratio },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(5.dp)
+                                        .clip(RoundedCornerShape(3.dp))
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "$countForStar",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.width(22.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Compact Rate & Review Box
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.22f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (existingUserReview != null) "Update Your Review" else "Rate & Review ${app.appName}",
+                            style = MaterialTheme.typography.labelLarge,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Surface(
+                            color = MaterialTheme.colorScheme.surface,
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f))
                         ) {
                             Text(
-                                text = "$star ★",
-                                style = MaterialTheme.typography.labelSmall,
-                                modifier = Modifier.width(28.dp)
+                                text = "$selectedStars / 5 ★",
+                                fontSize = 10.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                                maxLines = 1,
+                                softWrap = false
                             )
-                            LinearProgressIndicator(
-                                progress = { ratio },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(6.dp)
-                                    .clip(RoundedCornerShape(3.dp))
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            for (star in 1L..5L) {
+                                IconButton(
+                                    onClick = { selectedStars = star },
+                                    modifier = Modifier.testTag("star_rating_button_$star")
+                                ) {
+                                    Icon(
+                                        imageVector = if (star <= selectedStars) Icons.Default.Star else Icons.Default.StarBorder,
+                                        contentDescription = "Rate $star stars",
+                                        tint = if (star <= selectedStars) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = reviewComment,
+                        onValueChange = { reviewComment = it },
+                        label = { Text("Share your experience...", fontSize = 12.sp) },
+                        minLines = 1,
+                        maxLines = 3,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("review_comment_input")
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        Button(
+                            onClick = {
+                                onSubmitReview(selectedStars, reviewComment)
+                            },
+                            modifier = Modifier.testTag("submit_review_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Send,
+                                contentDescription = null,
+                                modifier = Modifier.size(15.dp)
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "$countForStar",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.width(22.dp)
+                                text = if (existingUserReview != null) "Update Review" else "Post Review",
+                                fontSize = 12.sp
                             )
                         }
                     }
                 }
             }
 
-            HorizontalDivider()
-
-            // Write or Update Your Review Form
-            Text(
-                text = if (existingUserReview != null) "Update Your Review" else "Rate & Review ${app.appName}",
-                style = MaterialTheme.typography.labelLarge
-            )
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                for (star in 1L..5L) {
-                    IconButton(
-                        onClick = { selectedStars = star },
-                        modifier = Modifier.testTag("star_rating_button_$star")
-                    ) {
-                        Icon(
-                            imageVector = if (star <= selectedStars) Icons.Default.Star else Icons.Default.StarBorder,
-                            contentDescription = "Rate $star stars",
-                            tint = if (star <= selectedStars) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-                Text(
-                    text = "$selectedStars / 5 Stars",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-
-            OutlinedTextField(
-                value = reviewComment,
-                onValueChange = { reviewComment = it },
-                label = { Text("Share your experience with this APK release...") },
-                minLines = 2,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("review_comment_input")
-            )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
-            ) {
-                Button(
-                    onClick = {
-                        onSubmitReview(selectedStars, reviewComment)
-                    },
-                    modifier = Modifier.testTag("submit_review_button")
-                ) {
-                    Text(if (existingUserReview != null) "Update Review" else "Post Review")
-                }
-            }
-
             // Community Reviews List
             if (reviews.isEmpty()) {
                 Surface(
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
                     shape = RoundedCornerShape(12.dp),
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.22f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(
-                        text = "No written reviews yet for ${app.appName}. Be the first to rate this release!",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(14.dp)
-                    )
+                    Row(
+                        modifier = Modifier.padding(10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Forum,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = "No written reviews yet. Be the first to rate this release!",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             } else {
                 HorizontalDivider()
@@ -355,7 +444,8 @@ private fun ReviewItemCard(
                     if (review.verifiedInstall) {
                         Surface(
                             color = MaterialTheme.colorScheme.secondaryContainer,
-                            shape = RoundedCornerShape(6.dp)
+                            shape = RoundedCornerShape(6.dp),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.25f))
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
@@ -379,7 +469,8 @@ private fun ReviewItemCard(
                     if (review.flagged) {
                         Surface(
                             color = MaterialTheme.colorScheme.errorContainer,
-                            shape = RoundedCornerShape(6.dp)
+                            shape = RoundedCornerShape(6.dp),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.25f))
                         ) {
                             Text(
                                 text = "Flagged",
@@ -400,7 +491,8 @@ private fun ReviewItemCard(
             Spacer(modifier = Modifier.height(6.dp))
             Text(
                 text = review.comment,
-                style = MaterialTheme.typography.bodyMedium
+                fontSize = 12.5.sp,
+                lineHeight = 17.sp
             )
 
             if (review.developerReply.isNotBlank()) {
@@ -408,6 +500,7 @@ private fun ReviewItemCard(
                 Surface(
                     color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
                     shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(10.dp)) {

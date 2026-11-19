@@ -25,34 +25,46 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
+import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.CompareArrows
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.InstallMobile
+import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.NewReleases
 import androidx.compose.material.icons.filled.OfflineBolt
+import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Policy
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SdStorage
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Update
 import androidx.compose.material.icons.filled.Verified
+import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.material.icons.filled.WorkspacePremium
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -255,15 +267,15 @@ fun AppDetailScreen(
             }
         }
 
-        // 2. App Identity Header Card
+        // 2. App Identity Header Card (Compact & Bordered)
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(22.dp),
+                shape = RoundedCornerShape(20.dp),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.28f)),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
+                Column(modifier = Modifier.padding(14.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         val detailIconModel: Any = if (
                             app.packageName == "com.zayaanapps.store" &&
@@ -279,93 +291,159 @@ fun AppDetailScreen(
                             placeholder = painterResource(id = R.drawable.img_launcher_icon_1795021165006),
                             error = painterResource(id = R.drawable.img_launcher_icon_1795021165006),
                             modifier = Modifier
-                                .size(76.dp)
-                                .clip(RoundedCornerShape(18.dp))
+                                .size(64.dp)
+                                .clip(RoundedCornerShape(16.dp))
                                 .border(
                                     width = 1.dp,
                                     color = MaterialTheme.colorScheme.outline.copy(alpha = 0.28f),
-                                    shape = RoundedCornerShape(18.dp)
+                                    shape = RoundedCornerShape(16.dp)
                                 )
                                 .background(MaterialTheme.colorScheme.surfaceVariant),
                             contentScale = ContentScale.Crop
                         )
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Column(modifier = Modifier.weight(1f)) {
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
                             ) {
                                 Text(
                                     text = app.appName,
-                                    style = MaterialTheme.typography.headlineSmall
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false)
                                 )
                                 if (app.editorsChoice) {
                                     Icon(
                                         imageVector = Icons.Default.Verified,
                                         contentDescription = "Editor's Choice",
                                         tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(20.dp)
+                                        modifier = Modifier.size(18.dp)
                                     )
                                 }
                             }
-                            Text(
-                                text = app.developerName,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = app.packageName,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Storefront,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Text(
+                                    text = app.developerName,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Inventory2,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Text(
+                                    text = app.packageName,
+                                    fontSize = 11.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(3.dp))
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
                                 Surface(
                                     color = MaterialTheme.colorScheme.primaryContainer,
-                                    shape = RoundedCornerShape(6.dp),
-                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f))
+                                    shape = RoundedCornerShape(7.dp),
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.28f))
                                 ) {
-                                    Text(
-                                        text = app.category,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                                    )
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Category,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            modifier = Modifier.size(11.dp)
+                                        )
+                                        Text(
+                                            text = app.category,
+                                            fontSize = 10.5.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            maxLines = 1
+                                        )
+                                    }
                                 }
                                 if (app.editorsChoice) {
                                     Surface(
                                         color = MaterialTheme.colorScheme.tertiaryContainer,
-                                        shape = RoundedCornerShape(6.dp),
-                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = 0.25f))
+                                        shape = RoundedCornerShape(7.dp),
+                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = 0.28f))
                                     ) {
-                                        Text(
-                                            text = "Editor's Choice",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onTertiaryContainer,
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                                        )
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.WorkspacePremium,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                                                modifier = Modifier.size(11.dp)
+                                            )
+                                            Text(
+                                                text = "Editor's Choice",
+                                                fontSize = 10.5.sp,
+                                                fontWeight = FontWeight.Medium,
+                                                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                                maxLines = 1
+                                            )
+                                        }
                                     }
                                 }
                                 if (app.offlineCapable) {
                                     Surface(
                                         color = MaterialTheme.colorScheme.secondaryContainer,
-                                        shape = RoundedCornerShape(6.dp),
-                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.25f))
+                                        shape = RoundedCornerShape(7.dp),
+                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.28f))
                                     ) {
                                         Row(
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                                            verticalAlignment = Alignment.CenterVertically
+                                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(3.dp)
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Default.OfflineBolt,
                                                 contentDescription = null,
-                                                modifier = Modifier.size(12.dp)
+                                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                modifier = Modifier.size(11.dp)
                                             )
-                                            Spacer(modifier = Modifier.width(3.dp))
                                             Text(
                                                 text = "Offline Ready",
-                                                style = MaterialTheme.typography.labelSmall
+                                                fontSize = 10.5.sp,
+                                                fontWeight = FontWeight.Medium,
+                                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                maxLines = 1
                                             )
                                         }
                                     }
@@ -375,15 +453,18 @@ fun AppDetailScreen(
                     }
 
                     if (app.shortDescription.isNotBlank()) {
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(10.dp))
                         Text(
                             text = app.shortDescription,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            fontSize = 12.5.sp,
+                            lineHeight = 17.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
                     // Compact Single-Line Telemetry Strip (Version, Size, Downloads, Rating with Icons)
                     val ratingSummaryText = if (reviews.isNotEmpty() || app.reviewCount > 0) {
@@ -966,7 +1047,7 @@ fun AppDetailScreen(
             )
         }
 
-        // 7. Technical Specifications, Android Compatibility & Permissions
+        // 7. Technical Specifications, Android Compatibility & Permissions (Compact & Bordered)
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -975,57 +1056,115 @@ fun AppDetailScreen(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Column(
-                    modifier = Modifier.padding(16.dp),
+                    modifier = Modifier.padding(14.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Security,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "Package & Compatibility Specifications",
-                            style = MaterialTheme.typography.titleMedium
-                        )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Security,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = "Package & Compatibility",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Surface(
+                            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.28f))
+                        ) {
+                            Text(
+                                text = "API ${app.minAndroidSdk}+",
+                                fontSize = 10.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
                     }
-                    Spacer(modifier = Modifier.height(2.dp))
-                    SpecKeyValueRow("Package ID", app.packageName)
-                    SpecKeyValueRow("Version", "v${app.versionName} (Build Code ${app.versionCode})")
-                    SpecKeyValueRow("File Size", app.apkFileSize)
-                    SpecKeyValueRow("Supported Android", "Android API ${app.minAndroidSdk}+ (Target API ${app.targetAndroidSdk})")
-                    SpecKeyValueRow("CPU Architecture", app.architecture)
-                    SpecKeyValueRow("Last Updated", formattedUpdatedDate)
-                    SpecKeyValueRow("First Published", formattedPublishedDate)
-                    SpecKeyValueRow("Offline Support", if (app.offlineCapable) "Yes (Works Offline)" else "Requires Internet")
-                    if (app.sha256Checksum.isNotBlank()) {
-                        SpecKeyValueRow("SHA-256 Checksum", app.sha256Checksum.take(24) + "...")
+
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.22f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column {
+                            SpecKeyValueRow("Package ID", app.packageName, Icons.Default.Inventory2)
+                            SpecRowDivider()
+                            SpecKeyValueRow("Version", "v${app.versionName} (Code ${app.versionCode})", Icons.Default.NewReleases)
+                            SpecRowDivider()
+                            SpecKeyValueRow("APK Size", app.apkFileSize, Icons.Default.SdStorage)
+                            SpecRowDivider()
+                            SpecKeyValueRow("Android OS", "API ${app.minAndroidSdk}+ (Target ${app.targetAndroidSdk})", Icons.Default.PhoneAndroid)
+                            SpecRowDivider()
+                            SpecKeyValueRow("Architecture", app.architecture, Icons.Default.Memory)
+                            SpecRowDivider()
+                            SpecKeyValueRow("Updated / Published", "$formattedUpdatedDate • $formattedPublishedDate", Icons.Default.CalendarToday)
+                            SpecRowDivider()
+                            SpecKeyValueRow(
+                                "Connectivity",
+                                if (app.offlineCapable) "Works Offline" else "Requires Internet",
+                                if (app.offlineCapable) Icons.Default.OfflineBolt else Icons.Default.Wifi
+                            )
+                            if (app.sha256Checksum.isNotBlank()) {
+                                SpecRowDivider()
+                                SpecKeyValueRow("SHA-256", "${app.sha256Checksum.take(20)}...", Icons.Default.Fingerprint)
+                            }
+                        }
                     }
 
                     if (app.permissionsList.isNotEmpty()) {
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
-                        Text(
-                            text = "Declared Android Permissions",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AdminPanelSettings,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Text(
+                                text = "Declared Permissions (${app.permissionsList.size})",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                         FlowRow(
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             app.permissionsList.forEach { perm ->
                                 Surface(
-                                    color = MaterialTheme.colorScheme.surfaceVariant,
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
                                     shape = RoundedCornerShape(8.dp),
-                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.22f))
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
                                 ) {
                                     Text(
                                         text = perm,
-                                        style = MaterialTheme.typography.labelSmall,
+                                        fontSize = 10.5.sp,
                                         fontFamily = FontFamily.Monospace,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                                     )
                                 }
                             }
@@ -1035,7 +1174,7 @@ fun AppDetailScreen(
             }
         }
 
-        // 8. Developer Information & Official Links
+        // 8. Developer Information & Official Links (Compact & Bordered)
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -1044,88 +1183,81 @@ fun AppDetailScreen(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Column(
-                    modifier = Modifier.padding(16.dp),
+                    modifier = Modifier.padding(14.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text(
-                        text = "Developer & Distribution Info",
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                    SpecKeyValueRow("Developer", app.developerName)
-                    SpecKeyValueRow("Support Contact", app.supportEmail)
-                    SpecKeyValueRow("Distribution Source", "GitHub Releases APK")
-
-                    Spacer(modifier = Modifier.height(4.dp))
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        AssistChip(
-                            onClick = { showDeveloperProfile.value = true },
-                            label = { Text("Developer Profile") },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.Verified,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
+                        Icon(
+                            imageVector = Icons.Default.Storefront,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = "Developer & Distribution Info",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.22f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column {
+                            SpecKeyValueRow("Developer", app.developerName, Icons.Default.Verified)
+                            SpecRowDivider()
+                            SpecKeyValueRow("Support", app.supportEmail, Icons.Default.Email)
+                            SpecRowDivider()
+                            SpecKeyValueRow("Source", "GitHub Releases APK", Icons.Default.CloudDone)
+                        }
+                    }
+
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        CompactActionChip(
+                            label = "Developer Profile",
+                            icon = Icons.Default.Verified,
+                            onClick = { showDeveloperProfile.value = true }
                         )
                         if (app.websiteUrl.isNotBlank()) {
-                            AssistChip(
+                            CompactActionChip(
+                                label = "Website",
+                                icon = Icons.Default.Language,
                                 onClick = {
                                     onOpenBrowserDownload(context, app.copy(apkDownloadUrl = app.websiteUrl))
-                                },
-                                label = { Text("Website") },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = Icons.Default.Language,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp)
-                                    )
                                 }
                             )
                         }
                         if (app.githubRepoUrl.isNotBlank()) {
-                            AssistChip(
+                            CompactActionChip(
+                                label = "GitHub Repo",
+                                icon = Icons.Default.Code,
                                 onClick = {
                                     onOpenBrowserDownload(context, app.copy(apkDownloadUrl = app.githubRepoUrl))
-                                },
-                                label = { Text("GitHub Repository") },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = Icons.Default.Code,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp)
-                                    )
                                 }
                             )
                         }
                         if (app.privacyPolicyUrl.isNotBlank()) {
-                            AssistChip(
+                            CompactActionChip(
+                                label = "Privacy Policy",
+                                icon = Icons.Default.Policy,
                                 onClick = {
                                     onOpenBrowserDownload(context, app.copy(apkDownloadUrl = app.privacyPolicyUrl))
-                                },
-                                label = { Text("Privacy Policy") },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = Icons.Default.Policy,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp)
-                                    )
                                 }
                             )
                         }
-                        AssistChip(
-                            onClick = { showReportDialog.value = true },
-                            label = { Text("Report App / Security") },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.Security,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
+                        CompactActionChip(
+                            label = "Report Issue",
+                            icon = Icons.Default.Security,
+                            onClick = { showReportDialog.value = true }
                         )
                     }
                 }
@@ -1319,26 +1451,88 @@ private fun RelatedAppMiniCard(
 @Composable
 private fun SpecKeyValueRow(
     label: String,
-    value: String
+    value: String,
+    icon: ImageVector? = null
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 10.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(modifier = Modifier.width(12.dp))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(14.dp)
+                )
+            }
+            Text(
+                text = label,
+                fontSize = 11.5.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                softWrap = false
+            )
+        }
+        Spacer(modifier = Modifier.width(10.dp))
         Text(
             text = value,
-            style = MaterialTheme.typography.bodySmall,
-            fontWeight = FontWeight.Medium,
+            fontSize = 11.5.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
+    }
+}
+
+@Composable
+private fun SpecRowDivider() {
+    HorizontalDivider(
+        thickness = 1.dp,
+        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.14f)
+    )
+}
+
+@Composable
+private fun CompactActionChip(
+    label: String,
+    icon: ImageVector,
+    onClick: () -> Unit
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        shape = RoundedCornerShape(10.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.28f)),
+        modifier = Modifier.clickable(onClick = onClick)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(14.dp)
+            )
+            Text(
+                text = label,
+                fontSize = 11.5.sp,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                softWrap = false
+            )
+        }
     }
 }
 
