@@ -3,6 +3,7 @@ package com.example.ui
 import android.content.Context
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,10 +22,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CompareArrows
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Forum
+import androidx.compose.material.icons.filled.NewReleases
+import androidx.compose.material.icons.filled.OfflineBolt
+import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.RateReview
+import androidx.compose.material.icons.filled.SdStorage
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
@@ -55,6 +62,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -791,144 +799,214 @@ fun AppComparisonSectionCard(
     onClearAll: () -> Unit,
     onDownloadOrUpdate: (StoreApp) -> Unit
 ) {
+    val cs = MaterialTheme.colorScheme
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .testTag("app_comparison_section"),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, cs.outline.copy(alpha = 0.28f)),
+        colors = CardDefaults.cardColors(containerColor = cs.surface)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.CompareArrows,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Surface(
+                        color = cs.primaryContainer,
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(1.dp, cs.primary.copy(alpha = 0.25f))
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CompareArrows,
+                            contentDescription = null,
+                            tint = cs.onPrimaryContainer,
+                            modifier = Modifier
+                                .padding(6.dp)
+                                .size(16.dp)
+                        )
+                    }
                     Column {
                         Text(
-                            text = "Side-by-Side Application Comparison (${comparedApps.size})",
-                            style = MaterialTheme.typography.titleMedium
+                            text = "Side-by-Side Comparison (${comparedApps.size})",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "Compare versions, ratings, APK sizes, SDKs & offline capability",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            text = "Versions, ratings, APK sizes & target SDKs",
+                            fontSize = 11.sp,
+                            color = cs.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
                 if (comparedApps.isNotEmpty()) {
-                    TextButton(
-                        onClick = onClearAll,
-                        modifier = Modifier.testTag("clear_comparison_button")
-                    ) {
-                        Text("Clear")
-                    }
+                    Text(
+                        text = "Clear",
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = cs.primary,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(7.dp))
+                            .clickable(onClick = onClearAll)
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                            .testTag("clear_comparison_button")
+                    )
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
-
             if (comparedApps.isEmpty()) {
-                Text(
-                    text = "Tap the 'Compare' button on any two or more application detail screens to compare their features, ratings, APK sizes, target Android SDKs, and installed versions side-by-side.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Surface(
+                    color = cs.surfaceVariant.copy(alpha = 0.35f),
+                    shape = RoundedCornerShape(11.dp),
+                    border = BorderStroke(1.dp, cs.outline.copy(alpha = 0.20f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CompareArrows,
+                            contentDescription = null,
+                            tint = cs.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = "Tap Compare on any app details screen to compare versions, sizes, and SDK specs side-by-side.",
+                            fontSize = 11.5.sp,
+                            lineHeight = 15.sp,
+                            color = cs.onSurfaceVariant
+                        )
+                    }
+                }
             } else {
                 LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    contentPadding = PaddingValues(vertical = 4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    contentPadding = PaddingValues(vertical = 2.dp)
                 ) {
                     items(comparedApps, key = { "cmp_${it.appId.ifBlank { it.docId }}" }) { app ->
                         val appId = app.appId.ifBlank { app.docId }
                         val status = installedStatuses[app.packageName]
                         Surface(
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
-                            shape = RoundedCornerShape(16.dp),
-                            modifier = Modifier.width(230.dp)
+                            color = cs.surfaceVariant.copy(alpha = 0.38f),
+                            shape = RoundedCornerShape(14.dp),
+                            border = BorderStroke(1.dp, cs.outline.copy(alpha = 0.26f)),
+                            modifier = Modifier.width(214.dp)
                         ) {
                             Column(
-                                modifier = Modifier.padding(14.dp),
-                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                                modifier = Modifier.padding(11.dp),
+                                verticalArrangement = Arrangement.spacedBy(5.dp)
                             ) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier.clickable { onSelectApp(app) }
                                 ) {
+                                    val iconModel: Any = if (
+                                        app.packageName == "com.zayaanapps.store" &&
+                                        (app.iconUrl.isBlank() || app.iconUrl.contains("/web/icons/Icon-192.png"))
+                                    ) {
+                                        R.drawable.img_launcher_icon_1795021165006
+                                    } else {
+                                        app.iconUrl
+                                    }
                                     AsyncImage(
-                                        model = app.iconUrl,
+                                        model = iconModel,
                                         contentDescription = "${app.appName} icon",
                                         placeholder = painterResource(id = R.drawable.img_launcher_icon_1795021165006),
                                         error = painterResource(id = R.drawable.img_launcher_icon_1795021165006),
                                         modifier = Modifier
-                                            .size(44.dp)
+                                            .size(38.dp)
                                             .clip(RoundedCornerShape(10.dp))
-                                            .background(MaterialTheme.colorScheme.surface),
+                                            .border(
+                                                1.dp,
+                                                cs.outline.copy(alpha = 0.25f),
+                                                RoundedCornerShape(10.dp)
+                                            )
+                                            .background(cs.surface),
                                         contentScale = ContentScale.Crop
                                     )
-                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
                                             text = app.appName,
                                             style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis
                                         )
                                         Text(
                                             text = app.category,
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.primary
+                                            fontSize = 10.5.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = cs.primary,
+                                            maxLines = 1
                                         )
                                     }
                                 }
 
-                                HorizontalDivider()
+                                HorizontalDivider(color = cs.outline.copy(alpha = 0.20f))
 
-                                CompareMetricLine("Store Version", "v${app.versionName} (${app.versionCode})")
+                                CompareMetricLine("Version", "v${app.versionName} (${app.versionCode})", Icons.Default.NewReleases)
                                 CompareMetricLine(
-                                    "Device Status",
+                                    "Status",
                                     when {
                                         status?.updateAvailable == true -> "Update (${status.installedVersionName})"
-                                        status?.isInstalled == true -> "Installed (v${status.installedVersionName})"
+                                        status?.isInstalled == true -> "Installed v${status.installedVersionName}"
                                         else -> "Not Installed"
-                                    }
+                                    },
+                                    Icons.Default.Verified
                                 )
-                                CompareMetricLine("APK Size", app.apkFileSize)
+                                CompareMetricLine("APK Size", app.apkFileSize, Icons.Default.SdStorage)
                                 CompareMetricLine(
                                     "Rating",
                                     if (app.reviewCount > 0) {
-                                        "★ ${String.format(Locale.US, "%.1f", app.averageRating)} (${app.reviewCount})"
+                                        "${String.format(Locale.US, "%.1f", app.averageRating)} (${app.reviewCount})"
                                     } else {
-                                        "Verified Release"
-                                    }
+                                        "Verified"
+                                    },
+                                    Icons.Default.Star
                                 )
-                                CompareMetricLine("Downloads", "${app.downloadCount}")
-                                CompareMetricLine("Android API", "API ${app.minAndroidSdk}+ (Target ${app.targetAndroidSdk})")
-                                CompareMetricLine("Offline Ready", if (app.offlineCapable) "Yes" else "Online Only")
-                                CompareMetricLine("Permissions", "${app.permissionsList.size} declared")
+                                CompareMetricLine("Downloads", "${app.downloadCount}", Icons.Default.Download)
+                                CompareMetricLine("Android", "API ${app.minAndroidSdk}+ → ${app.targetAndroidSdk}", Icons.Default.PhoneAndroid)
+                                CompareMetricLine("Offline", if (app.offlineCapable) "Ready" else "Online", Icons.Default.OfflineBolt)
+                                CompareMetricLine("Permissions", "${app.permissionsList.size} declared", Icons.Default.Security)
 
-                                Spacer(modifier = Modifier.height(4.dp))
+                                Spacer(modifier = Modifier.height(2.dp))
                                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                     FilledTonalButton(
                                         onClick = { onDownloadOrUpdate(app) },
-                                        modifier = Modifier.weight(1f)
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                        shape = RoundedCornerShape(9.dp),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(32.dp)
                                     ) {
                                         Text(
                                             text = if (status?.updateAvailable == true) "Update" else "Get APK",
-                                            style = MaterialTheme.typography.labelSmall
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold
                                         )
                                     }
                                     OutlinedButton(
-                                        onClick = { onRemoveFromCompare(appId) }
+                                        onClick = { onRemoveFromCompare(appId) },
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                        shape = RoundedCornerShape(9.dp),
+                                        modifier = Modifier.height(32.dp)
                                     ) {
-                                        Text("Remove", style = MaterialTheme.typography.labelSmall)
+                                        Text("Remove", fontSize = 11.sp)
                                     }
                                 }
                             }
@@ -941,19 +1019,38 @@ fun AppComparisonSectionCard(
 }
 
 @Composable
-private fun CompareMetricLine(label: String, value: String) {
+private fun CompareMetricLine(
+    label: String,
+    value: String,
+    icon: ImageVector? = null
+) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(11.dp)
+                )
+            }
+            Text(
+                text = label,
+                fontSize = 10.5.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Spacer(modifier = Modifier.width(6.dp))
         Text(
             text = value,
-            style = MaterialTheme.typography.labelSmall,
+            fontSize = 10.5.sp,
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis

@@ -913,13 +913,34 @@ class StoreViewModel(
         }
         viewModelScope.launch {
             _statusBannerMessage.value = "Update All started for ${updatableApps.size} app(s)..."
-            for (app in updatableApps) {
+            for (rawApp in updatableApps) {
+                val repoCandidate = rawApp.githubRepoUrl.ifBlank {
+                    if (rawApp.apkDownloadUrl.contains("github.com/", ignoreCase = true)) {
+                        rawApp.apkDownloadUrl
+                    } else {
+                        "https://github.com/zayaanapps/zayaan-apps"
+                    }
+                }
+                val resolved = packageController.resolveLatestGitHubReleaseAsset(repoCandidate)
+                    ?: packageController.resolveLatestGitHubReleaseAsset(rawApp.apkDownloadUrl)
+                val app = if (resolved != null) {
+                    rawApp.copy(
+                        versionName = resolved.tagName.ifBlank { rawApp.versionName },
+                        versionCode = maxOf(rawApp.versionCode, resolved.versionCode),
+                        apkDownloadUrl = resolved.browserDownloadUrl,
+                        apkFileSize = resolved.fileSizeFormatted.ifBlank { rawApp.apkFileSize },
+                        releaseNotes = resolved.releaseNotes.ifBlank { rawApp.releaseNotes },
+                        sha256Checksum = resolved.sha256Checksum.ifBlank { rawApp.sha256Checksum }
+                    )
+                } else {
+                    rawApp
+                }
                 val key = app.appId.ifBlank { app.docId }
                 recordDownloadedAppId(key)
                 if (isAuthenticated) {
                     repository.incrementDownloadCount(app.docId.ifBlank { app.appId }, app.downloadCount)
                 }
-                packageController.downloadApkWithProgress(app).collect { state ->
+                packageController.downloadApkWithProgress(app, forceRedownload = true).collect { state ->
                     _downloadStates.value = _downloadStates.value + (key to state)
                     if (state is DownloadState.ReadyToInstall) {
                         refreshCachedApks()

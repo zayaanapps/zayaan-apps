@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -24,8 +25,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.AdminPanelSettings
+import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.CalendarToday
@@ -44,6 +47,7 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Fingerprint
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.InstallMobile
 import androidx.compose.material.icons.filled.Inventory2
@@ -88,7 +92,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -2162,6 +2168,8 @@ fun MyAppsScreen(
     onOpenInstalledApp: (Context, String) -> Unit
 ) {
     val context = LocalContext.current
+    val cs = MaterialTheme.colorScheme
+    val isDark = cs.background.luminance() < 0.5f
     val allApps = (appsState as? UiState.Success)?.data ?: emptyList()
 
     val updatesAvailableApps = allApps.filter { app ->
@@ -2187,152 +2195,303 @@ fun MyAppsScreen(
         modifier = Modifier
             .fillMaxSize()
             .testTag("my_apps_list"),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
+        // Compact, Theme-Adaptive Library Header Card
         item {
-            Row(
+            val headerGradient = if (isDark) {
+                listOf(Color(0xFF0C2235), Color(0xFF092A27))
+            } else {
+                listOf(Color(0xFFEAF8F1), Color(0xFFF1F7FC))
+            }
+            Card(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(1.dp, cs.primary.copy(alpha = if (isDark) 0.34f else 0.24f)),
+                colors = CardDefaults.cardColors(containerColor = cs.surface)
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Library, Downloads & Updates",
-                        style = MaterialTheme.typography.headlineSmall
-                    )
-                    Text(
-                        text = "Download Manager, Update All, Wishlist, Favorites & App Comparison",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                OutlinedButton(
-                    onClick = onRefreshScan,
-                    modifier = Modifier.testTag("scan_updates_button")
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Brush.horizontalGradient(headerGradient))
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = "Scan for app updates",
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Scan")
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(9.dp)
+                        ) {
+                            Surface(
+                                color = cs.primaryContainer,
+                                shape = RoundedCornerShape(10.dp),
+                                border = BorderStroke(1.dp, cs.primary.copy(alpha = 0.28f))
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Inventory2,
+                                    contentDescription = null,
+                                    tint = cs.onPrimaryContainer,
+                                    modifier = Modifier
+                                        .padding(7.dp)
+                                        .size(18.dp)
+                                )
+                            }
+                            Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                                Text(
+                                    text = "Library, Downloads & Updates",
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = cs.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = "Updates, downloads, installed & saved apps",
+                                    fontSize = 11.sp,
+                                    color = cs.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Surface(
+                            color = cs.surface.copy(alpha = if (isDark) 0.85f else 0.94f),
+                            shape = RoundedCornerShape(9.dp),
+                            border = BorderStroke(1.dp, cs.primary.copy(alpha = 0.35f)),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(9.dp))
+                                .clickable(onClick = onRefreshScan)
+                                .testTag("scan_updates_button")
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = "Scan for app updates",
+                                    tint = cs.primary,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = "Scan",
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = cs.primary
+                                )
+                            }
+                        }
+                    }
+
+                    // Compact bordered summary strip
+                    Surface(
+                        color = cs.surface.copy(alpha = if (isDark) 0.62f else 0.88f),
+                        shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(1.dp, cs.outline.copy(alpha = 0.22f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 10.dp, vertical = 5.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            MyAppsSummaryMetric(
+                                icon = Icons.Default.SystemUpdate,
+                                label = "${updatesAvailableApps.size} Updates",
+                                tint = if (updatesAvailableApps.isNotEmpty()) cs.tertiary else cs.primary
+                            )
+                            VerticalDivider(modifier = Modifier.height(11.dp), color = cs.outline.copy(alpha = 0.22f))
+                            MyAppsSummaryMetric(
+                                icon = Icons.Default.PhoneAndroid,
+                                label = "${installedApps.size} Installed",
+                                tint = cs.primary
+                            )
+                            VerticalDivider(modifier = Modifier.height(11.dp), color = cs.outline.copy(alpha = 0.22f))
+                            MyAppsSummaryMetric(
+                                icon = Icons.Default.Favorite,
+                                label = "${favoriteApps.size} Favs",
+                                tint = cs.secondary
+                            )
+                            VerticalDivider(modifier = Modifier.height(11.dp), color = cs.outline.copy(alpha = 0.22f))
+                            MyAppsSummaryMetric(
+                                icon = Icons.Default.Bookmark,
+                                label = "${bookmarkedApps.size} Saved",
+                                tint = cs.tertiary
+                            )
+                        }
+                    }
                 }
             }
         }
 
-        // Section 1: Available Updates & Update All Button
+        // Section 1: Available Updates & Update All (shown only if multiple updates available)
         item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Available Updates (${updatesAvailableApps.size})",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.tertiary
-                )
-                if (updatesAvailableApps.isNotEmpty()) {
-                    Button(
-                        onClick = { onUpdateAllClick(context, updatesAvailableApps) },
-                        modifier = Modifier.testTag("update_all_apps_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.SystemUpdate,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Update All (${updatesAvailableApps.size})")
+            MyAppsSectionHeader(
+                icon = Icons.Default.SystemUpdate,
+                iconTint = cs.tertiary,
+                title = "Available Updates",
+                count = updatesAvailableApps.size,
+                trailingContent = if (updatesAvailableApps.size > 1) {
+                    {
+                        Button(
+                            onClick = { onUpdateAllClick(context, updatesAvailableApps) },
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            shape = RoundedCornerShape(9.dp),
+                            modifier = Modifier
+                                .height(32.dp)
+                                .testTag("update_all_apps_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.SystemUpdate,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Update All (${updatesAvailableApps.size})",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
                     }
-                }
-            }
+                } else null
+            )
         }
 
         if (updatesAvailableApps.isEmpty()) {
             item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CheckCircle,
-                            contentDescription = "All apps up to date",
-                            tint = MaterialTheme.colorScheme.secondary
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            text = "All installed Zayaan Apps packages are running the latest version.",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
-                }
+                MyAppsCompactEmptyCard(
+                    icon = Icons.Default.CheckCircle,
+                    iconTint = cs.primary,
+                    borderColor = cs.primary.copy(alpha = 0.26f),
+                    title = "All Apps Up to Date",
+                    subtitle = "All installed Zayaan Apps packages are running the latest release."
+                )
             }
         } else {
             items(updatesAvailableApps, key = { "upd_${it.appId}" }) { app ->
                 val status = installedStatuses[app.packageName]
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onAppClick(app) },
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.dp, cs.tertiary.copy(alpha = 0.34f)),
+                    colors = CardDefaults.cardColors(containerColor = cs.surface)
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(14.dp),
+                            .padding(horizontal = 11.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(text = app.appName, style = MaterialTheme.typography.titleMedium)
+                        MyAppsThumbnailIcon(app = app, size = 42.dp)
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
                             Text(
-                                text = "Installed: v${status?.installedVersionName} (${status?.installedVersionCode}) → Latest: v${app.versionName} (${app.versionCode})",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.tertiary
+                                text = app.appName,
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Update,
+                                    contentDescription = null,
+                                    tint = cs.tertiary,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Text(
+                                    text = "v${status?.installedVersionName} (${status?.installedVersionCode}) → v${app.versionName} (${app.versionCode})",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = cs.tertiary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
-                        Button(onClick = { onUpdateOrDownloadClick(app) }) {
-                            Text("Update APK")
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Button(
+                            onClick = { onUpdateOrDownloadClick(app) },
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            shape = RoundedCornerShape(9.dp),
+                            modifier = Modifier.height(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Download,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Update", fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold)
                         }
                     }
                 }
             }
         }
 
-        // Section 2: Download Manager (Active Downloads, Progress, Retry & Cached APK Files)
+        // Section 2: Download Manager & Local Cache
         item {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("download_manager_card"),
-                shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(1.dp, cs.outline.copy(alpha = 0.28f)),
+                colors = CardDefaults.cardColors(containerColor = cs.surface)
             ) {
                 Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.CloudDownload,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Column {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Surface(
+                            color = cs.primaryContainer,
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(1.dp, cs.primary.copy(alpha = 0.25f))
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CloudDownload,
+                                contentDescription = null,
+                                tint = cs.onPrimaryContainer,
+                                modifier = Modifier
+                                    .padding(6.dp)
+                                    .size(16.dp)
+                            )
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "APK Download Manager & Local Cache",
-                                style = MaterialTheme.typography.titleMedium
+                                text = "APK Download Manager & Cache",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "Track live progress, retry interrupted transfers & install cached APKs",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                text = "Live transfers, retries & cached APK installers",
+                                fontSize = 11.sp,
+                                color = cs.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
@@ -2343,11 +2502,15 @@ fun MyAppsScreen(
                             val matchedApp = allApps.firstOrNull { (it.appId.ifBlank { it.docId }) == appId }
                             val displayTitle = matchedApp?.appName ?: appId
                             Surface(
-                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
-                                shape = RoundedCornerShape(12.dp),
+                                color = cs.surfaceVariant.copy(alpha = 0.42f),
+                                shape = RoundedCornerShape(11.dp),
+                                border = BorderStroke(1.dp, cs.outline.copy(alpha = 0.24f)),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Column(modifier = Modifier.padding(12.dp)) {
+                                Column(
+                                    modifier = Modifier.padding(10.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
                                     when (state) {
                                         is DownloadState.Downloading -> {
                                             Row(
@@ -2357,13 +2520,20 @@ fun MyAppsScreen(
                                             ) {
                                                 Text(
                                                     text = "$displayTitle (${state.progressPercent}%)",
-                                                    style = MaterialTheme.typography.labelLarge
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.SemiBold
                                                 )
-                                                IconButton(onClick = { onCancelDownload(appId) }) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(26.dp)
+                                                        .clip(RoundedCornerShape(7.dp))
+                                                        .clickable { onCancelDownload(appId) },
+                                                    contentAlignment = Alignment.Center
+                                                ) {
                                                     Icon(
                                                         imageVector = Icons.Default.Close,
                                                         contentDescription = "Cancel download",
-                                                        modifier = Modifier.size(16.dp)
+                                                        modifier = Modifier.size(15.dp)
                                                     )
                                                 }
                                             }
@@ -2371,7 +2541,7 @@ fun MyAppsScreen(
                                                 progress = { state.progressPercent / 100f },
                                                 modifier = Modifier
                                                     .fillMaxWidth()
-                                                    .height(6.dp)
+                                                    .height(5.dp)
                                                     .clip(RoundedCornerShape(3.dp))
                                             )
                                         }
@@ -2384,11 +2554,18 @@ fun MyAppsScreen(
                                             ) {
                                                 Text(
                                                     text = "$displayTitle — Paused (${state.progressPercent}%)",
-                                                    style = MaterialTheme.typography.labelMedium
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.Medium,
+                                                    modifier = Modifier.weight(1f)
                                                 )
                                                 if (matchedApp != null) {
-                                                    FilledTonalButton(onClick = { onUpdateOrDownloadClick(matchedApp) }) {
-                                                        Text("Resume")
+                                                    FilledTonalButton(
+                                                        onClick = { onUpdateOrDownloadClick(matchedApp) },
+                                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                                        shape = RoundedCornerShape(8.dp),
+                                                        modifier = Modifier.height(30.dp)
+                                                    ) {
+                                                        Text("Resume", fontSize = 11.sp)
                                                     }
                                                 }
                                             }
@@ -2402,19 +2579,28 @@ fun MyAppsScreen(
                                             ) {
                                                 Column(modifier = Modifier.weight(1f)) {
                                                     Text(
-                                                        text = "$displayTitle — Download Failed",
-                                                        style = MaterialTheme.typography.labelMedium,
-                                                        color = MaterialTheme.colorScheme.error
+                                                        text = "$displayTitle — Failed",
+                                                        fontSize = 12.sp,
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        color = cs.error
                                                     )
                                                     Text(
                                                         text = state.errorMessage,
-                                                        style = MaterialTheme.typography.bodySmall,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                        fontSize = 11.sp,
+                                                        color = cs.onSurfaceVariant,
+                                                        maxLines = 2,
+                                                        overflow = TextOverflow.Ellipsis
                                                     )
                                                 }
                                                 if (matchedApp != null) {
-                                                    Button(onClick = { onUpdateOrDownloadClick(matchedApp) }) {
-                                                        Text("Retry")
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                    Button(
+                                                        onClick = { onUpdateOrDownloadClick(matchedApp) },
+                                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                                        shape = RoundedCornerShape(8.dp),
+                                                        modifier = Modifier.height(30.dp)
+                                                    ) {
+                                                        Text("Retry", fontSize = 11.sp)
                                                     }
                                                 }
                                             }
@@ -2429,19 +2615,27 @@ fun MyAppsScreen(
                                                 Column(modifier = Modifier.weight(1f)) {
                                                     Text(
                                                         text = "$displayTitle — Ready to Install",
-                                                        style = MaterialTheme.typography.labelLarge,
-                                                        color = MaterialTheme.colorScheme.secondary
+                                                        fontSize = 12.sp,
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        color = cs.secondary
                                                     )
                                                     if (state.computedSha256.isNotBlank()) {
                                                         Text(
                                                             text = "SHA-256: ${state.computedSha256.take(16)}...",
-                                                            style = MaterialTheme.typography.labelSmall,
-                                                            fontFamily = FontFamily.Monospace
+                                                            fontSize = 10.5.sp,
+                                                            fontFamily = FontFamily.Monospace,
+                                                            color = cs.onSurfaceVariant
                                                         )
                                                     }
                                                 }
-                                                Button(onClick = { onInstallCachedApk(context, state.apkFilePath) }) {
-                                                    Text("Install APK")
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Button(
+                                                    onClick = { onInstallCachedApk(context, state.apkFilePath) },
+                                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                                    shape = RoundedCornerShape(8.dp),
+                                                    modifier = Modifier.height(30.dp)
+                                                ) {
+                                                    Text("Install", fontSize = 11.sp)
                                                 }
                                             }
                                         }
@@ -2454,56 +2648,114 @@ fun MyAppsScreen(
                     }
 
                     if (downloadedApkFiles.isNotEmpty()) {
-                        HorizontalDivider()
+                        HorizontalDivider(color = cs.outline.copy(alpha = 0.20f))
                         Text(
-                            text = "Cached APK Packages on Device (${downloadedApkFiles.size})",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary
+                            text = "Cached APK Packages (${downloadedApkFiles.size})",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = cs.primary
                         )
                         downloadedApkFiles.forEach { file ->
                             val sizeMb = String.format(Locale.US, "%.2f MB", file.length().toDouble() / (1024.0 * 1024.0))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                            Surface(
+                                color = cs.surfaceVariant.copy(alpha = 0.35f),
+                                shape = RoundedCornerShape(10.dp),
+                                border = BorderStroke(1.dp, cs.outline.copy(alpha = 0.22f)),
+                                modifier = Modifier.fillMaxWidth()
                             ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = file.name,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                    Text(
-                                        text = sizeMb,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    FilledTonalButton(
-                                        onClick = { onInstallCachedApk(context, file.absolutePath) }
-                                    ) {
-                                        Text("Install", style = MaterialTheme.typography.labelSmall)
-                                    }
-                                    IconButton(
-                                        onClick = { onDeleteCachedApk(file.absolutePath) }
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 10.dp, vertical = 7.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(
+                                        modifier = Modifier.weight(1f),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
                                         Icon(
-                                            imageVector = Icons.Default.Delete,
-                                            contentDescription = "Delete cached APK",
-                                            tint = MaterialTheme.colorScheme.error,
-                                            modifier = Modifier.size(18.dp)
+                                            imageVector = Icons.Default.SdStorage,
+                                            contentDescription = null,
+                                            tint = cs.secondary,
+                                            modifier = Modifier.size(16.dp)
                                         )
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = file.name,
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Medium,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            Text(
+                                                text = sizeMb,
+                                                fontSize = 10.5.sp,
+                                                color = cs.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        FilledTonalButton(
+                                            onClick = { onInstallCachedApk(context, file.absolutePath) },
+                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                                            shape = RoundedCornerShape(8.dp),
+                                            modifier = Modifier.height(30.dp)
+                                        ) {
+                                            Text("Install", fontSize = 11.sp)
+                                        }
+                                        Surface(
+                                            color = cs.errorContainer.copy(alpha = 0.55f),
+                                            shape = RoundedCornerShape(8.dp),
+                                            border = BorderStroke(1.dp, cs.error.copy(alpha = 0.25f)),
+                                            modifier = Modifier
+                                                .size(30.dp)
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .clickable { onDeleteCachedApk(file.absolutePath) }
+                                        ) {
+                                            Box(contentAlignment = Alignment.Center) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Delete,
+                                                    contentDescription = "Delete cached APK",
+                                                    tint = cs.error,
+                                                    modifier = Modifier.size(15.dp)
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
                     } else if (activeEntries.isEmpty()) {
-                        Text(
-                            text = "No active or cached APK downloads in local storage yet. Start any download from the Store catalog to track progress here.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Surface(
+                            color = cs.surfaceVariant.copy(alpha = 0.35f),
+                            shape = RoundedCornerShape(11.dp),
+                            border = BorderStroke(1.dp, cs.outline.copy(alpha = 0.20f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Info,
+                                    contentDescription = null,
+                                    tint = cs.primary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    text = "No active or cached APK downloads. Installed APKs are automatically cleaned up.",
+                                    fontSize = 11.5.sp,
+                                    lineHeight = 15.sp,
+                                    color = cs.onSurfaceVariant
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -2523,49 +2775,89 @@ fun MyAppsScreen(
 
         // Section 4: Installed Packages on This Device
         item {
-            Text(
-                text = "Installed on This Device (${installedApps.size})",
-                style = MaterialTheme.typography.titleMedium
+            MyAppsSectionHeader(
+                icon = Icons.Default.PhoneAndroid,
+                iconTint = cs.primary,
+                title = "Installed on This Device",
+                count = installedApps.size
             )
         }
 
         if (installedApps.isEmpty()) {
             item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                ) {
-                    Text(
-                        text = "No catalog packages detected as installed yet. Download any APK from the Store tab to install.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(16.dp)
-                    )
-                }
+                MyAppsCompactEmptyCard(
+                    icon = Icons.Default.PhoneAndroid,
+                    iconTint = cs.onSurfaceVariant,
+                    borderColor = cs.outline.copy(alpha = 0.24f),
+                    title = "No Store Apps Installed Yet",
+                    subtitle = "Download any verified APK from the Store tab to track and open it here."
+                )
             }
         } else {
             items(installedApps, key = { "inst_${it.appId}" }) { app ->
                 val status = installedStatuses[app.packageName]
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onAppClick(app) },
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.dp, cs.outline.copy(alpha = 0.26f)),
+                    colors = CardDefaults.cardColors(containerColor = cs.surface)
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(14.dp),
+                            .padding(horizontal = 11.dp, vertical = 9.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(text = app.appName, style = MaterialTheme.typography.titleMedium)
+                        MyAppsThumbnailIcon(app = app, size = 42.dp)
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    text = app.appName,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false)
+                                )
+                                Icon(
+                                    imageVector = Icons.Default.Verified,
+                                    contentDescription = "Installed",
+                                    tint = cs.primary,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                            }
                             Text(
                                 text = "${app.packageName} • v${status?.installedVersionName ?: app.versionName}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                fontSize = 11.sp,
+                                color = cs.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
-                        OutlinedButton(onClick = { onOpenInstalledApp(context, app.packageName) }) {
-                            Text("Open")
+                        Spacer(modifier = Modifier.width(8.dp))
+                        OutlinedButton(
+                            onClick = { onOpenInstalledApp(context, app.packageName) },
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            shape = RoundedCornerShape(9.dp),
+                            border = BorderStroke(1.dp, cs.primary.copy(alpha = 0.42f)),
+                            modifier = Modifier.height(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+                                contentDescription = null,
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Open", fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold)
                         }
                     }
                 }
@@ -2574,29 +2866,27 @@ fun MyAppsScreen(
 
         // Section 5: Personal Library — Favorite Apps
         item {
-            Text(
-                text = "Favorite Apps (${favoriteApps.size})",
-                style = MaterialTheme.typography.titleMedium
+            MyAppsSectionHeader(
+                icon = Icons.Default.Favorite,
+                iconTint = cs.secondary,
+                title = "Favorite Apps",
+                count = favoriteApps.size
             )
         }
 
         if (favoriteApps.isEmpty()) {
             item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                ) {
-                    Text(
-                        text = "Tap the heart icon on any application details page to mark it as a Favorite (synchronized across Android and Web).",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(16.dp)
-                    )
-                }
+                MyAppsCompactEmptyCard(
+                    icon = Icons.Default.FavoriteBorder,
+                    iconTint = cs.secondary,
+                    borderColor = cs.outline.copy(alpha = 0.24f),
+                    title = "No Favorites Yet",
+                    subtitle = "Tap the heart icon on any app details screen to save favorites across Android & Web."
+                )
             }
         } else {
             items(favoriteApps, key = { "fav_${it.appId}" }) { app ->
-                StoreAppListRowCard(
+                MyAppsCompactRowCard(
                     app = app,
                     installedStatus = installedStatuses[app.packageName],
                     onClick = { onAppClick(app) }
@@ -2606,29 +2896,27 @@ fun MyAppsScreen(
 
         // Section 6: Personal Library — Saved / Wishlist Apps
         item {
-            Text(
-                text = "Wishlist / Saved Apps (${bookmarkedApps.size})",
-                style = MaterialTheme.typography.titleMedium
+            MyAppsSectionHeader(
+                icon = Icons.Default.Bookmark,
+                iconTint = cs.tertiary,
+                title = "Wishlist / Saved Apps",
+                count = bookmarkedApps.size
             )
         }
 
         if (bookmarkedApps.isEmpty()) {
             item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                ) {
-                    Text(
-                        text = "Tap the bookmark icon on any application details page to save it to your Wishlist.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(16.dp)
-                    )
-                }
+                MyAppsCompactEmptyCard(
+                    icon = Icons.Default.BookmarkBorder,
+                    iconTint = cs.tertiary,
+                    borderColor = cs.outline.copy(alpha = 0.24f),
+                    title = "Wishlist Empty",
+                    subtitle = "Tap the bookmark icon on any app details page to save it for later."
+                )
             }
         } else {
             items(bookmarkedApps, key = { "bm_${it.appId}" }) { app ->
-                StoreAppListRowCard(
+                MyAppsCompactRowCard(
                     app = app,
                     installedStatus = installedStatuses[app.packageName],
                     onClick = { onAppClick(app) }
@@ -2638,34 +2926,331 @@ fun MyAppsScreen(
 
         // Section 7: Personal Library — Previously Downloaded History
         item {
-            Text(
-                text = "Previously Downloaded History (${previouslyDownloadedApps.size})",
-                style = MaterialTheme.typography.titleMedium
+            MyAppsSectionHeader(
+                icon = Icons.Default.History,
+                iconTint = cs.primary,
+                title = "Previously Downloaded History",
+                count = previouslyDownloadedApps.size
             )
         }
 
         if (previouslyDownloadedApps.isEmpty()) {
             item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                ) {
-                    Text(
-                        text = "Applications you download are automatically recorded in your cloud-synced download history.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(16.dp)
-                    )
-                }
+                MyAppsCompactEmptyCard(
+                    icon = Icons.Default.History,
+                    iconTint = cs.onSurfaceVariant,
+                    borderColor = cs.outline.copy(alpha = 0.24f),
+                    title = "No Download History",
+                    subtitle = "Apps you download are automatically synced to your cloud library."
+                )
             }
         } else {
             items(previouslyDownloadedApps, key = { "dl_hist_${it.appId}" }) { app ->
-                StoreAppListRowCard(
+                MyAppsCompactRowCard(
                     app = app,
                     installedStatus = installedStatuses[app.packageName],
                     onClick = { onAppClick(app) }
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun MyAppsSummaryMetric(
+    icon: ImageVector,
+    label: String,
+    tint: Color
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = tint,
+            modifier = Modifier.size(12.dp)
+        )
+        Text(
+            text = label,
+            fontSize = 10.5.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            softWrap = false
+        )
+    }
+}
+
+@Composable
+private fun MyAppsSectionHeader(
+    icon: ImageVector,
+    iconTint: Color,
+    title: String,
+    count: Int,
+    trailingContent: (@Composable () -> Unit)? = null
+) {
+    val cs = MaterialTheme.colorScheme
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 2.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(
+            modifier = Modifier.weight(1f),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Surface(
+                color = iconTint.copy(alpha = 0.14f),
+                shape = RoundedCornerShape(8.dp),
+                border = BorderStroke(1.dp, iconTint.copy(alpha = 0.28f))
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = iconTint,
+                    modifier = Modifier
+                        .padding(5.dp)
+                        .size(15.dp)
+                )
+            }
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false)
+            )
+            Surface(
+                color = cs.surfaceVariant.copy(alpha = 0.55f),
+                shape = RoundedCornerShape(7.dp),
+                border = BorderStroke(1.dp, cs.outline.copy(alpha = 0.22f))
+            ) {
+                Text(
+                    text = "$count",
+                    fontSize = 10.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = cs.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
+                )
+            }
+        }
+        if (trailingContent != null) {
+            Spacer(modifier = Modifier.width(8.dp))
+            trailingContent()
+        }
+    }
+}
+
+@Composable
+private fun MyAppsCompactEmptyCard(
+    icon: ImageVector,
+    iconTint: Color,
+    borderColor: Color,
+    title: String,
+    subtitle: String
+) {
+    val cs = MaterialTheme.colorScheme
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.dp, borderColor),
+        colors = CardDefaults.cardColors(containerColor = cs.surface)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Surface(
+                color = iconTint.copy(alpha = 0.12f),
+                shape = RoundedCornerShape(9.dp),
+                border = BorderStroke(1.dp, iconTint.copy(alpha = 0.26f))
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = iconTint,
+                    modifier = Modifier
+                        .padding(6.dp)
+                        .size(17.dp)
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    fontSize = 12.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = cs.onSurface
+                )
+                Text(
+                    text = subtitle,
+                    fontSize = 11.sp,
+                    lineHeight = 14.5.sp,
+                    color = cs.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MyAppsThumbnailIcon(
+    app: StoreApp,
+    size: androidx.compose.ui.unit.Dp
+) {
+    val cs = MaterialTheme.colorScheme
+    val iconModel: Any = if (
+        app.packageName == "com.zayaanapps.store" &&
+        (app.iconUrl.isBlank() || app.iconUrl.contains("/web/icons/Icon-192.png"))
+    ) {
+        R.drawable.img_launcher_icon_1795021165006
+    } else {
+        app.iconUrl
+    }
+    AsyncImage(
+        model = iconModel,
+        contentDescription = "${app.appName} icon",
+        placeholder = painterResource(id = R.drawable.img_launcher_icon_1795021165006),
+        error = painterResource(id = R.drawable.img_launcher_icon_1795021165006),
+        modifier = Modifier
+            .size(size)
+            .clip(RoundedCornerShape(11.dp))
+            .border(1.dp, cs.outline.copy(alpha = 0.26f), RoundedCornerShape(11.dp))
+            .background(cs.surfaceVariant),
+        contentScale = ContentScale.Crop
+    )
+}
+
+@Composable
+private fun MyAppsCompactRowCard(
+    app: StoreApp,
+    installedStatus: InstalledPackageStatus?,
+    onClick: () -> Unit
+) {
+    val cs = MaterialTheme.colorScheme
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.dp, cs.outline.copy(alpha = 0.26f)),
+        colors = CardDefaults.cardColors(containerColor = cs.surface)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 11.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            MyAppsThumbnailIcon(app = app, size = 44.dp)
+            Spacer(modifier = Modifier.width(10.dp))
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = app.appName,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    if (app.editorsChoice) {
+                        Icon(
+                            imageVector = Icons.Default.Verified,
+                            contentDescription = "Verified",
+                            tint = cs.primary,
+                            modifier = Modifier.size(13.dp)
+                        )
+                    }
+                }
+                Text(
+                    text = "${app.developerName} • ${app.category}",
+                    fontSize = 11.sp,
+                    color = cs.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.NewReleases,
+                            contentDescription = null,
+                            tint = cs.primary,
+                            modifier = Modifier.size(11.dp)
+                        )
+                        Text(
+                            text = "v${app.versionName}",
+                            fontSize = 10.5.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = cs.primary
+                        )
+                    }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.SdStorage,
+                            contentDescription = null,
+                            tint = cs.secondary,
+                            modifier = Modifier.size(11.dp)
+                        )
+                        Text(
+                            text = app.apkFileSize,
+                            fontSize = 10.5.sp,
+                            color = cs.onSurfaceVariant
+                        )
+                    }
+                    if (installedStatus?.isInstalled == true) {
+                        Surface(
+                            color = if (installedStatus.updateAvailable) {
+                                cs.tertiaryContainer
+                            } else {
+                                cs.primaryContainer
+                            },
+                            shape = RoundedCornerShape(6.dp)
+                        ) {
+                            Text(
+                                text = if (installedStatus.updateAvailable) "Update" else "Installed",
+                                fontSize = 9.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (installedStatus.updateAvailable) {
+                                    cs.onTertiaryContainer
+                                } else {
+                                    cs.onPrimaryContainer
+                                },
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                            )
+                        }
+                    }
+                }
+            }
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = "Open details",
+                tint = cs.onSurfaceVariant,
+                modifier = Modifier.size(20.dp)
+            )
         }
     }
 }
