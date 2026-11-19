@@ -1,5 +1,8 @@
-### Latest Updates, Fixes & Changes
-- **Auto-Delete Installed APKs:** Automatically removes downloaded APK update/install packages from device cache right after installation completes.
-- **Guided Device Permissions:** Prompts for **Install Unknown Apps** (`REQUEST_INSTALL_PACKAGES`) and **Notifications** (`POST_NOTIFICATIONS`) when needed, and resumes installation automatically once permission is granted.
-- **Cleaner "What's New" & "About App":** Displays latest updates, fixes, and changes in **What's New**, and includes Package ID, Version, Build Code, Size, and OS compatibility inside **About This Application**.
-- **Polished Home & Details UI:** Compact, icon-rich bordered cards across Android and Web, with automatic System/Light/Dark theme support and smooth app launch.
+# Zayaan Apps Store Release Changelog & Recent Updates
+
+### 🚀 What's New in Zayaan Apps
+- **Google Sign-In Authentication:** Streamlined login workflow centered on secure Google Sign-In via Credential Manager.
+- **Smart Repo Auto-Detect:** Publishing or updating apps automatically extracts version, size, APK download URL, release notes, and SHA-256 checksum directly from public GitHub repositories/releases.
+- **Enhanced Guest Preview:** Unauthenticated users see only the official Zayaan Apps Store catalog without clutter.
+- **Cross-Platform Sync:** Real-time updates across both native Android APK and the responsive Flutter Web portal (`zayaanapps.github.io/zayaan-apps/`).
+- **Zero-Trust Admin & DevOps:** Secure administrative controls and automated GitHub Actions CI/CD pipeline.
