@@ -1,6 +1,11 @@
 package com.example.ui
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -23,13 +28,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.Analytics
+import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CollectionsBookmark
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Publish
+import androidx.compose.material.icons.filled.RateReview
 import androidx.compose.material.icons.filled.Report
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Security
@@ -38,6 +47,7 @@ import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.WorkspacePremium
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
@@ -46,6 +56,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -54,6 +65,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -61,11 +73,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.data.AdminRecord
 import com.example.data.ApkArchiveVerificationInfo
 import com.example.data.AppCollection
@@ -144,224 +162,248 @@ fun AdminDashboardScreen(
     val pendingSubmissionsCount = submissions.count { it.status == "PENDING" }
     val openReportsCount = reports.count { it.status == "OPEN" }
 
+    val cs = MaterialTheme.colorScheme
+    val isDark = cs.background.luminance() < 0.5f
+
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
             .testTag("admin_dashboard_screen"),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        // 1. Admin Header, RBAC Status & Real-Time Marketplace Analytics
+        // 1. Compact, Theme-Adaptive Admin Header & Action Console
         item {
+            val headerGradient = if (isDark) {
+                listOf(Color(0xFF0C2235), Color(0xFF092A27))
+            } else {
+                listOf(Color(0xFFEAF8F1), Color(0xFFF1F7FC))
+            }
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
-                )
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(1.dp, cs.primary.copy(alpha = if (isDark) 0.34f else 0.24f)),
+                colors = CardDefaults.cardColors(containerColor = cs.surface)
             ) {
-                Column(modifier = Modifier.padding(20.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.AdminPanelSettings,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(28.dp)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column(modifier = Modifier.weight(1f)) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Brush.horizontalGradient(headerGradient))
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(9.dp)
+                    ) {
+                        Surface(
+                            color = cs.primaryContainer,
+                            shape = RoundedCornerShape(10.dp),
+                            border = BorderStroke(1.dp, cs.primary.copy(alpha = 0.28f))
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AdminPanelSettings,
+                                contentDescription = null,
+                                tint = cs.onPrimaryContainer,
+                                modifier = Modifier
+                                    .padding(7.dp)
+                                    .size(18.dp)
+                            )
+                        }
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(1.dp)
+                        ) {
                             Text(
-                                text = "Zayaan Apps Admin & Marketplace Console",
-                                style = MaterialTheme.typography.titleLarge
+                                text = "Zayaan Apps Admin Console",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = cs.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                text = "${currentUserEmail ?: "Open Store Mode (Local Session)"} • ${if (isTrustedAdmin) "Admin Console" else "Developer Portal Mode"}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                text = "${currentUserEmail ?: "Open Store Mode"} • ${if (isTrustedAdmin) "RBAC Verified" else "Developer Portal"}",
+                                fontSize = 11.sp,
+                                color = cs.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                    // Compact bordered 5-metric telemetry strip
+                    Surface(
+                        color = cs.surface.copy(alpha = if (isDark) 0.65f else 0.90f),
+                        shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(1.dp, cs.outline.copy(alpha = 0.22f)),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        AdminMetricBox("APPS", "${apps.size}")
-                        AdminMetricBox("LIVE", "$publishedCount")
-                        AdminMetricBox("FEATURED", "$featuredCount")
-                        AdminMetricBox("DOWNLOADS", "$totalDownloads")
-                        AdminMetricBox("VIEWS", "$totalPageViews")
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            AdminCompactMetric("APPS", "${apps.size}")
+                            VerticalDivider(modifier = Modifier.height(18.dp), color = cs.outline.copy(alpha = 0.22f))
+                            AdminCompactMetric("LIVE", "$publishedCount")
+                            VerticalDivider(modifier = Modifier.height(18.dp), color = cs.outline.copy(alpha = 0.22f))
+                            AdminCompactMetric("FEAT", "$featuredCount")
+                            VerticalDivider(modifier = Modifier.height(18.dp), color = cs.outline.copy(alpha = 0.22f))
+                            AdminCompactMetric("DLs", "$totalDownloads")
+                            VerticalDivider(modifier = Modifier.height(18.dp), color = cs.outline.copy(alpha = 0.22f))
+                            AdminCompactMetric("VIEWS", "$totalPageViews")
+                        }
                     }
-
-                    Spacer(modifier = Modifier.height(14.dp))
 
                     // Row 1: Primary App CRUD, Categories, Collections & Banners
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Button(
                             onClick = {
                                 editingApp = StoreApp()
                                 isCreatingNew = true
                             },
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            shape = RoundedCornerShape(9.dp),
                             modifier = Modifier
-                                .weight(1.2f)
+                                .weight(1.15f)
+                                .height(34.dp)
                                 .testTag("admin_add_app_button")
                         ) {
-                            Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Publish App")
+                            Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(15.dp))
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text("Publish", fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
                         }
 
-                        FilledTonalButton(
-                            onClick = { showCategoryDialog = true },
+                        AdminActionPillButton(
+                            label = "Categories",
+                            icon = Icons.Default.Category,
                             modifier = Modifier
                                 .weight(1f)
-                                .testTag("admin_manage_categories_button")
-                        ) {
-                            Icon(imageVector = Icons.Default.Category, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Categories")
-                        }
+                                .testTag("admin_manage_categories_button"),
+                            onClick = { showCategoryDialog = true }
+                        )
 
-                        FilledTonalButton(
-                            onClick = { showCollectionsDialog = true },
+                        AdminActionPillButton(
+                            label = "Banners (${collections.size})",
+                            icon = Icons.Default.CollectionsBookmark,
                             modifier = Modifier
-                                .weight(1f)
-                                .testTag("admin_manage_collections_button")
-                        ) {
-                            Icon(imageVector = Icons.Default.CollectionsBookmark, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Banners (${collections.size})")
-                        }
+                                .weight(1.05f)
+                                .testTag("admin_manage_collections_button"),
+                            onClick = { showCollectionsDialog = true }
+                        )
                     }
-
-                    Spacer(modifier = Modifier.height(8.dp))
 
                     // Row 2: Developer Submissions Queue & Multi-Version / SHA-256 Checksum Manager
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        FilledTonalButton(
-                            onClick = { showSubmissionsDialog = true },
+                        AdminActionPillButton(
+                            label = if (pendingSubmissionsCount > 0) {
+                                "Submissions ($pendingSubmissionsCount)"
+                            } else {
+                                "Portal (${submissions.size})"
+                            },
+                            icon = Icons.Default.Publish,
                             modifier = Modifier
                                 .weight(1f)
-                                .testTag("admin_submissions_button")
-                        ) {
-                            Icon(imageVector = Icons.Default.Publish, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                if (pendingSubmissionsCount > 0) {
-                                    "Submissions ($pendingSubmissionsCount Pending)"
-                                } else {
-                                    "Developer Portal (${submissions.size})"
-                                }
-                            )
-                        }
+                                .testTag("admin_submissions_button"),
+                            onClick = { showSubmissionsDialog = true }
+                        )
 
-                        FilledTonalButton(
-                            onClick = { showVersionsDialog = true },
+                        AdminActionPillButton(
+                            label = "Versions & SHA-256",
+                            icon = Icons.Default.Security,
                             modifier = Modifier
                                 .weight(1f)
-                                .testTag("admin_version_history_button")
-                        ) {
-                            Icon(imageVector = Icons.Default.Security, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Versions & SHA-256")
-                        }
+                                .testTag("admin_version_history_button"),
+                            onClick = { showVersionsDialog = true }
+                        )
                     }
-
-                    Spacer(modifier = Modifier.height(8.dp))
 
                     // Row 3: Review Moderation, Security Reports & Store Announcements
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         val flaggedCount = allReviews.count { it.flagged }
-                        FilledTonalButton(
-                            onClick = { showModerationDialog = true },
+                        AdminActionPillButton(
+                            label = if (flaggedCount > 0) "Reviews ($flaggedCount)" else "Reviews (${allReviews.size})",
+                            icon = Icons.Default.RateReview,
                             modifier = Modifier
                                 .weight(1f)
-                                .testTag("admin_review_moderation_button")
-                        ) {
-                            Text(
-                                text = if (flaggedCount > 0) {
-                                    "Reviews ($flaggedCount Flag)"
-                                } else {
-                                    "Reviews (${allReviews.size})"
-                                }
-                            )
-                        }
+                                .testTag("admin_review_moderation_button"),
+                            onClick = { showModerationDialog = true }
+                        )
 
-                        FilledTonalButton(
-                            onClick = { showReportsDialog = true },
+                        AdminActionPillButton(
+                            label = if (openReportsCount > 0) "Reports ($openReportsCount)" else "Reports (${reports.size})",
+                            icon = Icons.Default.Report,
                             modifier = Modifier
                                 .weight(1f)
-                                .testTag("admin_reports_button")
-                        ) {
-                            Text(
-                                text = if (openReportsCount > 0) {
-                                    "Reports ($openReportsCount Open)"
-                                } else {
-                                    "Reports (${reports.size})"
-                                }
-                            )
-                        }
+                                .testTag("admin_reports_button"),
+                            onClick = { showReportsDialog = true }
+                        )
 
-                        FilledTonalButton(
-                            onClick = { showNotificationDialog = true },
+                        AdminActionPillButton(
+                            label = "Alerts (${notifications.size})",
+                            icon = Icons.Default.Notifications,
                             modifier = Modifier
-                                .weight(1f)
-                                .testTag("admin_broadcast_notification_button")
-                        ) {
-                            Text("Alerts (${notifications.size})")
-                        }
+                                .weight(0.95f)
+                                .testTag("admin_broadcast_notification_button"),
+                            onClick = { showNotificationDialog = true }
+                        )
                     }
-
-                    Spacer(modifier = Modifier.height(8.dp))
 
                     // Row 4: Users/Developers/RBAC Roles & Analytics/Audit Logs
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        FilledTonalButton(
-                            onClick = { showUsersRolesDialog = true },
+                        AdminActionPillButton(
+                            label = "Developers & Roles",
+                            icon = Icons.Default.People,
                             modifier = Modifier
                                 .weight(1f)
-                                .testTag("admin_users_roles_button")
-                        ) {
-                            Icon(imageVector = Icons.Default.People, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Developers & Roles")
-                        }
+                                .testTag("admin_users_roles_button"),
+                            onClick = { showUsersRolesDialog = true }
+                        )
 
-                        FilledTonalButton(
-                            onClick = { showAnalyticsAuditDialog = true },
+                        AdminActionPillButton(
+                            label = "Analytics (${auditLogs.size})",
+                            icon = Icons.Default.Analytics,
                             modifier = Modifier
                                 .weight(1f)
-                                .testTag("admin_analytics_audit_button")
-                        ) {
-                            Icon(imageVector = Icons.Default.Analytics, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Analytics & Audit (${auditLogs.size})")
-                        }
+                                .testTag("admin_analytics_audit_button"),
+                            onClick = { showAnalyticsAuditDialog = true }
+                        )
                     }
-
-                    Spacer(modifier = Modifier.height(8.dp))
 
                     OutlinedButton(
                         onClick = onSeedOfficialCatalog,
-                        modifier = Modifier.fillMaxWidth()
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        shape = RoundedCornerShape(9.dp),
+                        border = BorderStroke(1.dp, cs.primary.copy(alpha = 0.35f)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(34.dp)
                     ) {
-                        Icon(imageVector = Icons.Default.Restore, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Sync / Restore Default Zayaan Ecosystem Apps")
+                        Icon(imageVector = Icons.Default.Restore, contentDescription = null, modifier = Modifier.size(15.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Sync / Restore Default Zayaan Ecosystem Apps",
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                 }
             }
@@ -371,40 +413,90 @@ fun AdminDashboardScreen(
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
-                )
+                shape = RoundedCornerShape(14.dp),
+                border = BorderStroke(1.dp, cs.primary.copy(alpha = 0.26f)),
+                colors = CardDefaults.cardColors(containerColor = cs.surface)
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Surface(
+                        color = cs.primaryContainer,
+                        shape = RoundedCornerShape(9.dp),
+                        border = BorderStroke(1.dp, cs.primary.copy(alpha = 0.28f))
+                    ) {
                         Icon(
                             imageVector = Icons.Default.Verified,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Real-Time Multi-Platform & GitHub Releases Sync",
-                            style = MaterialTheme.typography.titleMedium
+                            tint = cs.onPrimaryContainer,
+                            modifier = Modifier
+                                .padding(6.dp)
+                                .size(16.dp)
                         )
                     }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Every application release, multi-version changelog, curated collection, and SHA-256 checksum saved here synchronizes in real time across the Android APK Store and https://zayaanapps.github.io/zayaan-apps/.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Real-Time GitHub Releases & Cloud Sync",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Releases, changelogs, collections & SHA-256 sync instantly across Android & Web.",
+                            fontSize = 11.sp,
+                            lineHeight = 14.5.sp,
+                            color = cs.onSurfaceVariant
+                        )
+                    }
                 }
             }
         }
 
-        // 3. Managed Applications Catalog List
+        // 3. Managed Applications Catalog List Header
         item {
-            Text(
-                text = "Managed Store Catalog (${apps.size})",
-                style = MaterialTheme.typography.titleLarge
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Surface(
+                    color = cs.primary.copy(alpha = 0.14f),
+                    shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(1.dp, cs.primary.copy(alpha = 0.28f))
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Apps,
+                        contentDescription = null,
+                        tint = cs.primary,
+                        modifier = Modifier
+                            .padding(5.dp)
+                            .size(15.dp)
+                    )
+                }
+                Text(
+                    text = "Managed Store Catalog",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Surface(
+                    color = cs.surfaceVariant.copy(alpha = 0.55f),
+                    shape = RoundedCornerShape(7.dp),
+                    border = BorderStroke(1.dp, cs.outline.copy(alpha = 0.22f))
+                ) {
+                    Text(
+                        text = "${apps.size}",
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = cs.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
+                    )
+                }
+            }
         }
 
         items(
@@ -414,92 +506,112 @@ fun AdminDashboardScreen(
             val appVersionsCount = versionHistory.count { it.appId == (app.appId.ifBlank { app.docId }) }
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
-                )
+                shape = RoundedCornerShape(14.dp),
+                border = BorderStroke(1.dp, cs.outline.copy(alpha = 0.26f)),
+                colors = CardDefaults.cardColors(containerColor = cs.surface)
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
+                Column(
+                    modifier = Modifier.padding(11.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        AppEmblemAvatar(app = app, sizeDp = 52)
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                        AppEmblemAvatar(app = app, sizeDp = 44)
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
                                 Text(
                                     text = app.appName,
-                                    style = MaterialTheme.typography.titleMedium,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
                                     maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false)
                                 )
-                                Spacer(modifier = Modifier.width(8.dp))
                                 Surface(
-                                    color = if (app.published) {
-                                        MaterialTheme.colorScheme.primaryContainer
-                                    } else {
-                                        MaterialTheme.colorScheme.errorContainer
-                                    },
-                                    shape = RoundedCornerShape(6.dp)
+                                    color = if (app.published) cs.primaryContainer else cs.errorContainer,
+                                    shape = RoundedCornerShape(6.dp),
+                                    border = BorderStroke(
+                                        1.dp,
+                                        if (app.published) cs.primary.copy(alpha = 0.28f) else cs.error.copy(alpha = 0.28f)
+                                    )
                                 ) {
                                     Text(
                                         text = if (app.published) "PUBLISHED" else "DRAFT",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        fontSize = 9.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (app.published) cs.onPrimaryContainer else cs.onErrorContainer,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
                                     )
                                 }
                             }
                             Text(
-                                text = "${app.packageName} • v${app.versionName} (code ${app.versionCode})",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                text = "${app.packageName} • v${app.versionName} (${app.versionCode})",
+                                fontSize = 11.sp,
+                                color = cs.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                             Text(
                                 text = "${app.category} • ${app.apkFileSize} • ${app.downloadCount} DLs • ${app.pageViews} views" +
-                                    if (appVersionsCount > 0) " • $appVersionsCount versions" else "",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    if (appVersionsCount > 0) " • $appVersionsCount vers" else "",
+                                fontSize = 10.5.sp,
+                                color = cs.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                             if (app.sha256Checksum.isNotBlank()) {
                                 Text(
                                     text = "SHA-256: ${app.sha256Checksum.take(20)}...",
-                                    style = MaterialTheme.typography.labelSmall,
+                                    fontSize = 10.sp,
                                     fontFamily = FontFamily.Monospace,
-                                    color = MaterialTheme.colorScheme.primary
+                                    color = cs.primary,
+                                    maxLines = 1
                                 )
                             }
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    HorizontalDivider(color = cs.outline.copy(alpha = 0.18f))
 
-                    // Curation & Publishing Chips
+                    // Compact bordered curation & publishing pills
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                        verticalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
-                        FilterChip(
+                        AdminTogglePill(
+                            label = "Featured",
                             selected = app.featured,
-                            onClick = { onToggleFeatured(app) },
-                            label = { Text("Featured") },
-                            modifier = Modifier.testTag("admin_toggle_featured_${app.appId}")
+                            icon = if (app.featured) Icons.Default.Star else Icons.Default.StarBorder,
+                            modifier = Modifier.testTag("admin_toggle_featured_${app.appId}"),
+                            onClick = { onToggleFeatured(app) }
                         )
-                        FilterChip(
+                        AdminTogglePill(
+                            label = "Editor's",
                             selected = app.editorsChoice,
-                            onClick = { onToggleEditorsChoice(app) },
-                            label = { Text("Editor's Choice") }
+                            icon = Icons.Default.WorkspacePremium,
+                            onClick = { onToggleEditorsChoice(app) }
                         )
-                        FilterChip(
+                        AdminTogglePill(
+                            label = "Essential",
                             selected = app.essential,
-                            onClick = { onToggleEssential(app) },
-                            label = { Text("Essential") }
+                            icon = Icons.Default.CheckCircle,
+                            onClick = { onToggleEssential(app) }
                         )
-                        FilterChip(
+                        AdminTogglePill(
+                            label = if (app.published) "Published" else "Draft",
                             selected = app.published,
-                            onClick = { onTogglePublished(app) },
-                            label = { Text(if (app.published) "Published" else "Draft") },
-                            modifier = Modifier.testTag("admin_toggle_publish_${app.appId}")
+                            icon = if (app.published) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                            modifier = Modifier.testTag("admin_toggle_publish_${app.appId}"),
+                            onClick = { onTogglePublished(app) }
                         )
                     }
 
@@ -508,27 +620,41 @@ fun AdminDashboardScreen(
                         horizontalArrangement = Arrangement.End,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        TextButton(
+                        OutlinedButton(
                             onClick = {
                                 editingApp = app
                                 isCreatingNew = false
                             },
-                            modifier = Modifier.testTag("admin_edit_app_${app.appId}")
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            shape = RoundedCornerShape(9.dp),
+                            border = BorderStroke(1.dp, cs.primary.copy(alpha = 0.38f)),
+                            modifier = Modifier
+                                .height(30.dp)
+                                .testTag("admin_edit_app_${app.appId}")
                         ) {
-                            Icon(imageVector = Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Icon(imageVector = Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(13.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Edit / Bump Version")
+                            Text("Edit / Bump Version", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                         }
-
-                        IconButton(
-                            onClick = { onDeleteApp(app) },
-                            modifier = Modifier.testTag("admin_delete_app_${app.appId}")
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Surface(
+                            color = cs.errorContainer.copy(alpha = 0.55f),
+                            shape = RoundedCornerShape(9.dp),
+                            border = BorderStroke(1.dp, cs.error.copy(alpha = 0.28f)),
+                            modifier = Modifier
+                                .size(30.dp)
+                                .clip(RoundedCornerShape(9.dp))
+                                .clickable { onDeleteApp(app) }
+                                .testTag("admin_delete_app_${app.appId}")
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Delete,
-                                contentDescription = "Delete App",
-                                tint = MaterialTheme.colorScheme.error
-                            )
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = "Delete App",
+                                    tint = cs.error,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -661,10 +787,13 @@ fun AdminDashboardScreen(
 
 @Composable
 private fun AppEmblemAvatar(app: StoreApp, sizeDp: Int) {
+    val cs = MaterialTheme.colorScheme
     Surface(
-        modifier = Modifier.size(sizeDp.dp),
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.primaryContainer
+        modifier = Modifier
+            .size(sizeDp.dp)
+            .border(1.dp, cs.outline.copy(alpha = 0.26f), RoundedCornerShape(11.dp)),
+        shape = RoundedCornerShape(11.dp),
+        color = cs.primaryContainer
     ) {
         if (app.iconUrl.isNotBlank()) {
             val emblemModel: Any = if (
@@ -684,14 +813,14 @@ private fun AppEmblemAvatar(app: StoreApp, sizeDp: Int) {
                 contentScale = androidx.compose.ui.layout.ContentScale.Crop
             )
         } else {
-            androidx.compose.foundation.layout.Box(
+            Box(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = app.appName.take(2).uppercase(),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = cs.onPrimaryContainer,
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -700,25 +829,102 @@ private fun AppEmblemAvatar(app: StoreApp, sizeDp: Int) {
 }
 
 @Composable
-private fun AdminMetricBox(label: String, value: String) {
+private fun AdminCompactMetric(label: String, value: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            text = value,
+            fontSize = 13.sp,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1
+        )
+        Text(
+            text = label,
+            fontSize = 9.5.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1
+        )
+    }
+}
+
+@Composable
+private fun AdminActionPillButton(
+    label: String,
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    val cs = MaterialTheme.colorScheme
     Surface(
-        color = MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(14.dp)
+        color = cs.surface,
+        shape = RoundedCornerShape(9.dp),
+        border = BorderStroke(1.dp, cs.outline.copy(alpha = 0.28f)),
+        modifier = modifier
+            .height(34.dp)
+            .clip(RoundedCornerShape(9.dp))
+            .clickable(onClick = onClick)
     ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
         ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = cs.primary,
+                modifier = Modifier.size(14.dp)
+            )
+            Spacer(modifier = Modifier.width(4.dp))
             Text(
-                text = value,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold
+                text = label,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = cs.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+private fun AdminTogglePill(
+    label: String,
+    selected: Boolean,
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    val cs = MaterialTheme.colorScheme
+    Surface(
+        color = if (selected) cs.primaryContainer else cs.surface,
+        shape = RoundedCornerShape(8.dp),
+        border = BorderStroke(
+            width = 1.dp,
+            color = if (selected) cs.primary.copy(alpha = 0.45f) else cs.outline.copy(alpha = 0.26f)
+        ),
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = if (selected) cs.onPrimaryContainer else cs.onSurfaceVariant,
+                modifier = Modifier.size(12.dp)
             )
             Text(
                 text = label,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                fontSize = 11.sp,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                color = if (selected) cs.onPrimaryContainer else cs.onSurfaceVariant,
+                maxLines = 1
             )
         }
     }

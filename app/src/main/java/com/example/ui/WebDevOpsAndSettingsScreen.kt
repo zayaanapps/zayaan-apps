@@ -3,8 +3,13 @@ package com.example.ui
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -21,22 +26,23 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.BrightnessAuto
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.InstallMobile
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.RocketLaunch
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -55,10 +61,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.BuildConfig
 import com.example.data.AppThemeMode
 
@@ -79,6 +94,8 @@ fun WebDevOpsAndSettingsScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val cs = MaterialTheme.colorScheme
+    val isDark = cs.background.luminance() < 0.5f
     var selectedBlueprintTab by remember { mutableStateOf("Overview & Architecture") }
 
     val blueprintTabs = listOf(
@@ -93,157 +110,259 @@ fun WebDevOpsAndSettingsScreen(
         modifier = modifier
             .fillMaxSize()
             .testTag("web_devops_settings_screen"),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        // 1. Live Website & GitHub Repository Banner
+        // 1. Compact, Theme-Adaptive Web & GitHub DevOps Header Card
         item {
+            val headerShape = RoundedCornerShape(16.dp)
+            val headerBrush = if (isDark) {
+                Brush.linearGradient(
+                    colors = listOf(Color(0xFF0C2235), Color(0xFF092A27))
+                )
+            } else {
+                Brush.linearGradient(
+                    colors = listOf(Color(0xFFEAF8F1), Color(0xFFF1F7FC))
+                )
+            }
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f)
+                shape = headerShape,
+                colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+                border = BorderStroke(
+                    width = 1.dp,
+                    color = cs.primary.copy(alpha = if (isDark) 0.34f else 0.24f)
                 )
             ) {
-                Column(modifier = Modifier.padding(20.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Public,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(28.dp)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(headerBrush)
+                        .padding(horizontal = 12.dp, vertical = 10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(34.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(cs.primary.copy(alpha = 0.14f))
+                                .border(
+                                    width = 1.dp,
+                                    color = cs.primary.copy(alpha = 0.32f),
+                                    shape = RoundedCornerShape(10.dp)
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Public,
+                                contentDescription = null,
+                                tint = cs.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(9.dp))
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Zayaan Apps Web & GitHub DevOps Hub",
-                                style = MaterialTheme.typography.titleLarge
+                                text = "Zayaan Apps Web & DevOps",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.ExtraBold
+                                ),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                             Text(
                                 text = "https://zayaanapps.github.io/zayaan-apps/",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    textDecoration = TextDecoration.Underline,
+                                    fontWeight = FontWeight.Medium
+                                ),
+                                color = cs.primary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.clickable {
+                                    onOpenUrl(context, "https://zayaanapps.github.io/zayaan-apps/")
+                                }
                             )
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(7.dp))
 
-                    Text(
-                        text = "Installed Store Build: v${BuildConfig.VERSION_NAME} (versionCode ${BuildConfig.VERSION_CODE}) • ${BuildConfig.APPLICATION_ID}",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+                    Surface(
+                        color = cs.surface.copy(alpha = if (isDark) 0.62f else 0.88f),
+                        shape = RoundedCornerShape(9.dp),
+                        border = BorderStroke(1.dp, cs.outline.copy(alpha = 0.22f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Verified,
+                                contentDescription = null,
+                                tint = cs.primary,
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Text(
+                                text = "Build v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) • ${BuildConfig.APPLICATION_ID}",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                ),
+                                color = cs.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
 
                     Spacer(modifier = Modifier.height(6.dp))
 
                     Text(
-                        text = "Both your Android APK and responsive Flutter Web store share the exact same Cloud Firestore 'apps' collection. All Flutter/Dart files (flutter_zayaan_apps/) and GitHub Actions workflows (.github/workflows/deploy.yml) are generated in this workspace.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = "Android APK & responsive Flutter Web share the live Firestore 'apps' catalog and GitHub Actions CI/CD releases.",
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                        color = cs.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
 
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Button(
                             onClick = {
                                 onOpenUrl(context, "https://github.com/zayaanapps/zayaan-apps/releases/latest/download/zayaan-apps-release.apk")
                             },
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
                             modifier = Modifier
                                 .weight(1f)
+                                .height(34.dp)
                                 .testTag("direct_latest_release_apk_button")
                         ) {
-                            Icon(imageVector = Icons.Default.RocketLaunch, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Latest Release APK")
+                            Icon(imageVector = Icons.Default.RocketLaunch, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Text("Latest Release APK", style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
 
                         OutlinedButton(
                             onClick = {
                                 onOpenUrl(context, "https://github.com/zayaanapps/zayaan-apps/releases/latest")
                             },
-                            modifier = Modifier.weight(1f)
+                            shape = RoundedCornerShape(10.dp),
+                            border = BorderStroke(1.dp, cs.primary.copy(alpha = 0.35f)),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(34.dp)
                         ) {
-                            Icon(imageVector = Icons.Default.Code, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("GitHub Releases")
+                            Icon(imageVector = Icons.Default.Code, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Text("GitHub Releases", style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         FilledTonalButton(
                             onClick = {
                                 onOpenUrl(context, "https://zayaanapps.github.io/zayaan-apps/")
                             },
-                            modifier = Modifier.weight(1f)
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(34.dp)
                         ) {
-                            Icon(imageVector = Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Open Web Store")
+                            Icon(imageVector = Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Text("Open Web Store", style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
 
                         OutlinedButton(
                             onClick = {
                                 onOpenUrl(context, "https://github.com/zayaanapps/zayaan-apps")
                             },
-                            modifier = Modifier.weight(1f)
+                            shape = RoundedCornerShape(10.dp),
+                            border = BorderStroke(1.dp, cs.outline.copy(alpha = 0.32f)),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(34.dp)
                         ) {
-                            Icon(imageVector = Icons.Default.Code, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("GitHub Repo")
+                            Icon(imageVector = Icons.Default.Code, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Text("GitHub Repo", style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
                 }
             }
         }
 
-        // 2. App Settings (Theme, Notifications, Account)
+        // 2. Compact Store Settings & Preferences Card
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
-                )
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = cs.surface),
+                border = BorderStroke(1.dp, cs.outline.copy(alpha = 0.24f))
             ) {
-                Column(modifier = Modifier.padding(18.dp)) {
-                    Text(
-                        text = "Store Settings & Preferences",
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
+                Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        SettingLeadingIconBadge(
+                            icon = Icons.Default.Settings,
+                            tint = cs.primary
+                        )
+                        Text(
+                            text = "Store Settings & Preferences",
+                            style = MaterialTheme.typography.titleSmall.copy(
+                                fontWeight = FontWeight.Bold
+                            )
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
 
                     Column(modifier = Modifier.fillMaxWidth()) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = when (themeMode) {
+                            SettingLeadingIconBadge(
+                                icon = when (themeMode) {
                                     AppThemeMode.SYSTEM -> Icons.Default.BrightnessAuto
                                     AppThemeMode.LIGHT -> Icons.Default.LightMode
                                     AppThemeMode.DARK -> Icons.Default.DarkMode
                                 },
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
+                                tint = cs.primary
                             )
-                            Spacer(modifier = Modifier.width(12.dp))
+                            Spacer(modifier = Modifier.width(9.dp))
                             Column {
-                                Text("App Theme (Material 3)", style = MaterialTheme.typography.labelLarge)
                                 Text(
-                                    text = "Defaults to System device theme; choose System, Light, or Dark",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    text = "App Theme (Material 3)",
+                                    style = MaterialTheme.typography.labelLarge.copy(
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                )
+                                Text(
+                                    text = "Follows System by default; switch to Light or Dark anytime",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                    color = cs.onSurfaceVariant
                                 )
                             }
                         }
-                        Spacer(modifier = Modifier.height(10.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
                         SingleChoiceSegmentedButtonRow(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -265,19 +384,25 @@ fun WebDevOpsAndSettingsScreen(
                                                 AppThemeMode.DARK -> Icons.Default.DarkMode
                                             },
                                             contentDescription = null,
-                                            modifier = Modifier.size(16.dp)
+                                            modifier = Modifier.size(15.dp)
                                         )
                                     },
-                                    label = { Text(mode.label) },
+                                    label = {
+                                        Text(
+                                            text = mode.label,
+                                            style = MaterialTheme.typography.labelSmall
+                                        )
+                                    },
                                     modifier = Modifier.testTag("theme_mode_${mode.name.lowercase()}")
                                 )
                             }
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(12.dp))
-                    HorizontalDivider()
-                    Spacer(modifier = Modifier.height(12.dp))
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 10.dp),
+                        color = cs.outline.copy(alpha = 0.18f)
+                    )
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -285,13 +410,26 @@ fun WebDevOpsAndSettingsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                            Icon(imageVector = Icons.Default.Notifications, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                            Spacer(modifier = Modifier.width(12.dp))
+                            SettingLeadingIconBadge(
+                                icon = Icons.Default.Notifications,
+                                tint = cs.primary
+                            )
+                            Spacer(modifier = Modifier.width(9.dp))
                             Column {
-                                Text("Available Update Notifications", style = MaterialTheme.typography.labelLarge)
-                                Text("Notify when installed Zayaan apps have newer versionCode", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(
+                                    text = "Available Update Notifications",
+                                    style = MaterialTheme.typography.labelLarge.copy(
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                )
+                                Text(
+                                    text = "Notify when installed Zayaan apps have newer versionCode",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                    color = cs.onSurfaceVariant
+                                )
                             }
                         }
+                        Spacer(modifier = Modifier.width(6.dp))
                         Switch(
                             checked = notifyUpdates,
                             onCheckedChange = { enabled ->
@@ -302,9 +440,10 @@ fun WebDevOpsAndSettingsScreen(
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(14.dp))
-                    HorizontalDivider()
-                    Spacer(modifier = Modifier.height(14.dp))
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 10.dp),
+                        color = cs.outline.copy(alpha = 0.18f)
+                    )
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -312,84 +451,158 @@ fun WebDevOpsAndSettingsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                            Icon(imageVector = Icons.Default.InstallMobile, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                            Spacer(modifier = Modifier.width(12.dp))
+                            SettingLeadingIconBadge(
+                                icon = Icons.Default.InstallMobile,
+                                tint = cs.primary
+                            )
+                            Spacer(modifier = Modifier.width(9.dp))
                             Column {
-                                Text("Install Unknown Apps Permission", style = MaterialTheme.typography.labelLarge)
+                                Text(
+                                    text = "Install Unknown Apps Permission",
+                                    style = MaterialTheme.typography.labelLarge.copy(
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                )
                                 Text(
                                     text = if (canInstallUnknownApps) {
                                         "Granted — APK updates auto-delete after install"
                                     } else {
                                         "Required to install & update APKs"
                                     },
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                    color = cs.onSurfaceVariant
                                 )
                             }
                         }
+                        Spacer(modifier = Modifier.width(6.dp))
                         if (canInstallUnknownApps) {
-                            Icon(
-                                imageVector = Icons.Default.CheckCircle,
-                                contentDescription = "Granted",
-                                tint = MaterialTheme.colorScheme.primary
-                            )
+                            Surface(
+                                color = cs.primary.copy(alpha = 0.12f),
+                                shape = RoundedCornerShape(999.dp),
+                                border = BorderStroke(1.dp, cs.primary.copy(alpha = 0.30f))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.CheckCircle,
+                                        contentDescription = "Granted",
+                                        tint = cs.primary,
+                                        modifier = Modifier.size(13.dp)
+                                    )
+                                    Text(
+                                        text = "Granted",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        ),
+                                        color = cs.primary
+                                    )
+                                }
+                            }
                         } else {
-                            FilledTonalButton(onClick = onRequestInstallUnknownAppsPermission) {
-                                Text("Grant")
+                            FilledTonalButton(
+                                onClick = onRequestInstallUnknownAppsPermission,
+                                shape = RoundedCornerShape(9.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                                modifier = Modifier.height(30.dp)
+                            ) {
+                                Text("Grant", style = MaterialTheme.typography.labelSmall)
                             }
                         }
                     }
 
                     if (!notificationsPermissionGranted) {
-                        Spacer(modifier = Modifier.height(12.dp))
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 10.dp),
+                            color = cs.outline.copy(alpha = 0.18f)
+                        )
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                                Icon(imageVector = Icons.Default.Notifications, contentDescription = null, tint = MaterialTheme.colorScheme.tertiary)
-                                Spacer(modifier = Modifier.width(12.dp))
+                                SettingLeadingIconBadge(
+                                    icon = Icons.Default.Notifications,
+                                    tint = cs.tertiary
+                                )
+                                Spacer(modifier = Modifier.width(9.dp))
                                 Column {
-                                    Text("Notification Permission", style = MaterialTheme.typography.labelLarge)
+                                    Text(
+                                        text = "Notification Permission",
+                                        style = MaterialTheme.typography.labelLarge.copy(
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    )
                                     Text(
                                         text = "Tap Grant to receive app update & install alerts",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                        color = cs.onSurfaceVariant
                                     )
                                 }
                             }
-                            FilledTonalButton(onClick = onRequestNotificationPermission) {
-                                Text("Grant")
+                            Spacer(modifier = Modifier.width(6.dp))
+                            FilledTonalButton(
+                                onClick = onRequestNotificationPermission,
+                                shape = RoundedCornerShape(9.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                                modifier = Modifier.height(30.dp)
+                            ) {
+                                Text("Grant", style = MaterialTheme.typography.labelSmall)
                             }
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(14.dp))
-                    HorizontalDivider()
-                    Spacer(modifier = Modifier.height(14.dp))
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 10.dp),
+                        color = cs.outline.copy(alpha = 0.18f)
+                    )
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Account Session", style = MaterialTheme.typography.labelLarge)
-                            Text(
-                                text = currentUserEmail ?: "Open Store Mode (Sign-In disabled for now)",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                            SettingLeadingIconBadge(
+                                icon = Icons.Default.AccountCircle,
+                                tint = cs.secondary
                             )
+                            Spacer(modifier = Modifier.width(9.dp))
+                            Column {
+                                Text(
+                                    text = "Account Session",
+                                    style = MaterialTheme.typography.labelLarge.copy(
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                )
+                                Text(
+                                    text = currentUserEmail ?: "Open Store Mode (Sign-In disabled for now)",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                    color = cs.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
                         if (currentUserEmail != null) {
-                            FilledTonalButton(
+                            Spacer(modifier = Modifier.width(6.dp))
+                            OutlinedButton(
                                 onClick = onSignOut,
-                                modifier = Modifier.testTag("sign_out_button")
+                                shape = RoundedCornerShape(9.dp),
+                                border = BorderStroke(1.dp, cs.error.copy(alpha = 0.35f)),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = cs.error),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                                modifier = Modifier
+                                    .height(30.dp)
+                                    .testTag("sign_out_button")
                             ) {
-                                Icon(imageVector = Icons.AutoMirrored.Filled.Logout, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Sign Out")
+                                Icon(imageVector = Icons.AutoMirrored.Filled.Logout, contentDescription = null, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Sign Out", style = MaterialTheme.typography.labelSmall)
                             }
                         }
                     }
@@ -397,26 +610,54 @@ fun WebDevOpsAndSettingsScreen(
             }
         }
 
-        // 3. Interactive Blueprint & Code Inspector Selector
+        // 3. Compact Blueprint & Code Inspector Selector
         item {
-            Column {
-                Text(
-                    text = "Flutter + Web + GitHub Actions Blueprints",
-                    style = MaterialTheme.typography.titleLarge
-                )
-                Spacer(modifier = Modifier.height(8.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    SettingLeadingIconBadge(
+                        icon = Icons.Default.Code,
+                        tint = cs.primary
+                    )
+                    Text(
+                        text = "Flutter + Web + GitHub Actions Blueprints",
+                        style = MaterialTheme.typography.titleSmall.copy(
+                            fontWeight = FontWeight.Bold
+                        ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(7.dp)
                 ) {
                     blueprintTabs.forEach { tab ->
-                        FilterChip(
-                            selected = selectedBlueprintTab == tab,
+                        val selected = selectedBlueprintTab == tab
+                        Surface(
                             onClick = { selectedBlueprintTab = tab },
-                            label = { Text(tab) }
-                        )
+                            shape = RoundedCornerShape(999.dp),
+                            color = if (selected) cs.primary.copy(alpha = 0.14f) else cs.surface,
+                            border = BorderStroke(
+                                width = 1.dp,
+                                color = if (selected) cs.primary.copy(alpha = 0.55f) else cs.outline.copy(alpha = 0.24f)
+                            )
+                        ) {
+                            Text(
+                                text = tab,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                                    fontSize = 11.sp
+                                ),
+                                color = if (selected) cs.primary else cs.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -434,12 +675,11 @@ fun WebDevOpsAndSettingsScreen(
 
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
-                )
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = cs.surface),
+                border = BorderStroke(1.dp, cs.outline.copy(alpha = 0.24f))
             ) {
-                Column(modifier = Modifier.padding(18.dp)) {
+                Column(modifier = Modifier.padding(12.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -447,39 +687,76 @@ fun WebDevOpsAndSettingsScreen(
                     ) {
                         Text(
                             text = selectedBlueprintTab,
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.labelLarge.copy(
+                                fontWeight = FontWeight.Bold
+                            ),
+                            color = cs.primary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f)
                         )
-                        FilledTonalButton(
+                        Spacer(modifier = Modifier.width(8.dp))
+                        OutlinedButton(
                             onClick = {
                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
                                 clipboard?.setPrimaryClip(ClipData.newPlainText(selectedBlueprintTab, contentText))
                                 onShowCopiedMessage("Copied '$selectedBlueprintTab' to clipboard!")
-                            }
+                            },
+                            shape = RoundedCornerShape(9.dp),
+                            border = BorderStroke(1.dp, cs.primary.copy(alpha = 0.35f)),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                            modifier = Modifier.height(30.dp)
                         ) {
-                            Icon(imageVector = Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Copy")
+                            Icon(imageVector = Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(13.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Copy", style = MaterialTheme.typography.labelSmall)
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
                     Surface(
-                        color = MaterialTheme.colorScheme.surface,
-                        shape = RoundedCornerShape(14.dp),
+                        color = cs.surfaceVariant.copy(alpha = if (isDark) 0.42f else 0.32f),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, cs.outline.copy(alpha = 0.18f)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
                             text = contentText,
-                            style = MaterialTheme.typography.labelSmall,
-                            modifier = Modifier.padding(14.dp)
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 10.5.sp,
+                                lineHeight = 15.sp
+                            ),
+                            color = cs.onSurface,
+                            modifier = Modifier.padding(11.dp)
                         )
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SettingLeadingIconBadge(
+    icon: ImageVector,
+    tint: Color
+) {
+    Box(
+        modifier = Modifier
+            .size(28.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(tint.copy(alpha = 0.12f))
+            .border(1.dp, tint.copy(alpha = 0.28f), RoundedCornerShape(8.dp)),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = tint,
+            modifier = Modifier.size(15.dp)
+        )
     }
 }
 
