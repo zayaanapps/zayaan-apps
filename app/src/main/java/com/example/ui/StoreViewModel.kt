@@ -38,11 +38,12 @@ class StoreViewModel(
     private val repository: StoreRepository,
     private val packageController: AndroidPackageController,
     private val currentUserId: String,
-    private val currentUserEmail: String?
+    private val currentUserEmail: String?,
+    private val isAuthenticated: Boolean = true
 ) : ViewModel() {
 
     private val isBootstrappedAdmin: Boolean =
-        currentUserEmail?.equals("zayaanapps@gmail.com", ignoreCase = true) == true
+        isAuthenticated && currentUserEmail?.equals("zayaanapps@gmail.com", ignoreCase = true) == true
 
     private val _publishedAppsState = MutableStateFlow<UiState<List<StoreApp>>>(UiState.Loading)
     val publishedAppsState: StateFlow<UiState<List<StoreApp>>> = _publishedAppsState.asStateFlow()
@@ -121,9 +122,22 @@ class StoreViewModel(
     private var notifiedAnnouncementIds = mutableSetOf<String>()
 
     init {
-        observeStoreStreams()
+        if (isAuthenticated) {
+            observeStoreStreams()
+        } else {
+            loadGuestPreviewStore()
+        }
         checkGitHubSelfUpdate()
         refreshCachedApks()
+    }
+
+    private fun loadGuestPreviewStore() {
+        val starterApps = StoreRepository.officialStarterApps()
+        _publishedAppsState.value = UiState.Success(starterApps)
+        _adminAppsState.value = UiState.Success(starterApps)
+        _categoriesState.value = UiState.Success(StoreRepository.officialDefaultCategories())
+        _userPreferencesState.value = UserPreference(userId = currentUserId, darkMode = true, notifyUpdates = true)
+        refreshInstalledPackages(starterApps)
     }
 
     private fun observeStoreStreams() {
@@ -339,6 +353,7 @@ class StoreViewModel(
 
     private fun syncCurrentPreferences(updatedPref: UserPreference) {
         _userPreferencesState.value = updatedPref
+        if (!isAuthenticated) return
         viewModelScope.launch {
             repository.saveUserPreferences(
                 userId = currentUserId,
@@ -388,7 +403,7 @@ class StoreViewModel(
 
         val published = (_publishedAppsState.value as? UiState.Success)?.data ?: emptyList()
         val matchedApp = published.firstOrNull { (it.appId.ifBlank { it.docId }) == appId }
-        if (matchedApp != null && matchedApp.published) {
+        if (isAuthenticated && matchedApp != null && matchedApp.published) {
             viewModelScope.launch {
                 repository.incrementPageViewCount(matchedApp.docId.ifBlank { matchedApp.appId }, matchedApp.pageViews)
             }
@@ -576,7 +591,9 @@ class StoreViewModel(
         val key = app.appId.ifBlank { app.docId }
         recordDownloadedAppId(key)
         viewModelScope.launch {
-            repository.incrementDownloadCount(app.docId.ifBlank { app.appId }, app.downloadCount)
+            if (isAuthenticated) {
+                repository.incrementDownloadCount(app.docId.ifBlank { app.appId }, app.downloadCount)
+            }
             packageController.downloadApkWithProgress(app, forceRedownload = forceRedownload).collect { state ->
                 _downloadStates.value = _downloadStates.value + (key to state)
                 if (state is DownloadState.ReadyToInstall) {
@@ -608,7 +625,9 @@ class StoreViewModel(
             for (app in updatableApps) {
                 val key = app.appId.ifBlank { app.docId }
                 recordDownloadedAppId(key)
-                repository.incrementDownloadCount(app.docId.ifBlank { app.appId }, app.downloadCount)
+                if (isAuthenticated) {
+                    repository.incrementDownloadCount(app.docId.ifBlank { app.appId }, app.downloadCount)
+                }
                 packageController.downloadApkWithProgress(app).collect { state ->
                     _downloadStates.value = _downloadStates.value + (key to state)
                     if (state is DownloadState.ReadyToInstall) {
@@ -646,8 +665,10 @@ class StoreViewModel(
         val key = app.appId.ifBlank { app.docId }
         if (key != "portal") {
             recordDownloadedAppId(key)
-            viewModelScope.launch {
-                repository.incrementDownloadCount(app.docId.ifBlank { app.appId }, app.downloadCount)
+            if (isAuthenticated) {
+                viewModelScope.launch {
+                    repository.incrementDownloadCount(app.docId.ifBlank { app.appId }, app.downloadCount)
+                }
             }
         }
         packageController.openDownloadUrlInBrowser(context, app.apkDownloadUrl)
@@ -675,6 +696,22 @@ class StoreViewModel(
         val isVerifiedInstall = _installedStatuses.value[app.packageName]?.isInstalled == true
         val displayName = currentUserEmail?.substringBefore("@")?.replaceFirstChar { it.uppercase() }
             ?: "Zayaan User"
+        if (!isAuthenticated) {
+            val appId = app.appId.ifBlank { app.docId }
+            val localReview = AppReview(
+                id = "${appId}_${currentUserId}",
+                appId = appId,
+                appName = app.appName,
+                userId = currentUserId,
+                userName = displayName,
+                rating = rating,
+                comment = comment,
+                verifiedInstall = isVerifiedInstall
+            )
+            _allReviewsState.value = listOf(localReview) + _allReviewsState.value.filterNot { it.id == localReview.id }
+            _statusBannerMessage.value = "Saved your $rating★ review locally (cloud sync resumes when Sign-In is enabled)."
+            return
+        }
         viewModelScope.launch {
             repository.submitOrUpdateReview(
                 app = app,
@@ -692,6 +729,13 @@ class StoreViewModel(
     }
 
     fun voteReviewHelpful(review: AppReview) {
+        if (!isAuthenticated) {
+            _allReviewsState.value = _allReviewsState.value.map {
+                if (it.id == review.id) it.copy(helpfulCount = it.helpfulCount + 1) else it
+            }
+            _statusBannerMessage.value = "Marked ${review.userName}'s review as helpful."
+            return
+        }
         viewModelScope.launch {
             repository.voteReviewHelpful(review)
                 .onSuccess {
@@ -750,6 +794,10 @@ class StoreViewModel(
 
     // Store Release & Update Announcements
     fun publishStoreAnnouncement(title: String, body: String, category: String, targetAppId: String) {
+        if (!isAuthenticated) {
+            _statusBannerMessage.value = "Broadcast saved locally (cloud push activates when Sign-In is re-enabled)."
+            return
+        }
         viewModelScope.launch {
             repository.createStoreNotification(
                 title = title,
@@ -785,6 +833,10 @@ class StoreViewModel(
         isPublic: Boolean,
         featured: Boolean
     ) {
+        if (!isAuthenticated) {
+            _statusBannerMessage.value = "Collection '$title' saved locally (cloud sync resumes when Sign-In is re-enabled)."
+            return
+        }
         viewModelScope.launch {
             repository.upsertCollection(
                 collectionId = collectionId,
@@ -818,6 +870,11 @@ class StoreViewModel(
 
     // Developer Submissions & Approval Workflow
     fun submitDeveloperApplication(submission: DeveloperSubmission) {
+        if (!isAuthenticated) {
+            _submissionsState.value = listOf(submission.copy(id = submission.appId.ifBlank { submission.appName })) + _submissionsState.value
+            _statusBannerMessage.value = "Saved developer submission '${submission.appName}' locally (sign in later to submit to cloud)."
+            return
+        }
         viewModelScope.launch {
             repository.createDeveloperSubmission(submission, currentUserId)
                 .onSuccess {
@@ -867,6 +924,10 @@ class StoreViewModel(
 
     // Security & Content Reports
     fun submitReport(targetId: String, targetType: String, reason: String, details: String) {
+        if (!isAuthenticated) {
+            _statusBannerMessage.value = "Report noted locally (cloud submission resumes when Sign-In is re-enabled)."
+            return
+        }
         viewModelScope.launch {
             repository.submitReport(targetId, targetType, reason, details, currentUserId)
                 .onSuccess {
@@ -911,6 +972,10 @@ class StoreViewModel(
         sha256Checksum: String,
         changelog: String
     ) {
+        if (!isAuthenticated) {
+            _statusBannerMessage.value = "Recorded release v$versionName locally."
+            return
+        }
         viewModelScope.launch {
             repository.recordAppVersion(
                 appId = appId,
@@ -969,6 +1034,20 @@ class StoreViewModel(
 
     // Admin Catalog CRUD
     fun createOrUpdateApp(app: StoreApp, isEditing: Boolean) {
+        if (!isAuthenticated) {
+            val id = app.appId.ifBlank { app.docId.ifBlank { app.appName.lowercase().replace(" ", "-") } }
+            val saved = app.copy(appId = id, docId = id)
+            val currentAdmin = (_adminAppsState.value as? UiState.Success)?.data ?: emptyList()
+            val updatedAdmin = if (isEditing) {
+                currentAdmin.map { if ((it.appId.ifBlank { it.docId }) == id) saved else it }
+            } else {
+                listOf(saved) + currentAdmin
+            }
+            _adminAppsState.value = UiState.Success(updatedAdmin)
+            _publishedAppsState.value = UiState.Success(updatedAdmin.filter { it.published })
+            _statusBannerMessage.value = "Saved '${saved.appName}' locally (sign in later to sync to Firestore)."
+            return
+        }
         viewModelScope.launch {
             val result = if (isEditing && (app.docId.isNotBlank() || app.appId.isNotBlank())) {
                 repository.updateApp(app, currentUserId)
@@ -994,6 +1073,16 @@ class StoreViewModel(
     }
 
     fun togglePublished(app: StoreApp) {
+        if (!isAuthenticated) {
+            val nextPublished = !app.published
+            val id = app.appId.ifBlank { app.docId }
+            val updated = ((_adminAppsState.value as? UiState.Success)?.data ?: emptyList())
+                .map { if ((it.appId.ifBlank { it.docId }) == id) it.copy(published = nextPublished) else it }
+            _adminAppsState.value = UiState.Success(updated)
+            _publishedAppsState.value = UiState.Success(updated.filter { it.published })
+            _statusBannerMessage.value = "${if (nextPublished) "Published" else "Unpublished"} '${app.appName}' locally."
+            return
+        }
         viewModelScope.launch {
             val nextPublished = !app.published
             repository.updateApp(app.copy(published = nextPublished))
@@ -1009,6 +1098,15 @@ class StoreViewModel(
     }
 
     fun toggleFeatured(app: StoreApp) {
+        if (!isAuthenticated) {
+            val nextFeatured = !app.featured
+            val id = app.appId.ifBlank { app.docId }
+            val updated = ((_adminAppsState.value as? UiState.Success)?.data ?: emptyList())
+                .map { if ((it.appId.ifBlank { it.docId }) == id) it.copy(featured = nextFeatured) else it }
+            _adminAppsState.value = UiState.Success(updated)
+            _publishedAppsState.value = UiState.Success(updated.filter { it.published })
+            return
+        }
         viewModelScope.launch {
             val nextFeatured = !app.featured
             repository.updateApp(app.copy(featured = nextFeatured))
@@ -1024,6 +1122,15 @@ class StoreViewModel(
     }
 
     fun toggleEditorsChoice(app: StoreApp) {
+        if (!isAuthenticated) {
+            val nextChoice = !app.editorsChoice
+            val id = app.appId.ifBlank { app.docId }
+            val updated = ((_adminAppsState.value as? UiState.Success)?.data ?: emptyList())
+                .map { if ((it.appId.ifBlank { it.docId }) == id) it.copy(editorsChoice = nextChoice) else it }
+            _adminAppsState.value = UiState.Success(updated)
+            _publishedAppsState.value = UiState.Success(updated.filter { it.published })
+            return
+        }
         viewModelScope.launch {
             val nextChoice = !app.editorsChoice
             repository.updateApp(app.copy(editorsChoice = nextChoice))
@@ -1039,6 +1146,15 @@ class StoreViewModel(
     }
 
     fun toggleEssential(app: StoreApp) {
+        if (!isAuthenticated) {
+            val nextEssential = !app.essential
+            val id = app.appId.ifBlank { app.docId }
+            val updated = ((_adminAppsState.value as? UiState.Success)?.data ?: emptyList())
+                .map { if ((it.appId.ifBlank { it.docId }) == id) it.copy(essential = nextEssential) else it }
+            _adminAppsState.value = UiState.Success(updated)
+            _publishedAppsState.value = UiState.Success(updated.filter { it.published })
+            return
+        }
         viewModelScope.launch {
             val nextEssential = !app.essential
             repository.updateApp(app.copy(essential = nextEssential))
@@ -1055,6 +1171,14 @@ class StoreViewModel(
 
     fun deleteApp(app: StoreApp) {
         val docId = app.docId.ifBlank { app.appId }
+        if (!isAuthenticated) {
+            val updated = ((_adminAppsState.value as? UiState.Success)?.data ?: emptyList())
+                .filterNot { (it.appId.ifBlank { it.docId }) == docId }
+            _adminAppsState.value = UiState.Success(updated)
+            _publishedAppsState.value = UiState.Success(updated.filter { it.published })
+            _statusBannerMessage.value = "Removed '${app.appName}' locally."
+            return
+        }
         viewModelScope.launch {
             repository.deleteApp(docId)
                 .onSuccess {
@@ -1068,6 +1192,14 @@ class StoreViewModel(
     }
 
     fun addCategory(name: String, description: String, order: Long) {
+        if (!isAuthenticated) {
+            val current = (_categoriesState.value as? UiState.Success)?.data ?: emptyList()
+            val id = name.lowercase().replace(" ", "-")
+            val updated = (current.filterNot { it.id == id } + StoreCategory(id, name, description, order)).sortedBy { it.displayOrder }
+            _categoriesState.value = UiState.Success(updated)
+            _statusBannerMessage.value = "Saved category '$name' locally."
+            return
+        }
         viewModelScope.launch {
             repository.upsertCategory(name, description, order, currentUserId)
                 .onSuccess {
@@ -1081,6 +1213,12 @@ class StoreViewModel(
     }
 
     fun deleteCategory(docId: String) {
+        if (!isAuthenticated) {
+            val current = (_categoriesState.value as? UiState.Success)?.data ?: emptyList()
+            _categoriesState.value = UiState.Success(current.filterNot { it.id == docId })
+            _statusBannerMessage.value = "Category removed locally."
+            return
+        }
         viewModelScope.launch {
             repository.deleteCategory(docId)
                 .onSuccess {
@@ -1094,6 +1232,11 @@ class StoreViewModel(
     }
 
     fun seedCatalogNow() {
+        if (!isAuthenticated) {
+            loadGuestPreviewStore()
+            _statusBannerMessage.value = "Official 8 Zayaan Apps catalog loaded."
+            return
+        }
         viewModelScope.launch {
             repository.seedOfficialZayaanCatalog(currentUserId)
                 .onSuccess { count ->

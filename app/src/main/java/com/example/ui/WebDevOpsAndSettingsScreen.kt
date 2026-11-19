@@ -269,15 +269,21 @@ fun WebDevOpsAndSettingsScreen(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text("Account Session", style = MaterialTheme.typography.labelLarge)
-                            Text(currentUserEmail ?: "Authenticated Google Account", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                text = currentUserEmail ?: "Open Store Mode (Sign-In disabled for now)",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
-                        FilledTonalButton(
-                            onClick = onSignOut,
-                            modifier = Modifier.testTag("sign_out_button")
-                        ) {
-                            Icon(imageVector = Icons.AutoMirrored.Filled.Logout, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Sign Out")
+                        if (currentUserEmail != null) {
+                            FilledTonalButton(
+                                onClick = onSignOut,
+                                modifier = Modifier.testTag("sign_out_button")
+                            ) {
+                                Icon(imageVector = Icons.AutoMirrored.Filled.Logout, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Sign Out")
+                            }
                         }
                     }
                 }

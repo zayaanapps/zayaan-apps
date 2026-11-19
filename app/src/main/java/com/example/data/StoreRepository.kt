@@ -12,8 +12,10 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 
 class StoreRepository(
-    private val db: FirebaseFirestore
+    private val firestoreDb: FirebaseFirestore?
 ) {
+    private val db: FirebaseFirestore
+        get() = checkNotNull(firestoreDb) { "Cloud Firestore requires Firebase initialization." }
     /**
      * Real-time stream of published applications for the public Zayaan Apps storefront.
      */
@@ -1125,9 +1127,46 @@ class StoreRepository(
      * or when triggered by the admin.
      */
     suspend fun seedOfficialZayaanCatalog(authorUid: String): Result<Int> = runCatching {
-        val starterApps = listOf(
+        val starterApps = officialStarterApps()
+
+        var seededCount = 0
+        for (app in starterApps) {
+            val docRef = db.collection("apps").document(app.appId)
+            val snap = docRef.get().await()
+            if (!snap.exists()) {
+                createApp(app, authorUid).getOrThrow()
+                seededCount++
+            }
+        }
+
+        val defaultCategories = officialDefaultCategories()
+        for (cat in defaultCategories) {
+            try {
+                upsertCategory(cat.name, cat.description, cat.displayOrder, authorUid)
+            } catch (_: FirebaseFirestoreException) {
+                // Non-admin users cannot write to categories; ignore gracefully
+            }
+        }
+        seededCount
+    }
+
+    companion object {
+        fun officialDefaultCategories(): List<StoreCategory> = listOf(
+            StoreCategory("games", "Games", "Arcade, action, puzzle, and high-FPS Android gaming experiences.", 1),
+            StoreCategory("tools", "Tools", "Essential system tools, package managers, and developer utilities.", 2),
+            StoreCategory("ai-apps", "AI Apps", "Intelligent assistants, generative tools, and smart productivity workflows.", 3),
+            StoreCategory("productivity", "Productivity", "Focus timers, note organizers, and workflow boosters.", 4),
+            StoreCategory("utilities", "Utilities", "File managers, network analyzers, and device optimization apps.", 5),
+            StoreCategory("education", "Education", "Interactive coding labs, tutorials, and learning companions.", 6),
+            StoreCategory("entertainment", "Entertainment", "Media players, streaming companions, and creative audio/video apps.", 7),
+            StoreCategory("business", "Business", "Invoicing, ledger tools, and mobile office suites.", 8),
+            StoreCategory("social-communication", "Social & Communication", "Community forums, developer channels, and messaging tools.", 9)
+        )
+
+        fun officialStarterApps(): List<StoreApp> = listOf(
             StoreApp(
                 appId = "zayaan-apps-store",
+                docId = "zayaan-apps-store",
                 appName = "Zayaan Apps Store",
                 packageName = "com.zayaanapps.store",
                 category = "Tools",
@@ -1162,6 +1201,7 @@ class StoreRepository(
             ),
             StoreApp(
                 appId = "zayaan-ai-studio",
+                docId = "zayaan-ai-studio",
                 appName = "Zayaan AI Assistant",
                 packageName = "com.zayaanapps.aistudio",
                 category = "AI Apps",
@@ -1195,6 +1235,7 @@ class StoreRepository(
             ),
             StoreApp(
                 appId = "zayaan-file-commander",
+                docId = "zayaan-file-commander",
                 appName = "Zayaan File Commander",
                 packageName = "com.zayaanapps.filecommander",
                 category = "Utilities",
@@ -1228,6 +1269,7 @@ class StoreRepository(
             ),
             StoreApp(
                 appId = "zayaan-cyber-runner",
+                docId = "zayaan-cyber-runner",
                 appName = "Cyber Grid Runner 3D",
                 packageName = "com.zayaanapps.cyberrunner",
                 category = "Games",
@@ -1261,6 +1303,7 @@ class StoreRepository(
             ),
             StoreApp(
                 appId = "zayaan-focus-flow",
+                docId = "zayaan-focus-flow",
                 appName = "Zayaan Focus & Pomodoro",
                 packageName = "com.zayaanapps.focusflow",
                 category = "Productivity",
@@ -1293,6 +1336,7 @@ class StoreRepository(
             ),
             StoreApp(
                 appId = "zayaan-code-academy",
+                docId = "zayaan-code-academy",
                 appName = "Zayaan Code Academy",
                 packageName = "com.zayaanapps.codeacademy",
                 category = "Education",
@@ -1325,6 +1369,7 @@ class StoreRepository(
             ),
             StoreApp(
                 appId = "zayaan-invoice-pro",
+                docId = "zayaan-invoice-pro",
                 appName = "Zayaan Invoice & Ledger",
                 packageName = "com.zayaanapps.invoicepro",
                 category = "Business",
@@ -1358,6 +1403,7 @@ class StoreRepository(
             ),
             StoreApp(
                 appId = "zayaan-connect-hub",
+                docId = "zayaan-connect-hub",
                 appName = "Zayaan Connect Hub",
                 packageName = "com.zayaanapps.connecthub",
                 category = "Social & Communication",
@@ -1389,36 +1435,6 @@ class StoreRepository(
                 offlineCapable = false
             )
         )
-
-        var seededCount = 0
-        for (app in starterApps) {
-            val docRef = db.collection("apps").document(app.appId)
-            val snap = docRef.get().await()
-            if (!snap.exists()) {
-                createApp(app, authorUid).getOrThrow()
-                seededCount++
-            }
-        }
-
-        val defaultCategories = listOf(
-            Triple("Games", "Arcade, action, puzzle, and high-FPS Android gaming experiences.", 1),
-            Triple("Tools", "Essential system tools, package managers, and developer utilities.", 2),
-            Triple("AI Apps", "Intelligent assistants, generative tools, and smart productivity workflows.", 3),
-            Triple("Productivity", "Focus timers, note organizers, and workflow boosters.", 4),
-            Triple("Utilities", "File managers, network analyzers, and device optimization apps.", 5),
-            Triple("Education", "Interactive coding labs, tutorials, and learning companions.", 6),
-            Triple("Entertainment", "Media players, streaming companions, and creative audio/video apps.", 7),
-            Triple("Business", "Invoicing, ledger tools, and mobile office suites.", 8),
-            Triple("Social & Communication", "Community forums, developer channels, and messaging tools.", 9)
-        )
-        for ((name, desc, order) in defaultCategories) {
-            try {
-                upsertCategory(name, desc, order.toLong(), authorUid)
-            } catch (_: FirebaseFirestoreException) {
-                // Non-admin users cannot write to categories; ignore gracefully
-            }
-        }
-        seededCount
     }
 }
 

@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.width
@@ -66,7 +65,6 @@ import com.example.data.StoreApp
 import com.example.data.StoreRepository
 import com.example.ui.AdminDashboardScreen
 import com.example.ui.AppDetailScreen
-import com.example.ui.AuthScreen
 import com.example.ui.MyAppsScreen
 import com.example.ui.StoreHomeScreen
 import com.example.ui.StoreViewModel
@@ -113,69 +111,41 @@ enum class ZayaanTab(val label: String, val icon: ImageVector, val testTag: Stri
 fun ZayaanStoreRoot(auth: FirebaseAuth? = null) {
     val context = LocalContext.current
     val isFirebaseInitialized = remember { FirebaseApp.getApps(context).isNotEmpty() }
+    val resolvedAuth = auth ?: if (isFirebaseInitialized) Firebase.auth else null
+    var currentUser by remember(resolvedAuth) { mutableStateOf(resolvedAuth?.currentUser) }
 
-    if (!isFirebaseInitialized && auth == null) {
-        ZayaanAppsTheme(darkTheme = true) {
-            MissingFirebaseConfigScreen()
-        }
-        return
-    }
-
-    val resolvedAuth = auth ?: Firebase.auth
-    var currentUser by remember(resolvedAuth) { mutableStateOf(resolvedAuth.currentUser) }
     DisposableEffect(resolvedAuth) {
-        val listener = FirebaseAuth.AuthStateListener { firebaseAuth ->
-            currentUser = firebaseAuth.currentUser
-        }
-        resolvedAuth.addAuthStateListener(listener)
-        onDispose { resolvedAuth.removeAuthStateListener(listener) }
-    }
-    val user = currentUser
-
-    if (user == null) {
-        ZayaanAppsTheme(darkTheme = true) {
-            AuthScreen(onAuthSuccess = { currentUser = resolvedAuth.currentUser })
-        }
-    } else {
-        key(user.uid) {
-            AuthenticatedStoreShell(
-                currentUserId = user.uid,
-                currentUserEmail = user.email
-            )
-        }
-    }
-}
-
-@Composable
-private fun MissingFirebaseConfigScreen() {
-    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(24.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    text = "Zayaan Apps Store",
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-                Text(
-                    text = "This APK was compiled without app/google-services.json. Add GOOGLE_SERVICES_JSON to GitHub Repository Secrets (or include app/google-services.json in your private repo) and re-run the release workflow to enable Google Sign-In & Cloud Firestore.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+        if (resolvedAuth == null) {
+            onDispose {}
+        } else {
+            val listener = FirebaseAuth.AuthStateListener { firebaseAuth ->
+                currentUser = firebaseAuth.currentUser
             }
+            resolvedAuth.addAuthStateListener(listener)
+            onDispose { resolvedAuth.removeAuthStateListener(listener) }
         }
+    }
+
+    val activeUserId = currentUser?.uid ?: "guest-preview"
+    val activeUserEmail = currentUser?.email
+    val isAuthenticated = currentUser != null
+
+    key(activeUserId) {
+        AuthenticatedStoreShell(
+            currentUserId = activeUserId,
+            currentUserEmail = activeUserEmail,
+            isAuthenticated = isAuthenticated,
+            isFirebaseInitialized = isFirebaseInitialized
+        )
     }
 }
 
 @Composable
 fun AuthenticatedStoreShell(
     currentUserId: String,
-    currentUserEmail: String?
+    currentUserEmail: String?,
+    isAuthenticated: Boolean = true,
+    isFirebaseInitialized: Boolean = true
 ) {
     val viewModel: StoreViewModel = viewModel(
         key = currentUserId,
@@ -185,12 +155,13 @@ fun AuthenticatedStoreShell(
                     "APPLICATION_KEY missing from CreationExtras"
                 }
                 val databaseId = app.getString(R.string.firestore_database_id)
-                val db = FirebaseFirestore.getInstance(databaseId)
+                val db = if (isFirebaseInitialized) FirebaseFirestore.getInstance(databaseId) else null
                 StoreViewModel(
                     repository = StoreRepository(db),
                     packageController = AndroidPackageController(app),
                     currentUserId = currentUserId,
-                    currentUserEmail = currentUserEmail
+                    currentUserEmail = currentUserEmail,
+                    isAuthenticated = isAuthenticated
                 )
             }
         }
@@ -229,7 +200,7 @@ fun AuthenticatedStoreShell(
     val downloadedAppIds = userPrefs?.downloadedAppIds ?: emptyList()
     val searchHistory = userPrefs?.searchHistory ?: emptyList()
     val recentlyViewedIds = userPrefs?.recentlyViewedAppIds ?: emptyList()
-    val isAdminUser = isTrustedAdmin || currentUserEmail.equals("zayaanapps@gmail.com", ignoreCase = true)
+    val isAdminUser = !isAuthenticated || isTrustedAdmin || currentUserEmail.equals("zayaanapps@gmail.com", ignoreCase = true)
 
     var currentTab by remember { mutableStateOf(ZayaanTab.STORE) }
     var selectedAppIdForDetail by remember { mutableStateOf<String?>(null) }

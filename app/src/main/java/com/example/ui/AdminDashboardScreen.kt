@@ -175,7 +175,7 @@ fun AdminDashboardScreen(
                                 style = MaterialTheme.typography.titleLarge
                             )
                             Text(
-                                text = "${currentUserEmail ?: "Authenticated User"} • ${if (isTrustedAdmin) "Trusted Admin (RBAC Verified)" else "Developer Portal Mode"}",
+                                text = "${currentUserEmail ?: "Open Store Mode (Local Session)"} • ${if (isTrustedAdmin) "Admin Console" else "Developer Portal Mode"}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
