@@ -87,18 +87,30 @@ class ZayaanFirestoreService {
         .replaceAll(RegExp(r'[^a-zA-Z0-9_\-]'), '_');
     final ref = _db.collection('reviews').doc(docId);
     final snap = await ref.get();
+    final appRef = _db.collection('apps').doc(app.appId);
+    final appSnap = await appRef.get();
+    final appData = appSnap.data() ?? <String, dynamic>{};
+    final currentSum = (appData['ratingSum'] as num?)?.toInt() ?? app.ratingSum;
+    final currentCount =
+        (appData['reviewCount'] as num?)?.toInt() ?? app.reviewCount;
+
     final cleanRating = rating.clamp(1, 5);
-    final userName = (user.displayName ?? user.email ?? 'Zayaan User')
-        .split('@')
-        .first;
-    if (!snap.exists) {
+    final cleanComment =
+        comment.trim().isEmpty ? 'Rated $cleanRating stars.' : comment.trim();
+    final userName =
+        (user.displayName ?? user.email ?? 'Zayaan User').split('@').first;
+    final isNew = !snap.exists;
+    final previousRating =
+        isNew ? 0 : ((snap.data()?['rating'] as num?)?.toInt() ?? 0);
+
+    if (isNew) {
       await ref.set({
         'appId': app.appId,
         'appName': app.appName,
         'userId': user.uid,
         'userName': userName,
         'rating': cleanRating,
-        'comment': comment.trim().isEmpty ? 'Rated $cleanRating stars.' : comment.trim(),
+        'comment': cleanComment,
         'verifiedInstall': verifiedInstall,
         'helpfulCount': 0,
         'developerReply': '',
@@ -109,11 +121,40 @@ class ZayaanFirestoreService {
     } else {
       await ref.update({
         'rating': cleanRating,
-        'comment': comment.trim(),
+        'comment': cleanComment,
         'userName': userName,
         'verifiedInstall': verifiedInstall,
         'updatedAt': FieldValue.serverTimestamp(),
       });
+    }
+
+    if (appSnap.exists) {
+      final newSum =
+          (currentSum - previousRating + cleanRating).clamp(0, 1000000);
+      final newCount = isNew ? currentCount + 1 : currentCount.clamp(1, 1000000);
+      await appRef.update({
+        'ratingSum': newSum,
+        'reviewCount': newCount,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    }
+  }
+
+  Future<void> deleteReview(AppReviewModel review) async {
+    await _db.collection('reviews').doc(review.id).delete();
+    if (review.appId.isNotEmpty) {
+      final appRef = _db.collection('apps').doc(review.appId);
+      final appSnap = await appRef.get();
+      if (appSnap.exists) {
+        final data = appSnap.data() ?? <String, dynamic>{};
+        final currentSum = (data['ratingSum'] as num?)?.toInt() ?? 0;
+        final currentCount = (data['reviewCount'] as num?)?.toInt() ?? 0;
+        await appRef.update({
+          'ratingSum': (currentSum - review.rating).clamp(0, 1000000),
+          'reviewCount': (currentCount - 1).clamp(0, 1000000),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
     }
   }
 

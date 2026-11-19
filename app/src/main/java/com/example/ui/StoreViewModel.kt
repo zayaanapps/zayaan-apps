@@ -11,6 +11,7 @@ import com.example.data.ApkArchiveVerificationInfo
 import com.example.data.AppCollection
 import com.example.data.AppReport
 import com.example.data.AppReview
+import com.example.data.AppThemeMode
 import com.example.data.AppVersionRecord
 import com.example.data.AuditLogRecord
 import com.example.data.DeveloperSubmission
@@ -23,11 +24,13 @@ import com.example.data.StoreNotification
 import com.example.data.StoreRepository
 import com.example.data.UserPreference
 import com.google.firebase.Timestamp
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.Date
 
@@ -86,6 +89,9 @@ class StoreViewModel(
 
     private val _userPreferencesState = MutableStateFlow<UserPreference?>(null)
     val userPreferencesState: StateFlow<UserPreference?> = _userPreferencesState.asStateFlow()
+
+    private val _themeMode = MutableStateFlow(packageController.getSavedThemeMode())
+    val themeMode: StateFlow<AppThemeMode> = _themeMode.asStateFlow()
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
@@ -448,9 +454,15 @@ class StoreViewModel(
     }
 
     fun refreshCachedApks() {
-        val files = packageController.listDownloadedApkFiles()
-        _downloadedApkFiles.value = files
-        _cachedApkVerifications.value = files.map { packageController.inspectApkArchiveInfo(it) }
+        viewModelScope.launch {
+            val (files, verifications) = withContext(Dispatchers.IO) {
+                val apkFiles = packageController.listDownloadedApkFiles()
+                val infos = apkFiles.map { packageController.inspectApkArchiveInfo(it) }
+                apkFiles to infos
+            }
+            _downloadedApkFiles.value = files
+            _cachedApkVerifications.value = verifications
+        }
     }
 
     fun deleteCachedApk(apkFilePath: String) {
@@ -640,24 +652,28 @@ class StoreViewModel(
     }
 
     private fun refreshInstalledPackages(apps: List<StoreApp>) {
-        val statusMap = packageController.inspectCatalogPackages(apps)
-        _installedStatuses.value = statusMap
-
-        val selfApp = apps.firstOrNull { it.packageName == "com.zayaanapps.store" }
-        val selfStatus = statusMap["com.zayaanapps.store"]
-        if (selfApp != null && selfStatus?.updateAvailable == true) {
-            _storeSelfUpdateApp.value = selfApp
-        }
-
-        val notifyEnabled = _userPreferencesState.value?.notifyUpdates ?: true
-        if (notifyEnabled) {
-            val updatable = apps.filter { app ->
-                val status = statusMap[app.packageName]
-                status != null && status.updateAvailable && app.packageName !in notifiedUpdatePackages
+        viewModelScope.launch {
+            val statusMap = withContext(Dispatchers.IO) {
+                packageController.inspectCatalogPackages(apps)
             }
-            if (updatable.isNotEmpty()) {
-                updatable.forEach { notifiedUpdatePackages.add(it.packageName) }
-                packageController.notifyAvailableUpdates(updatable)
+            _installedStatuses.value = statusMap
+
+            val selfApp = apps.firstOrNull { it.packageName == "com.zayaanapps.store" }
+            val selfStatus = statusMap["com.zayaanapps.store"]
+            if (selfApp != null && selfStatus?.updateAvailable == true) {
+                _storeSelfUpdateApp.value = selfApp
+            }
+
+            val notifyEnabled = _userPreferencesState.value?.notifyUpdates ?: true
+            if (notifyEnabled) {
+                val updatable = apps.filter { app ->
+                    val status = statusMap[app.packageName]
+                    status != null && status.updateAvailable && app.packageName !in notifiedUpdatePackages
+                }
+                if (updatable.isNotEmpty()) {
+                    updatable.forEach { notifiedUpdatePackages.add(it.packageName) }
+                    packageController.notifyAvailableUpdates(updatable)
+                }
             }
         }
     }
@@ -857,9 +873,17 @@ class StoreViewModel(
         packageController.shareApplicationLink(context, app)
     }
 
+    fun updateThemeMode(mode: AppThemeMode) {
+        _themeMode.value = mode
+        packageController.saveThemeMode(mode)
+        if (mode != AppThemeMode.SYSTEM) {
+            val currentPref = _userPreferencesState.value ?: UserPreference(userId = currentUserId)
+            syncCurrentPreferences(currentPref.copy(darkMode = mode == AppThemeMode.DARK))
+        }
+    }
+
     fun updateDarkModePreference(enabled: Boolean) {
-        val currentPref = _userPreferencesState.value ?: UserPreference(userId = currentUserId)
-        syncCurrentPreferences(currentPref.copy(darkMode = enabled))
+        updateThemeMode(if (enabled) AppThemeMode.DARK else AppThemeMode.LIGHT)
     }
 
     fun updateNotificationPreference(enabled: Boolean) {

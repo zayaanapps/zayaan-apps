@@ -30,6 +30,12 @@ enum class SortOption(val label: String) {
     FILE_SIZE("Smallest Size")
 }
 
+enum class AppThemeMode(val label: String) {
+    SYSTEM("System"),
+    LIGHT("Light"),
+    DARK("Dark")
+}
+
 @Keep
 @IgnoreExtraProperties
 data class StoreApp(

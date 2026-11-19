@@ -1,8 +1,13 @@
+import 'dart:async';
 import 'dart:convert';
-import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/gestures.dart';
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 import 'models/store_app.dart';
+import 'services/firestore_service.dart';
 import 'services/installer_service.dart';
 
 void main() async {
@@ -23,12 +28,11 @@ class ZayaanAppsStoreApp extends StatefulWidget {
 }
 
 class _ZayaanAppsStoreAppState extends State<ZayaanAppsStoreApp> {
-  ThemeMode _themeMode = ThemeMode.dark;
+  ThemeMode _themeMode = ThemeMode.system;
 
-  void _toggleTheme() {
+  void _setThemeMode(ThemeMode mode) {
     setState(() {
-      _themeMode =
-          _themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+      _themeMode = mode;
     });
   }
 
@@ -40,8 +44,25 @@ class _ZayaanAppsStoreAppState extends State<ZayaanAppsStoreApp> {
       themeMode: _themeMode,
       theme: ThemeData(
         useMaterial3: true,
-        colorSchemeSeed: const Color(0xFF006C4A),
-        brightness: Brightness.light,
+        colorScheme: const ColorScheme.light(
+          primary: Color(0xFF006C4A),
+          onPrimary: Colors.white,
+          primaryContainer: Color(0xFF8BF8C4),
+          onPrimaryContainer: Color(0xFF002114),
+          secondary: Color(0xFF00658E),
+          onSecondary: Colors.white,
+          secondaryContainer: Color(0xFFC8E6FF),
+          onSecondaryContainer: Color(0xFF001E2E),
+          tertiary: Color(0xFF3E5F90),
+          onTertiary: Colors.white,
+          tertiaryContainer: Color(0xFFD6E3FF),
+          onTertiaryContainer: Color(0xFF001B3E),
+          surface: Color(0xFFFFFFFF),
+          onSurface: Color(0xFF171D1A),
+          surfaceContainerHighest: Color(0xFFDBE5DE),
+          onSurfaceVariant: Color(0xFF404944),
+          outline: Color(0xFF707973),
+        ),
         scaffoldBackgroundColor: const Color(0xFFF6FBF8),
       ),
       darkTheme: ThemeData(
@@ -68,21 +89,21 @@ class _ZayaanAppsStoreAppState extends State<ZayaanAppsStoreApp> {
         scaffoldBackgroundColor: const Color(0xFF0A192F),
       ),
       home: ZayaanResponsiveShell(
-        isDarkMode: _themeMode == ThemeMode.dark,
-        onToggleTheme: _toggleTheme,
+        themeMode: _themeMode,
+        onThemeModeChanged: _setThemeMode,
       ),
     );
   }
 }
 
 class ZayaanResponsiveShell extends StatefulWidget {
-  final bool isDarkMode;
-  final VoidCallback onToggleTheme;
+  final ThemeMode themeMode;
+  final ValueChanged<ThemeMode> onThemeModeChanged;
 
   const ZayaanResponsiveShell({
     super.key,
-    required this.isDarkMode,
-    required this.onToggleTheme,
+    required this.themeMode,
+    required this.onThemeModeChanged,
   });
 
   @override
@@ -109,13 +130,45 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
   final Map<String, List<AppReviewModel>> _reviewsByApp =
       <String, List<AppReviewModel>>{};
   int _draftStars = 5;
-  String _draftReviewComment = '';
+  final TextEditingController _reviewCommentController = TextEditingController();
   bool _notifyUpdates = true;
+  bool _whatsNewExpanded = false;
+  bool _aboutExpanded = false;
+  StreamSubscription<List<AppReviewModel>>? _reviewsSubscription;
+  final List<TapGestureRecognizer> _linkRecognizers = <TapGestureRecognizer>[];
+
+  String get _currentUserId {
+    try {
+      if (Firebase.apps.isNotEmpty) {
+        return FirebaseAuth.instance.currentUser?.uid ?? 'web_user';
+      }
+    } catch (_) {}
+    return 'web_user';
+  }
+
+  ZayaanFirestoreService? _tryFirestore() {
+    try {
+      if (Firebase.apps.isNotEmpty) {
+        return ZayaanFirestoreService();
+      }
+    } catch (_) {}
+    return null;
+  }
 
   @override
   void initState() {
     super.initState();
     _syncLatestGitHubRelease();
+  }
+
+  @override
+  void dispose() {
+    _reviewsSubscription?.cancel();
+    _reviewCommentController.dispose();
+    for (final recognizer in _linkRecognizers) {
+      recognizer.dispose();
+    }
+    super.dispose();
   }
 
   Future<void> _syncLatestGitHubRelease() async {
@@ -507,8 +560,23 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
   ];
 
   void _openAppDetail(StoreAppModel app) {
+    _reviewsSubscription?.cancel();
+    final fs = _tryFirestore();
+    if (fs != null) {
+      _reviewsSubscription = fs.observeReviewsForApp(app.appId).listen(
+        (cloudReviews) {
+          if (!mounted) return;
+          setState(() {
+            _reviewsByApp[app.appId] = cloudReviews;
+          });
+        },
+        onError: (_) {},
+      );
+    }
     setState(() {
       _selectedApp = app;
+      _whatsNewExpanded = false;
+      _aboutExpanded = false;
       _recentlyViewedIds.remove(app.appId);
       _recentlyViewedIds.insert(0, app.appId);
     });
@@ -545,29 +613,130 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
     });
   }
 
-  void _submitWebReview(StoreAppModel app) {
+  Future<void> _launchExternalUrl(String rawUrl) async {
+    final uri = Uri.tryParse(rawUrl.trim());
+    if (uri == null) return;
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _statusBanner = 'Could not open URL: $rawUrl';
+        });
+      }
+    }
+  }
+
+  Future<void> _saveWebReview(
+    StoreAppModel app, {
+    required int stars,
+    required String comment,
+  }) async {
+    final cleanStars = stars.clamp(1, 5);
+    final cleanComment =
+        comment.trim().isEmpty ? 'Rated $cleanStars stars.' : comment.trim();
+    final uid = _currentUserId;
+    String userName = 'Zayaan Community Member';
+    bool syncedCloud = false;
+
+    try {
+      if (Firebase.apps.isNotEmpty) {
+        final user = FirebaseAuth.instance.currentUser;
+        if (user != null) {
+          userName = (user.displayName ?? user.email ?? 'Zayaan User')
+              .split('@')
+              .first;
+          final fs = _tryFirestore();
+          if (fs != null) {
+            await fs.submitReview(
+              app: app,
+              rating: cleanStars,
+              comment: cleanComment,
+              verifiedInstall: PlatformApkInstaller.isAndroidPlatform,
+            );
+            syncedCloud = true;
+          }
+        }
+      }
+    } catch (_) {}
+
+    if (!mounted) return;
     final list = _reviewsByApp.putIfAbsent(app.appId, () => <AppReviewModel>[]);
     setState(() {
-      list.insert(
-        0,
-        AppReviewModel(
-          id: '${app.appId}_${DateTime.now().millisecondsSinceEpoch}',
+      final existingIndex = list.indexWhere((r) => r.userId == uid);
+      if (existingIndex >= 0) {
+        final prev = list[existingIndex];
+        list[existingIndex] = AppReviewModel(
+          id: prev.id,
           appId: app.appId,
           appName: app.appName,
-          userId: 'web_user',
-          userName: 'Zayaan Community Member',
-          rating: _draftStars,
-          comment: _draftReviewComment.trim().isEmpty
-              ? 'Rated $_draftStars stars.'
-              : _draftReviewComment.trim(),
-          verifiedInstall: PlatformApkInstaller.isAndroidPlatform,
-          helpfulCount: 0,
-        ),
-      );
-      _draftReviewComment = '';
-      _statusBanner = 'Published your $_draftStars★ review for ${app.appName}.';
+          userId: uid,
+          userName: prev.userName.isNotEmpty ? prev.userName : userName,
+          rating: cleanStars,
+          comment: cleanComment,
+          verifiedInstall: prev.verifiedInstall,
+          helpfulCount: prev.helpfulCount,
+          developerReply: prev.developerReply,
+          flagged: prev.flagged,
+        );
+      } else {
+        list.insert(
+          0,
+          AppReviewModel(
+            id: '${app.appId}_$uid',
+            appId: app.appId,
+            appName: app.appName,
+            userId: uid,
+            userName: userName,
+            rating: cleanStars,
+            comment: cleanComment,
+            verifiedInstall: PlatformApkInstaller.isAndroidPlatform,
+            helpfulCount: 0,
+          ),
+        );
+      }
+      _reviewCommentController.clear();
+      _statusBanner = syncedCloud
+          ? 'Saved your $cleanStars★ review to Cloud Firestore.'
+          : 'Saved your $cleanStars★ review for ${app.appName}.';
     });
   }
+
+  Future<void> _deleteWebReview(StoreAppModel app, AppReviewModel review) async {
+    bool syncedCloud = false;
+    try {
+      if (Firebase.apps.isNotEmpty && FirebaseAuth.instance.currentUser != null) {
+        final fs = _tryFirestore();
+        if (fs != null) {
+          await fs.deleteReview(review);
+          syncedCloud = true;
+        }
+      }
+    } catch (_) {}
+
+    if (!mounted) return;
+    setState(() {
+      _reviewsByApp[app.appId]?.removeWhere((r) => r.id == review.id);
+      _statusBanner = syncedCloud
+          ? 'Deleted review from Cloud Firestore.'
+          : 'Removed your review.';
+    });
+  }
+
+  void _cycleThemeMode() {
+    final next = switch (widget.themeMode) {
+      ThemeMode.system => ThemeMode.light,
+      ThemeMode.light => ThemeMode.dark,
+      ThemeMode.dark => ThemeMode.system,
+    };
+    widget.onThemeModeChanged(next);
+  }
+
+  String _themeModeLabel(ThemeMode mode) => switch (mode) {
+        ThemeMode.system => 'System',
+        ThemeMode.light => 'Light',
+        ThemeMode.dark => 'Dark',
+      };
 
   List<StoreAppModel> _getFilteredApps() {
     final list = _catalog.where((app) {
@@ -751,35 +920,59 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primary,
+                      color: const Color(0xFF6EDBA9),
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: Text(
+                    child: const Text(
                       'OFFICIAL ZAYAAN APPS MARKETPLACE',
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.onPrimary,
+                        color: Color(0xFF003824),
                       ),
                     ),
                   ),
-                  IconButton(
-                    onPressed: widget.onToggleTheme,
-                    icon: const Icon(Icons.brightness_6),
-                    tooltip: 'Toggle Light / Dark Theme',
+                  ActionChip(
+                    avatar: Icon(
+                      switch (widget.themeMode) {
+                        ThemeMode.system => Icons.brightness_auto,
+                        ThemeMode.light => Icons.light_mode,
+                        ThemeMode.dark => Icons.dark_mode,
+                      },
+                      size: 16,
+                      color: const Color(0xFF6EDBA9),
+                    ),
+                    label: Text(
+                      _themeModeLabel(widget.themeMode),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    backgroundColor: Colors.white.withValues(alpha: 0.12),
+                    side: BorderSide(
+                      color: const Color(0xFF6EDBA9).withValues(alpha: 0.4),
+                    ),
+                    onPressed: _cycleThemeMode,
+                    tooltip: 'Switch Theme (System / Light / Dark)',
                   ),
                 ],
               ),
               const SizedBox(height: 10),
               const Text(
                 'Zayaan Apps Store',
-                style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
               const SizedBox(height: 4),
-              Text(
+              const Text(
                 'Discover, verify, and install official Android APKs powered by GitHub Releases & Cloud Firestore.',
                 style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  color: Color(0xFFD6E4F0),
                 ),
               ),
               const SizedBox(height: 14),
@@ -794,6 +987,12 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
                   ),
                   OutlinedButton.icon(
                     onPressed: () => _openAppDetail(_catalog.first),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      side: BorderSide(
+                        color: const Color(0xFF6EDBA9).withValues(alpha: 0.65),
+                      ),
+                    ),
                     icon: const Icon(Icons.verified_user_outlined, size: 18),
                     label: const Text('Inspect Store Release'),
                   ),
@@ -1358,34 +1557,44 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
   }
 
   Widget _buildWebDevOpsTab() {
+    final cs = Theme.of(context).colorScheme;
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
         Card(
           shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(24)),
+            borderRadius: BorderRadius.circular(20),
+            side: BorderSide(color: cs.outline.withValues(alpha: 0.28)),
+          ),
           child: Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Row(
+                Row(
                   children: [
-                    Icon(Icons.public, color: Color(0xFF6EDBA9), size: 28),
-                    SizedBox(width: 10),
+                    Icon(Icons.public, color: cs.primary, size: 28),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
+                          const Text(
                             'Zayaan Apps Web & GitHub DevOps Hub',
                             style: TextStyle(
                                 fontSize: 20, fontWeight: FontWeight.bold),
                           ),
-                          Text(
-                            'https://zayaanapps.github.io/zayaan-apps/',
-                            style: TextStyle(
-                                fontSize: 12, color: Color(0xFF6EDBA9)),
+                          InkWell(
+                            onTap: () => _launchExternalUrl(
+                                'https://zayaanapps.github.io/zayaan-apps/'),
+                            child: Text(
+                              'https://zayaanapps.github.io/zayaan-apps/',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: cs.primary,
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
                           ),
                         ],
                       ),
@@ -1407,11 +1616,17 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
                       label: const Text('Latest Release APK'),
                     ),
                     OutlinedButton.icon(
-                      onPressed: widget.onToggleTheme,
-                      icon: const Icon(Icons.dark_mode, size: 18),
-                      label: Text(widget.isDarkMode
-                          ? 'Dark Theme Active'
-                          : 'Light Theme Active'),
+                      onPressed: _cycleThemeMode,
+                      icon: Icon(
+                        switch (widget.themeMode) {
+                          ThemeMode.system => Icons.brightness_auto,
+                          ThemeMode.light => Icons.light_mode,
+                          ThemeMode.dark => Icons.dark_mode,
+                        },
+                        size: 18,
+                      ),
+                      label: Text(
+                          'Theme: ${_themeModeLabel(widget.themeMode)}'),
                     ),
                   ],
                 ),
@@ -1422,7 +1637,9 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
         const SizedBox(height: 16),
         Card(
           shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20)),
+            borderRadius: BorderRadius.circular(20),
+            side: BorderSide(color: cs.outline.withValues(alpha: 0.28)),
+          ),
           child: Padding(
             padding: const EdgeInsets.all(18),
             child: Column(
@@ -1432,13 +1649,57 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
                   'Store Settings & Preferences',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
-                SwitchListTile(
-                  title: const Text('Dark Theme (Material 3)'),
-                  subtitle: const Text('Syncs preference to Cloud Firestore'),
-                  value: widget.isDarkMode,
-                  onChanged: (_) => widget.onToggleTheme(),
+                const SizedBox(height: 12),
+                Text(
+                  'App Theme',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
                 ),
+                const SizedBox(height: 4),
+                Text(
+                  switch (widget.themeMode) {
+                    ThemeMode.system =>
+                      'Following device / browser system appearance',
+                    ThemeMode.light => 'Always use Light theme',
+                    ThemeMode.dark => 'Always use Dark theme',
+                  },
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                      ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: SegmentedButton<ThemeMode>(
+                    segments: const [
+                      ButtonSegment<ThemeMode>(
+                        value: ThemeMode.system,
+                        label: Text('System'),
+                        icon: Icon(Icons.brightness_auto, size: 18),
+                      ),
+                      ButtonSegment<ThemeMode>(
+                        value: ThemeMode.light,
+                        label: Text('Light'),
+                        icon: Icon(Icons.light_mode, size: 18),
+                      ),
+                      ButtonSegment<ThemeMode>(
+                        value: ThemeMode.dark,
+                        label: Text('Dark'),
+                        icon: Icon(Icons.dark_mode, size: 18),
+                      ),
+                    ],
+                    selected: <ThemeMode>{widget.themeMode},
+                    onSelectionChanged: (selected) {
+                      if (selected.isNotEmpty) {
+                        widget.onThemeModeChanged(selected.first);
+                      }
+                    },
+                  ),
+                ),
+                const SizedBox(height: 8),
                 SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
                   title: const Text('Available Update Notifications'),
                   subtitle: const Text(
                       'Notify when installed Zayaan apps have newer versionCode'),
@@ -1454,40 +1715,65 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
   }
 
   Widget _buildDetailView(StoreAppModel app) {
+    final cs = Theme.of(context).colorScheme;
     final isFav = _favoriteIds.contains(app.appId);
     final isWish = _wishlistIds.contains(app.appId);
     final isCompared = _comparisonIds.contains(app.appId);
     final appReviews = _reviewsByApp[app.appId] ?? const <AppReviewModel>[];
+    final currentUid = _currentUserId;
+    AppReviewModel? existingUserReview;
+    for (final r in appReviews) {
+      if (r.userId == currentUid) {
+        existingUserReview = r;
+        break;
+      }
+    }
     final similarApps = _catalog
         .where((a) => a.category == app.category && a.appId != app.appId)
         .toList();
 
+    final reviewCountDisplay =
+        appReviews.length > app.reviewCount ? appReviews.length : app.reviewCount;
+    final avgRatingDisplay = appReviews.isNotEmpty
+        ? appReviews.map((r) => r.rating).reduce((a, b) => a + b) /
+            appReviews.length
+        : app.averageRating;
+    final ratingSummaryText = reviewCountDisplay > 0
+        ? '${avgRatingDisplay.toStringAsFixed(1)} ($reviewCountDisplay)'
+        : 'Verified';
+
     return ListView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       children: [
+        // 1. Top Navigation Row
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             TextButton.icon(
-              onPressed: () => setState(() => _selectedApp = null),
+              onPressed: () {
+                _reviewsSubscription?.cancel();
+                setState(() => _selectedApp = null);
+              },
               icon: const Icon(Icons.arrow_back),
               label: const Text('Back to Store'),
             ),
             Wrap(
-              spacing: 8,
+              spacing: 4,
               children: [
                 IconButton(
                   tooltip: 'Add to Comparison',
-                  icon: Icon(Icons.compare_arrows,
-                      color: isCompared
-                          ? Theme.of(context).colorScheme.primary
-                          : null),
+                  icon: Icon(
+                    Icons.compare_arrows,
+                    color: isCompared ? cs.primary : null,
+                  ),
                   onPressed: () => _toggleCompare(app.appId),
                 ),
                 IconButton(
                   tooltip: 'Favorite',
-                  icon: Icon(isFav ? Icons.favorite : Icons.favorite_border,
-                      color: isFav ? Colors.redAccent : null),
+                  icon: Icon(
+                    isFav ? Icons.favorite : Icons.favorite_border,
+                    color: isFav ? cs.error : null,
+                  ),
                   onPressed: () => setState(() {
                     if (isFav) {
                       _favoriteIds.remove(app.appId);
@@ -1498,7 +1784,10 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
                 ),
                 IconButton(
                   tooltip: 'Wishlist',
-                  icon: Icon(isWish ? Icons.bookmark : Icons.bookmark_border),
+                  icon: Icon(
+                    isWish ? Icons.bookmark : Icons.bookmark_border,
+                    color: isWish ? cs.primary : null,
+                  ),
                   onPressed: () => setState(() {
                     if (isWish) {
                       _wishlistIds.remove(app.appId);
@@ -1511,115 +1800,1525 @@ class _ZayaanResponsiveShellState extends State<ZayaanResponsiveShell> {
             ),
           ],
         ),
-        const SizedBox(height: 12),
-        Text(app.appName,
-            style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
-        Text('${app.developerName} • ${app.packageName}'),
-        const SizedBox(height: 16),
-        FilledButton.icon(
-          onPressed: () => _handleDownload(app),
-          icon: const Icon(Icons.cloud_download),
-          label: Text(
-              'Download Latest Version from GitHub Releases (v${app.versionName} • ${app.apkFileSize})'),
-        ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 8),
+
+        // 2. Compact Bordered App Identity Header + Single-Line Telemetry Card
         Card(
           shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(18)),
+            borderRadius: BorderRadius.circular(20),
+            side: BorderSide(color: cs.outline.withValues(alpha: 0.28)),
+          ),
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(14),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('What\'s New / Release Notes',
-                    style:
-                        TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 6),
-                Text(app.releaseNotes),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 62,
+                      height: 62,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        color: cs.primaryContainer,
+                        border: Border.all(
+                          color: cs.outline.withValues(alpha: 0.28),
+                        ),
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: app.iconUrl.isNotEmpty
+                          ? Image.network(
+                              app.iconUrl,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Center(
+                                child: Text(
+                                  app.appName.substring(0, 1),
+                                  style: TextStyle(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                    color: cs.onPrimaryContainer,
+                                  ),
+                                ),
+                              ),
+                            )
+                          : Center(
+                              child: Text(
+                                app.appName.substring(0, 1),
+                                style: TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  color: cs.onPrimaryContainer,
+                                ),
+                              ),
+                            ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  app.appName,
+                                  style: const TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (app.editorsChoice) ...[
+                                const SizedBox(width: 5),
+                                Icon(Icons.verified,
+                                    size: 18, color: cs.primary),
+                              ],
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Row(
+                            children: [
+                              Icon(Icons.storefront,
+                                  size: 13, color: cs.primary),
+                              const SizedBox(width: 4),
+                              Flexible(
+                                child: Text(
+                                  app.developerName,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: cs.primary,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Row(
+                            children: [
+                              Icon(Icons.inventory_2_outlined,
+                                  size: 12, color: cs.onSurfaceVariant),
+                              const SizedBox(width: 4),
+                              Flexible(
+                                child: Text(
+                                  app.packageName,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontFamily: 'monospace',
+                                    color: cs.onSurfaceVariant,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 4,
+                            children: [
+                              _buildBorderedBadge(
+                                icon: Icons.category_outlined,
+                                label: app.category,
+                                bgColor: cs.primaryContainer,
+                                fgColor: cs.onPrimaryContainer,
+                                borderColor: cs.primary.withValues(alpha: 0.28),
+                              ),
+                              if (app.editorsChoice)
+                                _buildBorderedBadge(
+                                  icon: Icons.workspace_premium_outlined,
+                                  label: "Editor's Choice",
+                                  bgColor: cs.tertiaryContainer,
+                                  fgColor: cs.onTertiaryContainer,
+                                  borderColor:
+                                      cs.tertiary.withValues(alpha: 0.28),
+                                ),
+                              if (app.offlineCapable)
+                                _buildBorderedBadge(
+                                  icon: Icons.offline_bolt_outlined,
+                                  label: 'Offline Ready',
+                                  bgColor: cs.secondaryContainer,
+                                  fgColor: cs.onSecondaryContainer,
+                                  borderColor:
+                                      cs.secondary.withValues(alpha: 0.28),
+                                ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                if (app.shortDescription.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    app.shortDescription,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      color: cs.onSurfaceVariant,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+                const SizedBox(height: 12),
+
+                // Compact Single-Line 4-Metric Telemetry Bar
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: cs.surfaceContainerHighest.withValues(alpha: 0.42),
+                    borderRadius: BorderRadius.circular(12),
+                    border:
+                        Border.all(color: cs.outline.withValues(alpha: 0.28)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      _buildCompactTelemetryItem(
+                        icon: Icons.new_releases_outlined,
+                        value: 'v${app.versionName}',
+                        color: cs.primary,
+                      ),
+                      _buildVerticalTelemetryDivider(cs),
+                      _buildCompactTelemetryItem(
+                        icon: Icons.sd_storage_outlined,
+                        value: app.apkFileSize,
+                        color: cs.secondary,
+                      ),
+                      _buildVerticalTelemetryDivider(cs),
+                      _buildCompactTelemetryItem(
+                        icon: Icons.download_outlined,
+                        value: '${app.downloadCount}',
+                        color: cs.tertiary,
+                      ),
+                      _buildVerticalTelemetryDivider(cs),
+                      _buildCompactTelemetryItem(
+                        icon: Icons.star,
+                        value: ratingSummaryText,
+                        color: cs.primary,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: () => _handleDownload(app),
+                    icon: const Icon(Icons.cloud_download, size: 18),
+                    label: Text(
+                      PlatformApkInstaller.isAndroidPlatform
+                          ? 'Install (v${app.versionName})'
+                          : 'Download APK (v${app.versionName})',
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
         ),
         const SizedBox(height: 12),
-        Card(
-          shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(18)),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('About This Application',
-                    style:
-                        TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 6),
-                Text(app.description),
-              ],
-            ),
-          ),
+
+        // 3. What's New Compact Bordered Card (Formatted Markdown + Clickable Links)
+        if (app.releaseNotes.trim().isNotEmpty) ...[
+          _buildWhatsNewCompactCard(app),
+          const SizedBox(height: 12),
+        ],
+
+        // 4. About This Application Compact Bordered Card
+        _buildAboutCompactCard(app),
+        const SizedBox(height: 12),
+
+        // 5. Ratings & Community Reviews (Summary + Edit Dialog)
+        _buildRatingsAndReviewsCard(
+          app: app,
+          reviews: appReviews,
+          existingUserReview: existingUserReview,
         ),
         const SizedBox(height: 12),
-        Card(
-          shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(18)),
-          child: ListTile(
-            leading: const Icon(Icons.verified_user_outlined),
-            title: const Text('APK Integrity & Technical Specifications'),
-            subtitle: Text(
-              'Version: v${app.versionName} (code ${app.versionCode}) • Size: ${app.apkFileSize}\n'
-              'Target SDK: Android API ${app.targetAndroidSdk} (Min API ${app.minAndroidSdk}) • Arch: ${app.architecture}\n'
-              'Permissions: ${app.permissionsList.join(", ")}',
-            ),
-          ),
-        ),
-        const Divider(height: 32),
-        const Text('Ratings & Written Reviews',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 8),
-        Row(
-          children: List.generate(5, (index) {
-            final star = index + 1;
-            return IconButton(
-              icon: Icon(star <= _draftStars ? Icons.star : Icons.star_border,
-                  color: Colors.amber),
-              onPressed: () => setState(() => _draftStars = star),
-            );
-          }),
-        ),
-        TextField(
-          decoration: const InputDecoration(
-            labelText: 'Write a review for this release...',
-            border: OutlineInputBorder(),
-          ),
-          onChanged: (v) => _draftReviewComment = v,
-        ),
-        const SizedBox(height: 8),
-        Align(
-          alignment: Alignment.centerRight,
-          child: FilledButton(
-            onPressed: () => _submitWebReview(app),
-            child: const Text('Post Review'),
-          ),
-        ),
+
+        // 6. Package & Compatibility Specifications Card
+        _buildPackageSpecsCard(app),
         const SizedBox(height: 12),
-        ...appReviews.map((r) => Card(
-              child: ListTile(
-                title: Text('${r.userName} • ${"★" * r.rating}'),
-                subtitle: Text(r.comment),
-                trailing: Text('Helpful (${r.helpfulCount})'),
-              ),
-            )),
+
+        // 7. Developer & Distribution Info Card
+        _buildDeveloperInfoCard(app),
+
         if (similarApps.isNotEmpty) ...[
           const Divider(height: 32),
           const Text('Similar Applications',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-          ...similarApps.map((s) => ListTile(
-                title: Text(s.appName),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          ...similarApps.map(
+            (s) => Card(
+              margin: const EdgeInsets.only(bottom: 8),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+                side: BorderSide(color: cs.outline.withValues(alpha: 0.24)),
+              ),
+              child: ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: cs.primaryContainer,
+                  child: Text(s.appName.substring(0, 1)),
+                ),
+                title: Text(s.appName,
+                    style: const TextStyle(fontWeight: FontWeight.w600)),
                 subtitle: Text('v${s.versionName} • ${s.apkFileSize}'),
+                trailing: const Icon(Icons.chevron_right),
                 onTap: () => _openAppDetail(s),
-              )),
+              ),
+            ),
+          ),
         ],
       ],
     );
   }
+
+  Widget _buildBorderedBadge({
+    required IconData icon,
+    required String label,
+    required Color bgColor,
+    required Color fgColor,
+    required Color borderColor,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(7),
+        border: Border.all(color: borderColor),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 11, color: fgColor),
+          const SizedBox(width: 3),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w600,
+              color: fgColor,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompactTelemetryItem({
+    required IconData icon,
+    required String value,
+    required Color color,
+  }) {
+    return Flexible(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: color),
+          const SizedBox(width: 3),
+          Flexible(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVerticalTelemetryDivider(ColorScheme cs) {
+    return Container(
+      width: 1,
+      height: 14,
+      margin: const EdgeInsets.symmetric(horizontal: 4),
+      color: cs.outline.withValues(alpha: 0.25),
+    );
+  }
+
+  List<_ExtractedLink> _extractLinksFromText(String rawText) {
+    final regex = RegExp(
+        r'\[([^\]]+)\]\((https?://[^\s)]+)\)|(https?://[^\s<>)\]]+)');
+    final links = <_ExtractedLink>[];
+    final seen = <String>{};
+    for (final rawLine in rawText.split('\n')) {
+      final line = rawLine.trim();
+      if (line.isEmpty) continue;
+      for (final m in regex.allMatches(line)) {
+        final mdLabel = (m.group(1) ?? '').trim();
+        final mdUrl = (m.group(2) ?? '').trim();
+        final bareUrl = (m.group(3) ?? '')
+            .replaceAll(RegExp(r'[.,;)]+$'), '');
+        final url = mdUrl.isNotEmpty ? mdUrl : bareUrl;
+        if (url.isEmpty || !seen.add(url)) continue;
+        String label = mdLabel;
+        if (label.isEmpty) {
+          final prefix = line
+              .substring(0, m.start)
+              .replaceAll(RegExp(r'^[\-*•#>\s]+'), '')
+              .replaceAll('**', '')
+              .replaceAll('`', '')
+              .trim()
+              .replaceAll(RegExp(r'[:\-\s]+$'), '');
+          if (prefix.isNotEmpty) {
+            label = prefix;
+          } else if (url.toLowerCase().contains('/compare/')) {
+            label = 'Full Changelog';
+          } else if (url.toLowerCase().contains('github.io')) {
+            label = 'Web Portal';
+          } else if (url.toLowerCase().contains('github.com')) {
+            label = 'GitHub';
+          } else {
+            label = 'Open Link';
+          }
+        }
+        links.add(_ExtractedLink(label: label, url: url));
+      }
+    }
+    return links;
+  }
+
+  TextSpan _buildRichMarkdownSpan(String rawText, ColorScheme cs) {
+    final tokenRegex = RegExp(
+        r'\[([^\]]+)\]\((https?://[^\s)]+)\)|https?://[^\s<>)\]]+|\*\*([^*]+)\*\*|`([^`]+)`');
+    final children = <InlineSpan>[];
+    final lines = rawText.split('\n');
+    bool appendedAny = false;
+    bool lastBlank = false;
+
+    for (final rawLine in lines) {
+      final trimmed = rawLine.trim();
+      if (trimmed.isEmpty) {
+        if (appendedAny && !lastBlank) {
+          children.add(const TextSpan(text: '\n'));
+          lastBlank = true;
+        }
+        continue;
+      }
+      if (appendedAny && !lastBlank) {
+        children.add(const TextSpan(text: '\n'));
+      }
+      appendedAny = true;
+      lastBlank = false;
+
+      final isHeading = trimmed.startsWith('#');
+      String normalized = trimmed;
+      if (isHeading) {
+        normalized = trimmed.replaceFirst(RegExp(r'^#+\s*'), '');
+      } else if (trimmed.startsWith('- ')) {
+        normalized = '• ${trimmed.substring(2).trim()}';
+      } else if (trimmed.startsWith('* ')) {
+        normalized = '• ${trimmed.substring(2).trim()}';
+      }
+
+      final baseStyle = TextStyle(
+        fontSize: 12.5,
+        height: 1.45,
+        fontWeight: isHeading ? FontWeight.bold : FontWeight.normal,
+        color: isHeading ? cs.primary : cs.onSurface,
+      );
+
+      int cursor = 0;
+      for (final m in tokenRegex.allMatches(normalized)) {
+        if (m.start > cursor) {
+          children.add(TextSpan(
+            text: normalized.substring(cursor, m.start),
+            style: baseStyle,
+          ));
+        }
+        final mdLabel = m.group(1) ?? '';
+        final mdUrl = m.group(2) ?? '';
+        final boldText = m.group(3) ?? '';
+        final codeText = m.group(4) ?? '';
+        if (mdUrl.isNotEmpty) {
+          final recognizer = TapGestureRecognizer()
+            ..onTap = () => _launchExternalUrl(mdUrl);
+          _linkRecognizers.add(recognizer);
+          children.add(TextSpan(
+            text: mdLabel.isNotEmpty ? mdLabel : mdUrl,
+            style: baseStyle.copyWith(
+              color: cs.secondary,
+              fontWeight: FontWeight.w600,
+              decoration: TextDecoration.underline,
+            ),
+            recognizer: recognizer,
+          ));
+        } else if (boldText.isNotEmpty) {
+          children.add(TextSpan(
+            text: boldText,
+            style: baseStyle.copyWith(fontWeight: FontWeight.w600),
+          ));
+        } else if (codeText.isNotEmpty) {
+          children.add(TextSpan(
+            text: codeText,
+            style: baseStyle.copyWith(
+              fontFamily: 'monospace',
+              backgroundColor: cs.surfaceContainerHighest.withValues(alpha: 0.7),
+            ),
+          ));
+        } else {
+          final rawUrl = m.group(0) ?? '';
+          final cleanUrl = rawUrl.replaceAll(RegExp(r'[.,;)]+$'), '');
+          final trailing = rawUrl.substring(cleanUrl.length);
+          final recognizer = TapGestureRecognizer()
+            ..onTap = () => _launchExternalUrl(cleanUrl);
+          _linkRecognizers.add(recognizer);
+          children.add(TextSpan(
+            text: cleanUrl,
+            style: baseStyle.copyWith(
+              color: cs.secondary,
+              fontWeight: FontWeight.w500,
+              decoration: TextDecoration.underline,
+            ),
+            recognizer: recognizer,
+          ));
+          if (trailing.isNotEmpty) {
+            children.add(TextSpan(text: trailing, style: baseStyle));
+          }
+        }
+        cursor = m.end;
+      }
+      if (cursor < normalized.length) {
+        children.add(TextSpan(
+          text: normalized.substring(cursor),
+          style: baseStyle,
+        ));
+      }
+    }
+    return TextSpan(children: children);
+  }
+
+  Widget _buildWhatsNewCompactCard(StoreAppModel app) {
+    final cs = Theme.of(context).colorScheme;
+    final extractedLinks = _extractLinksFromText(app.releaseNotes);
+    final nonEmptyLines = app.releaseNotes
+        .split('\n')
+        .map((l) => l.trim())
+        .where((l) => l.isNotEmpty)
+        .toList();
+    final isLong = nonEmptyLines.length > 6 || app.releaseNotes.length > 320;
+    final displayedText = (_whatsNewExpanded || !isLong)
+        ? app.releaseNotes
+        : nonEmptyLines
+            .where((l) {
+              final lower = l.toLowerCase();
+              return !((lower.contains('full changelog') ||
+                      lower.contains('web portal')) &&
+                  lower.contains('http'));
+            })
+            .take(5)
+            .join('\n');
+
+    return Card(
+      color: cs.surfaceContainerHighest.withValues(alpha: 0.38),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(color: cs.outline.withValues(alpha: 0.28)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Row(
+                    children: [
+                      Icon(Icons.new_releases, size: 18, color: cs.primary),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          "What's New in v${app.versionName}",
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: cs.primary,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                _buildBorderedBadge(
+                  icon: Icons.update,
+                  label: 'Latest Release',
+                  bgColor: cs.surface,
+                  fgColor: cs.onSurfaceVariant,
+                  borderColor: cs.outline.withValues(alpha: 0.24),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text.rich(_buildRichMarkdownSpan(displayedText, cs)),
+            if (extractedLinks.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              ...extractedLinks.map(
+                (link) => Padding(
+                  padding: const EdgeInsets.only(bottom: 5),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: () => _launchExternalUrl(link.url),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: cs.surface,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: cs.secondary.withValues(alpha: 0.32),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.link, size: 14, color: cs.secondary),
+                          const SizedBox(width: 6),
+                          Text(
+                            '${link.label}: ',
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          Expanded(
+                            child: Text(
+                              link.url,
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                color: cs.secondary,
+                                decoration: TextDecoration.underline,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Icon(Icons.open_in_new,
+                              size: 13, color: cs.secondary),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+            if (isLong)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () =>
+                      setState(() => _whatsNewExpanded = !_whatsNewExpanded),
+                  icon: Icon(
+                    _whatsNewExpanded ? Icons.expand_less : Icons.expand_more,
+                    size: 16,
+                  ),
+                  label: Text(_whatsNewExpanded ? 'Show less' : 'Show more'),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAboutCompactCard(StoreAppModel app) {
+    final cs = Theme.of(context).colorScheme;
+    final extractedLinks = _extractLinksFromText(app.description);
+    final isLong = app.description.length > 260;
+    final displayed = (_aboutExpanded || !isLong)
+        ? app.description
+        : '${app.description.substring(0, 260).trimRight()}...';
+
+    return Card(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(color: cs.outline.withValues(alpha: 0.28)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.info_outline, size: 18, color: cs.primary),
+                const SizedBox(width: 6),
+                const Text(
+                  'About This Application',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text.rich(_buildRichMarkdownSpan(displayed, cs)),
+            if (extractedLinks.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              ...extractedLinks.map(
+                (link) => Padding(
+                  padding: const EdgeInsets.only(bottom: 5),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: () => _launchExternalUrl(link.url),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: cs.surfaceContainerHighest.withValues(alpha: 0.3),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: cs.secondary.withValues(alpha: 0.32),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.link, size: 14, color: cs.secondary),
+                          const SizedBox(width: 6),
+                          Text(
+                            '${link.label}: ',
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          Expanded(
+                            child: Text(
+                              link.url,
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                color: cs.secondary,
+                                decoration: TextDecoration.underline,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          Icon(Icons.open_in_new,
+                              size: 13, color: cs.secondary),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+            if (isLong)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () =>
+                      setState(() => _aboutExpanded = !_aboutExpanded),
+                  icon: Icon(
+                    _aboutExpanded ? Icons.expand_less : Icons.expand_more,
+                    size: 16,
+                  ),
+                  label: Text(_aboutExpanded ? 'Show less' : 'Read more'),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRatingsAndReviewsCard({
+    required StoreAppModel app,
+    required List<AppReviewModel> reviews,
+    required AppReviewModel? existingUserReview,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    final totalCount =
+        reviews.length > app.reviewCount ? reviews.length : app.reviewCount;
+    final avgRating = reviews.isNotEmpty
+        ? reviews.map((r) => r.rating).reduce((a, b) => a + b) / reviews.length
+        : app.averageRating;
+
+    return Card(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(color: cs.outline.withValues(alpha: 0.28)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.rate_review_outlined,
+                              size: 18, color: cs.primary),
+                          const SizedBox(width: 6),
+                          const Text(
+                            'Ratings & Reviews',
+                            style: TextStyle(
+                                fontSize: 15, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                      Text(
+                        'Verified installs, helpful votes & cloud sync',
+                        style: TextStyle(
+                            fontSize: 11.5, color: cs.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
+                ),
+                _buildBorderedBadge(
+                  icon: Icons.star,
+                  label: totalCount > 0
+                      ? '${avgRating.toStringAsFixed(1)} ($totalCount)'
+                      : '5.0 New',
+                  bgColor: cs.primaryContainer,
+                  fgColor: cs.onPrimaryContainer,
+                  borderColor: cs.primary.withValues(alpha: 0.28),
+                ),
+              ],
+            ),
+            if (reviews.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerHighest.withValues(alpha: 0.28),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: cs.outline.withValues(alpha: 0.22)),
+                ),
+                child: Column(
+                  children: [
+                    for (int star = 5; star >= 1; star--)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 1.5),
+                        child: Row(
+                          children: [
+                            SizedBox(
+                              width: 28,
+                              child: Text('$star ★',
+                                  style: const TextStyle(fontSize: 11)),
+                            ),
+                            Expanded(
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(3),
+                                child: LinearProgressIndicator(
+                                  minHeight: 5,
+                                  value: reviews
+                                          .where((r) => r.rating == star)
+                                          .length /
+                                      reviews.length,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            SizedBox(
+                              width: 22,
+                              child: Text(
+                                '${reviews.where((r) => r.rating == star).length}',
+                                style: TextStyle(
+                                    fontSize: 11, color: cs.onSurfaceVariant),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: 10),
+
+            // Review composer (hidden after submission, replaced by compact summary + Edit button)
+            if (existingUserReview != null)
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                decoration: BoxDecoration(
+                  color: cs.primaryContainer.withValues(alpha: 0.28),
+                  borderRadius: BorderRadius.circular(12),
+                  border:
+                      Border.all(color: cs.primary.withValues(alpha: 0.28)),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.star, size: 15, color: cs.tertiary),
+                              const SizedBox(width: 5),
+                              Text(
+                                'Your review (${existingUserReview.rating}/5 ★)',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (existingUserReview.comment.trim().isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              existingUserReview.comment,
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                color: cs.onSurfaceVariant,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    OutlinedButton.icon(
+                      onPressed: () =>
+                          _showEditReviewDialog(app, existingUserReview),
+                      icon: const Icon(Icons.edit, size: 15),
+                      label: const Text('Edit'),
+                    ),
+                  ],
+                ),
+              )
+            else
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerHighest.withValues(alpha: 0.25),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: cs.outline.withValues(alpha: 0.22)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            'Rate & Review ${app.appName}',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        _buildBorderedBadge(
+                          icon: Icons.star,
+                          label: '$_draftStars / 5',
+                          bgColor: cs.surface,
+                          fgColor: cs.primary,
+                          borderColor: cs.primary.withValues(alpha: 0.25),
+                        ),
+                      ],
+                    ),
+                    Row(
+                      children: List.generate(5, (index) {
+                        final star = index + 1;
+                        return IconButton(
+                          icon: Icon(
+                            star <= _draftStars
+                                ? Icons.star
+                                : Icons.star_border,
+                            color: star <= _draftStars
+                                ? Colors.amber
+                                : cs.onSurfaceVariant,
+                          ),
+                          onPressed: () => setState(() => _draftStars = star),
+                        );
+                      }),
+                    ),
+                    TextField(
+                      controller: _reviewCommentController,
+                      minLines: 1,
+                      maxLines: 3,
+                      decoration: const InputDecoration(
+                        labelText: 'Share your experience...',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: FilledButton.icon(
+                        onPressed: () => _saveWebReview(
+                          app,
+                          stars: _draftStars,
+                          comment: _reviewCommentController.text,
+                        ),
+                        icon: const Icon(Icons.send, size: 15),
+                        label: const Text('Post Review'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+            const SizedBox(height: 10),
+            if (reviews.isEmpty)
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerHighest.withValues(alpha: 0.35),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: cs.outline.withValues(alpha: 0.22)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.forum_outlined,
+                        size: 16, color: cs.onSurfaceVariant),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'No written reviews yet. Be the first to rate this release!',
+                        style: TextStyle(
+                            fontSize: 12, color: cs.onSurfaceVariant),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else ...[
+              const Divider(height: 18),
+              ...reviews.map((r) {
+                final isOwn = r.userId == _currentUserId;
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: cs.surfaceContainerHighest.withValues(alpha: 0.38),
+                    borderRadius: BorderRadius.circular(14),
+                    border:
+                        Border.all(color: cs.outline.withValues(alpha: 0.22)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              Text(r.userName,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13)),
+                              if (r.verifiedInstall) ...[
+                                const SizedBox(width: 6),
+                                _buildBorderedBadge(
+                                  icon: Icons.verified,
+                                  label: 'Verified Install',
+                                  bgColor: cs.secondaryContainer,
+                                  fgColor: cs.onSecondaryContainer,
+                                  borderColor:
+                                      cs.secondary.withValues(alpha: 0.25),
+                                ),
+                              ],
+                            ],
+                          ),
+                          Text(
+                            '★' * r.rating.clamp(1, 5),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: cs.tertiary,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(r.comment, style: const TextStyle(fontSize: 12.5)),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          ActionChip(
+                            avatar: const Icon(Icons.thumb_up, size: 14),
+                            label: Text('Helpful (${r.helpfulCount})',
+                                style: const TextStyle(fontSize: 11.5)),
+                            onPressed: () async {
+                              try {
+                                final fs = _tryFirestore();
+                                if (fs != null &&
+                                    FirebaseAuth.instance.currentUser != null) {
+                                  await fs.voteReviewHelpful(r);
+                                }
+                              } catch (_) {}
+                              if (!mounted) return;
+                              setState(() {
+                                final idx = reviews.indexWhere((x) => x.id == r.id);
+                                if (idx >= 0) {
+                                  reviews[idx] = AppReviewModel(
+                                    id: r.id,
+                                    appId: r.appId,
+                                    appName: r.appName,
+                                    userId: r.userId,
+                                    userName: r.userName,
+                                    rating: r.rating,
+                                    comment: r.comment,
+                                    verifiedInstall: r.verifiedInstall,
+                                    helpfulCount: r.helpfulCount + 1,
+                                    developerReply: r.developerReply,
+                                    flagged: r.flagged,
+                                  );
+                                }
+                              });
+                            },
+                          ),
+                          if (isOwn)
+                            Row(
+                              children: [
+                                IconButton(
+                                  tooltip: 'Edit review',
+                                  icon: Icon(Icons.edit,
+                                      size: 18, color: cs.primary),
+                                  onPressed: () =>
+                                      _showEditReviewDialog(app, r),
+                                ),
+                                IconButton(
+                                  tooltip: 'Delete review',
+                                  icon: Icon(Icons.delete_outline,
+                                      size: 18, color: cs.error),
+                                  onPressed: () => _deleteWebReview(app, r),
+                                ),
+                              ],
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showEditReviewDialog(
+    StoreAppModel app,
+    AppReviewModel review,
+  ) async {
+    int dialogStars = review.rating.clamp(1, 5);
+    final controller = TextEditingController(text: review.comment);
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        final cs = Theme.of(dialogContext).colorScheme;
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            return AlertDialog(
+              title: Row(
+                children: [
+                  Icon(Icons.edit, size: 20, color: cs.primary),
+                  const SizedBox(width: 8),
+                  const Text('Edit Your Review',
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                ],
+              ),
+              content: SizedBox(
+                width: 400,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            app.appName,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: cs.onSurfaceVariant,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        _buildBorderedBadge(
+                          icon: Icons.star,
+                          label: '$dialogStars / 5',
+                          bgColor: cs.primaryContainer,
+                          fgColor: cs.onPrimaryContainer,
+                          borderColor: cs.primary.withValues(alpha: 0.28),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(5, (idx) {
+                        final star = idx + 1;
+                        return IconButton(
+                          icon: Icon(
+                            star <= dialogStars
+                                ? Icons.star
+                                : Icons.star_border,
+                            color: star <= dialogStars
+                                ? Colors.amber
+                                : cs.onSurfaceVariant,
+                            size: 28,
+                          ),
+                          onPressed: () =>
+                              setDialogState(() => dialogStars = star),
+                        );
+                      }),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: controller,
+                      minLines: 2,
+                      maxLines: 5,
+                      decoration: const InputDecoration(
+                        labelText: 'Update your review...',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton.icon(
+                  onPressed: () {
+                    final updatedText = controller.text;
+                    Navigator.of(dialogContext).pop();
+                    _saveWebReview(
+                      app,
+                      stars: dialogStars,
+                      comment: updatedText,
+                    );
+                  },
+                  icon: const Icon(Icons.send, size: 15),
+                  label: const Text('Save Changes'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    controller.dispose();
+  }
+
+  Widget _buildPackageSpecsCard(StoreAppModel app) {
+    final cs = Theme.of(context).colorScheme;
+    return Card(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(color: cs.outline.withValues(alpha: 0.28)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.security_outlined, size: 18, color: cs.primary),
+                    const SizedBox(width: 6),
+                    const Text(
+                      'Package & Compatibility',
+                      style:
+                          TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+                _buildBorderedBadge(
+                  icon: Icons.android,
+                  label: 'API ${app.minAndroidSdk}+',
+                  bgColor: cs.secondaryContainer.withValues(alpha: 0.7),
+                  fgColor: cs.onSecondaryContainer,
+                  borderColor: cs.secondary.withValues(alpha: 0.28),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Container(
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHighest.withValues(alpha: 0.28),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: cs.outline.withValues(alpha: 0.22)),
+              ),
+              child: Column(
+                children: [
+                  _buildSpecRow(
+                      cs, Icons.inventory_2_outlined, 'Package ID', app.packageName),
+                  _buildSpecDivider(cs),
+                  _buildSpecRow(cs, Icons.new_releases_outlined, 'Version',
+                      'v${app.versionName} (Code ${app.versionCode})'),
+                  _buildSpecDivider(cs),
+                  _buildSpecRow(
+                      cs, Icons.sd_storage_outlined, 'APK Size', app.apkFileSize),
+                  _buildSpecDivider(cs),
+                  _buildSpecRow(cs, Icons.phone_android, 'Android OS',
+                      'API ${app.minAndroidSdk}+ (Target ${app.targetAndroidSdk})'),
+                  _buildSpecDivider(cs),
+                  _buildSpecRow(
+                      cs, Icons.memory, 'Architecture', app.architecture),
+                  _buildSpecDivider(cs),
+                  _buildSpecRow(
+                    cs,
+                    app.offlineCapable
+                        ? Icons.offline_bolt_outlined
+                        : Icons.wifi,
+                    'Connectivity',
+                    app.offlineCapable ? 'Works Offline' : 'Requires Internet',
+                  ),
+                  if (app.sha256Checksum.isNotEmpty) ...[
+                    _buildSpecDivider(cs),
+                    _buildSpecRow(cs, Icons.fingerprint, 'SHA-256',
+                        '${app.sha256Checksum.substring(0, app.sha256Checksum.length.clamp(0, 20))}...'),
+                  ],
+                ],
+              ),
+            ),
+            if (app.permissionsList.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Icon(Icons.admin_panel_settings_outlined,
+                      size: 14, color: cs.primary),
+                  const SizedBox(width: 5),
+                  Text(
+                    'Declared Permissions (${app.permissionsList.length})',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: app.permissionsList
+                    .map(
+                      (perm) => Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: cs.surfaceContainerHighest.withValues(alpha: 0.6),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: cs.outline.withValues(alpha: 0.25),
+                          ),
+                        ),
+                        child: Text(
+                          perm,
+                          style: const TextStyle(
+                            fontSize: 10.5,
+                            fontFamily: 'monospace',
+                          ),
+                        ),
+                      ),
+                    )
+                    .toList(),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDeveloperInfoCard(StoreAppModel app) {
+    final cs = Theme.of(context).colorScheme;
+    return Card(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(color: cs.outline.withValues(alpha: 0.28)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.storefront_outlined, size: 18, color: cs.primary),
+                const SizedBox(width: 6),
+                const Text(
+                  'Developer & Distribution Info',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Container(
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHighest.withValues(alpha: 0.28),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: cs.outline.withValues(alpha: 0.22)),
+              ),
+              child: Column(
+                children: [
+                  _buildSpecRow(
+                      cs, Icons.verified_outlined, 'Developer', app.developerName),
+                  _buildSpecDivider(cs),
+                  _buildSpecRow(
+                      cs, Icons.email_outlined, 'Support', app.supportEmail),
+                  _buildSpecDivider(cs),
+                  _buildSpecRow(cs, Icons.cloud_done_outlined, 'Source',
+                      'GitHub Releases APK'),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                if (app.websiteUrl.isNotEmpty)
+                  _buildCompactActionChip(
+                    cs,
+                    icon: Icons.language,
+                    label: 'Website',
+                    onTap: () => _launchExternalUrl(app.websiteUrl),
+                  ),
+                if (app.githubRepoUrl.isNotEmpty)
+                  _buildCompactActionChip(
+                    cs,
+                    icon: Icons.code,
+                    label: 'GitHub Repo',
+                    onTap: () => _launchExternalUrl(app.githubRepoUrl),
+                  ),
+                if (app.privacyPolicyUrl.isNotEmpty)
+                  _buildCompactActionChip(
+                    cs,
+                    icon: Icons.policy_outlined,
+                    label: 'Privacy Policy',
+                    onTap: () => _launchExternalUrl(app.privacyPolicyUrl),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSpecRow(
+    ColorScheme cs,
+    IconData icon,
+    String label,
+    String value,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 14, color: cs.primary),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(fontSize: 11.5, color: cs.onSurfaceVariant),
+              ),
+            ],
+          ),
+          const SizedBox(width: 12),
+          Flexible(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w600,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSpecDivider(ColorScheme cs) {
+    return Divider(
+      height: 1,
+      thickness: 1,
+      color: cs.outline.withValues(alpha: 0.14),
+    );
+  }
+
+  Widget _buildCompactActionChip(
+    ColorScheme cs, {
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerHighest.withValues(alpha: 0.45),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: cs.outline.withValues(alpha: 0.28)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: cs.primary),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ExtractedLink {
+  final String label;
+  final String url;
+  const _ExtractedLink({required this.label, required this.url});
 }

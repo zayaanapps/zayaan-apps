@@ -21,11 +21,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.filled.BrightnessAuto
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.RocketLaunch
@@ -38,6 +40,9 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -53,13 +58,14 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.BuildConfig
+import com.example.data.AppThemeMode
 
 @Composable
 fun WebDevOpsAndSettingsScreen(
-    darkMode: Boolean,
+    themeMode: AppThemeMode,
     notifyUpdates: Boolean,
     currentUserEmail: String?,
-    onDarkModeChange: (Boolean) -> Unit,
+    onThemeModeChange: (AppThemeMode) -> Unit,
     onNotifyUpdatesChange: (Boolean) -> Unit,
     onRequestNotificationPermission: () -> Unit,
     onOpenUrl: (Context, String) -> Unit,
@@ -211,24 +217,57 @@ fun WebDevOpsAndSettingsScreen(
                     )
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                            Icon(imageVector = Icons.Default.DarkMode, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = when (themeMode) {
+                                    AppThemeMode.SYSTEM -> Icons.Default.BrightnessAuto
+                                    AppThemeMode.LIGHT -> Icons.Default.LightMode
+                                    AppThemeMode.DARK -> Icons.Default.DarkMode
+                                },
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
-                                Text("Dark Theme (Material 3)", style = MaterialTheme.typography.labelLarge)
-                                Text("Syncs preference to Cloud Firestore", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("App Theme (Material 3)", style = MaterialTheme.typography.labelLarge)
+                                Text(
+                                    text = "Defaults to System device theme; choose System, Light, or Dark",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
                         }
-                        Switch(
-                            checked = darkMode,
-                            onCheckedChange = onDarkModeChange,
-                            modifier = Modifier.testTag("dark_mode_switch")
-                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SingleChoiceSegmentedButtonRow(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("theme_mode_selector")
+                        ) {
+                            AppThemeMode.entries.forEachIndexed { index, mode ->
+                                SegmentedButton(
+                                    selected = themeMode == mode,
+                                    onClick = { onThemeModeChange(mode) },
+                                    shape = SegmentedButtonDefaults.itemShape(
+                                        index = index,
+                                        count = AppThemeMode.entries.size
+                                    ),
+                                    icon = {
+                                        Icon(
+                                            imageVector = when (mode) {
+                                                AppThemeMode.SYSTEM -> Icons.Default.BrightnessAuto
+                                                AppThemeMode.LIGHT -> Icons.Default.LightMode
+                                                AppThemeMode.DARK -> Icons.Default.DarkMode
+                                            },
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    },
+                                    label = { Text(mode.label) },
+                                    modifier = Modifier.testTag("theme_mode_${mode.name.lowercase()}")
+                                )
+                            }
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(12.dp))

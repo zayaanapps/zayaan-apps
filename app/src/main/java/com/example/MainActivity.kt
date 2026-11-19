@@ -10,6 +10,13 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -19,9 +26,12 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.Apps
@@ -32,6 +42,7 @@ import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -42,6 +53,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -50,9 +62,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.credentials.CredentialManager
 import androidx.lifecycle.Lifecycle
@@ -64,6 +80,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.data.AndroidPackageController
+import com.example.data.AppThemeMode
 import com.example.data.DownloadState
 import com.example.data.StoreApp
 import com.example.data.StoreRepository
@@ -83,6 +100,7 @@ import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 
@@ -197,7 +215,19 @@ fun AuthenticatedStoreShell(
     val storeSelfUpdateApp by viewModel.storeSelfUpdateApp.collectAsStateWithLifecycle()
     var selfUpdateDismissed by remember { mutableStateOf(false) }
 
-    val isDarkMode = userPrefs?.darkMode ?: true
+    val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
+    val systemInDarkTheme = isSystemInDarkTheme()
+    val effectiveDarkTheme = when (themeMode) {
+        AppThemeMode.SYSTEM -> systemInDarkTheme
+        AppThemeMode.LIGHT -> false
+        AppThemeMode.DARK -> true
+    }
+    var showLaunchSplash by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        delay(280)
+        showLaunchSplash = false
+    }
+
     val notifyUpdates = userPrefs?.notifyUpdates ?: true
     val bookmarkedIds = userPrefs?.bookmarkedAppIds ?: emptyList()
     val favoriteIds = userPrefs?.favoriteAppIds ?: emptyList()
@@ -239,8 +269,9 @@ fun AuthenticatedStoreShell(
         }
     }
 
-    ZayaanAppsTheme(darkTheme = isDarkMode) {
-        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+    ZayaanAppsTheme(darkTheme = effectiveDarkTheme) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val isExpandedScreen = maxWidth >= 700.dp
 
             Scaffold(
@@ -631,10 +662,10 @@ fun AuthenticatedStoreShell(
 
                                     ZayaanTab.WEB_DEVOPS -> {
                                         WebDevOpsAndSettingsScreen(
-                                            darkMode = isDarkMode,
+                                            themeMode = themeMode,
                                             notifyUpdates = notifyUpdates,
                                             currentUserEmail = currentUserEmail,
-                                            onDarkModeChange = { viewModel.updateDarkModePreference(it) },
+                                            onThemeModeChange = { viewModel.updateThemeMode(it) },
                                             onNotifyUpdatesChange = { viewModel.updateNotificationPreference(it) },
                                             onRequestNotificationPermission = {
                                                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -656,6 +687,43 @@ fun AuthenticatedStoreShell(
                                 }
                             }
                         }
+                    }
+                }
+            }
+        }
+            AnimatedVisibility(
+                visible = showLaunchSplash,
+                exit = fadeOut(animationSpec = tween(durationMillis = 260))
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Image(
+                            painter = painterResource(id = R.drawable.img_launcher_icon_1795021165006),
+                            contentDescription = "Zayaan Apps",
+                            modifier = Modifier
+                                .size(80.dp)
+                                .clip(RoundedCornerShape(20.dp)),
+                            contentScale = ContentScale.Crop
+                        )
+                        Text(
+                            text = "Zayaan Apps",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+                        LinearProgressIndicator(
+                            modifier = Modifier
+                                .width(120.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                        )
                     }
                 }
             }

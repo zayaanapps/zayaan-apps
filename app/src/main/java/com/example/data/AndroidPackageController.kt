@@ -48,6 +48,7 @@ class AndroidPackageController(private val context: Context) {
         private const val UPDATE_CHANNEL_ID = "zayaan_app_updates"
         private const val PREFS_NAME = "zayaan_store_local_cache"
         private const val KEY_PENDING_REVIEWS_JSON = "pending_reviews_json"
+        private const val KEY_APP_THEME_MODE = "app_theme_mode"
     }
 
     init {
@@ -854,6 +855,26 @@ class AndroidPackageController(private val context: Context) {
             appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                 .edit()
                 .remove(KEY_PENDING_REVIEWS_JSON)
+                .apply()
+        } catch (_: Exception) {
+        }
+    }
+
+    fun getSavedThemeMode(): AppThemeMode {
+        return try {
+            val raw = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getString(KEY_APP_THEME_MODE, AppThemeMode.SYSTEM.name)
+            AppThemeMode.entries.firstOrNull { it.name == raw } ?: AppThemeMode.SYSTEM
+        } catch (_: Exception) {
+            AppThemeMode.SYSTEM
+        }
+    }
+
+    fun saveThemeMode(mode: AppThemeMode) {
+        try {
+            appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .edit()
+                .putString(KEY_APP_THEME_MODE, mode.name)
                 .apply()
         } catch (_: Exception) {
         }
