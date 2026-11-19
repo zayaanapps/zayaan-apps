@@ -34,10 +34,14 @@ import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.CompareArrows
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.InstallMobile
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.NewReleases
 import androidx.compose.material.icons.filled.OfflineBolt
 import androidx.compose.material.icons.filled.Policy
@@ -47,6 +51,7 @@ import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.SystemUpdate
+import androidx.compose.material.icons.filled.Update
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
@@ -64,7 +69,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -72,11 +80,20 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withLink
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -155,7 +172,7 @@ fun AppDetailScreen(
         if (app.updatedAtMillis > 0L) {
             SimpleDateFormat("MMM d, yyyy", Locale.US).format(Date(app.updatedAtMillis))
         } else {
-            "Latest GitHub Release"
+            "Latest Release"
         }
     }
 
@@ -843,38 +860,11 @@ fun AppDetailScreen(
         // 4. What's New / Release Notes & Changelog
         if (app.releaseNotes.isNotBlank()) {
             item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.28f)),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "What's New in v${app.versionName}",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            Text(
-                                text = "Updated $formattedUpdatedDate",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = app.releaseNotes,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
-                }
+                WhatsNewCompactCard(
+                    versionName = app.versionName,
+                    updatedDateLabel = formattedUpdatedDate,
+                    releaseNotes = app.releaseNotes
+                )
             }
         }
 
@@ -956,25 +946,9 @@ fun AppDetailScreen(
 
         // 5. About This Application (Full Description)
         item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.28f)),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "About this application",
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = app.description,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
+            AboutApplicationCompactCard(
+                description = app.description
+            )
         }
 
         // 6. Ratings, Written Reviews, Helpful Votes & Moderation (Phase 2)
@@ -1394,6 +1368,469 @@ private fun CompactTelemetryItem(
             softWrap = false,
             overflow = TextOverflow.Ellipsis
         )
+    }
+}
+
+private data class ExtractedUrlLink(
+    val label: String,
+    val url: String
+)
+
+private val RICH_TEXT_TOKEN_REGEX = Regex(
+    """\[([^\]]+)]\((https?://[^\s)]+)\)|https?://[^\s<>)\]]+|\*\*([^*]+)\*\*|`([^`]+)`"""
+)
+
+private val EXTRACT_URL_REGEX = Regex("""\[([^\]]+)]\((https?://[^\s)]+)\)|(https?://[^\s<>)\]]+)""")
+
+private fun extractLinksFromRichText(rawText: String): List<ExtractedUrlLink> {
+    val links = mutableListOf<ExtractedUrlLink>()
+    val seenUrls = mutableSetOf<String>()
+    for (rawLine in rawText.lines()) {
+        val line = rawLine.trim()
+        if (line.isBlank()) continue
+        for (match in EXTRACT_URL_REGEX.findAll(line)) {
+            val mdLabel = match.groupValues[1].trim()
+            val mdUrl = match.groupValues[2].trim()
+            val bareUrl = match.groupValues[3].trimEnd('.', ',', ';', ')')
+            val url = mdUrl.ifBlank { bareUrl }
+            if (url.isBlank() || !seenUrls.add(url)) continue
+
+            val derivedLabel = if (mdLabel.isNotBlank()) {
+                mdLabel
+            } else {
+                val beforeUrl = line.substring(0, match.range.first)
+                    .replace(Regex("""^[\-*•#>\s]+"""), "")
+                    .replace("**", "")
+                    .replace("`", "")
+                    .trim()
+                    .trimEnd(':', '-', ' ')
+                when {
+                    beforeUrl.isNotBlank() -> beforeUrl
+                    url.contains("/compare/", ignoreCase = true) -> "Full Changelog"
+                    url.contains("github.io", ignoreCase = true) -> "Web Portal"
+                    url.contains("github.com", ignoreCase = true) -> "GitHub"
+                    else -> "Open Link"
+                }
+            }
+            links.add(ExtractedUrlLink(label = derivedLabel, url = url))
+        }
+    }
+    return links
+}
+
+private fun buildFormattedRichText(
+    rawText: String,
+    headingColor: Color,
+    bodyColor: Color,
+    linkColor: Color,
+    codeBgColor: Color
+): AnnotatedString {
+    val linkStyle = TextLinkStyles(
+        style = SpanStyle(
+            color = linkColor,
+            fontWeight = FontWeight.Medium,
+            textDecoration = TextDecoration.Underline
+        )
+    )
+    val lines = rawText.lines()
+    return buildAnnotatedString {
+        var appendedAny = false
+        var lastWasBlank = false
+        for (rawLine in lines) {
+            val trimmed = rawLine.trim()
+            if (trimmed.isEmpty()) {
+                if (appendedAny && !lastWasBlank) {
+                    append('\n')
+                    lastWasBlank = true
+                }
+                continue
+            }
+            if (appendedAny && !lastWasBlank) {
+                append('\n')
+            }
+            appendedAny = true
+            lastWasBlank = false
+
+            val isHeading = trimmed.startsWith("#")
+            val normalizedLine = when {
+                isHeading -> trimmed.trimStart('#').trim()
+                trimmed.startsWith("- ") -> "• ${trimmed.removePrefix("- ").trim()}"
+                trimmed.startsWith("* ") -> "• ${trimmed.removePrefix("* ").trim()}"
+                else -> trimmed
+            }
+
+            if (isHeading) {
+                withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = headingColor)) {
+                    appendFormattedInlineTokens(normalizedLine, bodyColor, codeBgColor, linkStyle)
+                }
+            } else {
+                appendFormattedInlineTokens(normalizedLine, bodyColor, codeBgColor, linkStyle)
+            }
+        }
+    }
+}
+
+private fun AnnotatedString.Builder.appendFormattedInlineTokens(
+    text: String,
+    bodyColor: Color,
+    codeBgColor: Color,
+    linkStyle: TextLinkStyles
+) {
+    var cursor = 0
+    for (match in RICH_TEXT_TOKEN_REGEX.findAll(text)) {
+        if (match.range.first > cursor) {
+            withStyle(SpanStyle(color = bodyColor)) {
+                append(text.substring(cursor, match.range.first))
+            }
+        }
+        val mdLabel = match.groupValues[1]
+        val mdUrl = match.groupValues[2]
+        val boldText = match.groupValues[3]
+        val codeText = match.groupValues[4]
+        when {
+            mdUrl.isNotBlank() -> {
+                withLink(LinkAnnotation.Url(url = mdUrl, styles = linkStyle)) {
+                    append(mdLabel.ifBlank { mdUrl })
+                }
+            }
+            boldText.isNotBlank() -> {
+                withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = bodyColor)) {
+                    append(boldText)
+                }
+            }
+            codeText.isNotBlank() -> {
+                withStyle(
+                    SpanStyle(
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Medium,
+                        background = codeBgColor,
+                        color = bodyColor
+                    )
+                ) {
+                    append(codeText)
+                }
+            }
+            else -> {
+                val rawUrl = match.value
+                val cleanUrl = rawUrl.trimEnd('.', ',', ';', ')')
+                val trailing = rawUrl.removePrefix(cleanUrl)
+                withLink(LinkAnnotation.Url(url = cleanUrl, styles = linkStyle)) {
+                    append(cleanUrl)
+                }
+                if (trailing.isNotEmpty()) {
+                    withStyle(SpanStyle(color = bodyColor)) {
+                        append(trailing)
+                    }
+                }
+            }
+        }
+        cursor = match.range.last + 1
+    }
+    if (cursor < text.length) {
+        withStyle(SpanStyle(color = bodyColor)) {
+            append(text.substring(cursor))
+        }
+    }
+}
+
+@Composable
+private fun WhatsNewCompactCard(
+    versionName: String,
+    updatedDateLabel: String,
+    releaseNotes: String
+) {
+    val uriHandler = LocalUriHandler.current
+    var expanded by remember(releaseNotes) { mutableStateOf(false) }
+
+    val extractedLinks = remember(releaseNotes) { extractLinksFromRichText(releaseNotes) }
+    val nonEmptyLines = remember(releaseNotes) {
+        releaseNotes.lines().map { it.trim() }.filter { it.isNotEmpty() }
+    }
+    val hasLongNotes = nonEmptyLines.size > 6 || releaseNotes.length > 320
+
+    val displayedRawNotes = remember(releaseNotes, expanded, hasLongNotes) {
+        if (expanded || !hasLongNotes) {
+            releaseNotes
+        } else {
+            nonEmptyLines
+                .filterNot { line ->
+                    val lower = line.lowercase()
+                    (lower.contains("full changelog") || lower.contains("web portal")) &&
+                        line.contains("http", ignoreCase = true)
+                }
+                .take(5)
+                .joinToString("\n")
+        }
+    }
+
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val secondaryColor = MaterialTheme.colorScheme.secondary
+    val onSurfaceColor = MaterialTheme.colorScheme.onSurface
+    val codeBgColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+
+    val formattedNotes = remember(displayedRawNotes, primaryColor, secondaryColor, onSurfaceColor, codeBgColor) {
+        buildFormattedRichText(
+            rawText = displayedRawNotes,
+            headingColor = primaryColor,
+            bodyColor = onSurfaceColor,
+            linkColor = secondaryColor,
+            codeBgColor = codeBgColor
+        )
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.28f)),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.NewReleases,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = "What's New in v$versionName",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Surface(
+                    color = MaterialTheme.colorScheme.surface,
+                    shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.24f))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Update,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(11.dp)
+                        )
+                        Text(
+                            text = updatedDateLabel,
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    }
+                }
+            }
+
+            if (formattedNotes.isNotEmpty()) {
+                Text(
+                    text = formattedNotes,
+                    fontSize = 12.sp,
+                    lineHeight = 17.sp
+                )
+            }
+
+            if (extractedLinks.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    extractedLinks.forEach { link ->
+                        Surface(
+                            color = MaterialTheme.colorScheme.surface,
+                            shape = RoundedCornerShape(10.dp),
+                            border = BorderStroke(
+                                1.dp,
+                                MaterialTheme.colorScheme.secondary.copy(alpha = 0.32f)
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    runCatching { uriHandler.openUri(link.url) }
+                                }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Link,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.secondary,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = "${link.label}:",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                                Text(
+                                    text = link.url,
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.secondary,
+                                    textDecoration = TextDecoration.Underline,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+                                    contentDescription = "Open ${link.label}",
+                                    tint = MaterialTheme.colorScheme.secondary,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (hasLongNotes) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.surface,
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.30f)),
+                        modifier = Modifier.clickable { expanded = !expanded }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = if (expanded) "Show less" else "Show full notes",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Icon(
+                                imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                contentDescription = if (expanded) "Collapse notes" else "Expand notes",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AboutApplicationCompactCard(
+    description: String
+) {
+    var expanded by remember(description) { mutableStateOf(false) }
+    val isLongDescription = description.length > 260 || description.lines().size > 5
+
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val secondaryColor = MaterialTheme.colorScheme.secondary
+    val onSurfaceVariantColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val codeBgColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+
+    val formattedDescription = remember(description, primaryColor, secondaryColor, onSurfaceVariantColor, codeBgColor) {
+        buildFormattedRichText(
+            rawText = description,
+            headingColor = primaryColor,
+            bodyColor = onSurfaceVariantColor,
+            linkColor = secondaryColor,
+            codeBgColor = codeBgColor
+        )
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.28f)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Info,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp)
+                )
+                Text(
+                    text = "About this application",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Text(
+                text = formattedDescription,
+                fontSize = 12.5.sp,
+                lineHeight = 18.sp,
+                maxLines = if (expanded || !isLongDescription) Int.MAX_VALUE else 4,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (isLongDescription) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)),
+                        modifier = Modifier.clickable { expanded = !expanded }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = if (expanded) "Show less" else "Read more",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Icon(
+                                imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                contentDescription = if (expanded) "Collapse description" else "Expand description",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
