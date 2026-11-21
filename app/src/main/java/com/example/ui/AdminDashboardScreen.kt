@@ -13,12 +13,15 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -27,6 +30,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.Apps
@@ -167,7 +171,7 @@ fun AdminDashboardScreen(
     modifier: Modifier = Modifier
 ) {
     var editingApp by remember { mutableStateOf<StoreApp?>(null) }
-    var isCreatingNew by remember { mutableStateOf(false) }
+    var isPublishingNewApp by remember { mutableStateOf(false) }
     var showCategoryDialog by remember { mutableStateOf(false) }
     var showModerationDialog by remember { mutableStateOf(false) }
     var showNotificationDialog by remember { mutableStateOf(false) }
@@ -284,8 +288,7 @@ fun AdminDashboardScreen(
                     ) {
                         Button(
                             onClick = {
-                                editingApp = StoreApp()
-                                isCreatingNew = true
+                                isPublishingNewApp = true
                             },
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                             shape = RoundedCornerShape(9.dp),
@@ -641,7 +644,6 @@ fun AdminDashboardScreen(
                         OutlinedButton(
                             onClick = {
                                 editingApp = app
-                                isCreatingNew = false
                             },
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                             shape = RoundedCornerShape(9.dp),
@@ -680,13 +682,23 @@ fun AdminDashboardScreen(
         }
     }
 
+    if (isPublishingNewApp) {
+        PublishNewAppScreen(
+            onDismiss = { isPublishingNewApp = false },
+            onSave = { newApp ->
+                onSaveApp(newApp, false)
+                isPublishingNewApp = false
+            }
+        )
+    }
+
     if (editingApp != null) {
         AppEditorDialog(
             initialApp = editingApp!!,
-            isNew = isCreatingNew,
+            isNew = false,
             onDismiss = { editingApp = null },
             onSave = { updatedApp ->
-                onSaveApp(updatedApp, !isCreatingNew)
+                onSaveApp(updatedApp, true)
                 editingApp = null
             }
         )
@@ -1866,4 +1878,647 @@ private fun NotificationBroadcastDialog(
             }
         }
     )
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun PublishNewAppScreen(
+    onDismiss: () -> Unit,
+    onSave: (StoreApp) -> Unit
+) {
+    var appId by remember { mutableStateOf("") }
+    var appName by remember { mutableStateOf("") }
+    var packageName by remember { mutableStateOf("") }
+    var appIdManuallyEdited by remember { mutableStateOf(false) }
+    var packageManuallyEdited by remember { mutableStateOf(false) }
+    var category by remember { mutableStateOf("Tools") }
+    var developerName by remember { mutableStateOf("") }
+    var shortDescription by remember { mutableStateOf("") }
+    var versionName by remember { mutableStateOf("") }
+    var versionCodeText by remember { mutableStateOf("") }
+    var apkFileSize by remember { mutableStateOf("") }
+    var apkDownloadUrl by remember { mutableStateOf("") }
+    var sha256Checksum by remember { mutableStateOf("") }
+    var iconUrl by remember { mutableStateOf("") }
+    var screenshotsText by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
+    var releaseNotes by remember { mutableStateOf("") }
+    var supportEmail by remember { mutableStateOf("") }
+    var githubRepoUrl by remember { mutableStateOf("") }
+    var privacyPolicyUrl by remember { mutableStateOf("") }
+    var featured by remember { mutableStateOf(false) }
+    var editorsChoice by remember { mutableStateOf(false) }
+    var essential by remember { mutableStateOf(false) }
+    var published by remember { mutableStateOf(true) }
+    var offlineCapable by remember { mutableStateOf(false) }
+    var showOptionalDetails by remember { mutableStateOf(true) }
+    var validationError by remember { mutableStateOf<String?>(null) }
+
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val packageController = remember(context) { AndroidPackageController(context) }
+    var isFetching by remember { mutableStateOf(false) }
+    val cs = MaterialTheme.colorScheme
+
+    androidx.activity.compose.BackHandler(onBack = onDismiss)
+
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = cs.background
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.safeDrawing)
+        ) {
+            Surface(
+                color = cs.surface,
+                shadowElevation = 4.dp
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        IconButton(
+                            onClick = onDismiss,
+                            modifier = Modifier
+                                .size(40.dp)
+                                .border(1.dp, cs.outline.copy(alpha = 0.3f), RoundedCornerShape(10.dp))
+                        ) {
+                            Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = cs.onSurface)
+                        }
+                        Column {
+                            Text(
+                                text = "Publish New Android App",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = cs.onSurface
+                            )
+                            Text(
+                                text = "Enter details manually or auto-extract from GitHub",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = cs.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Button(
+                        onClick = {
+                            val name = appName.trim()
+                            val pkg = packageName.trim()
+                            val dlUrl = apkDownloadUrl.trim()
+                            if (name.isBlank() || pkg.isBlank() || dlUrl.isBlank()) {
+                                validationError = "Please fill in App Name, Package Name, and APK Download URL (or Fetch from GitHub)."
+                            } else {
+                                val finalAppId = appId.trim().ifBlank {
+                                    name.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-')
+                                }.ifBlank { "app-${System.currentTimeMillis()}" }
+                                val vCode = versionCodeText.toLongOrNull()?.coerceAtLeast(1L) ?: 1L
+                                val newApp = StoreApp(
+                                    docId = finalAppId,
+                                    appId = finalAppId,
+                                    appName = name,
+                                    packageName = pkg,
+                                    category = category,
+                                    developerName = developerName.trim(),
+                                    shortDescription = shortDescription.trim().ifBlank { description.take(120) },
+                                    versionName = versionName.trim().ifBlank { "1.0.0.1" },
+                                    versionCode = vCode,
+                                    apkFileSize = apkFileSize.trim().ifBlank { "15.0 MB" },
+                                    apkDownloadUrl = dlUrl,
+                                    sha256Checksum = sha256Checksum.trim(),
+                                    iconUrl = iconUrl.trim(),
+                                    screenshots = screenshotsText.split(",").map { it.trim() }.filter { it.isNotBlank() },
+                                    description = description.trim().ifBlank { shortDescription },
+                                    releaseNotes = releaseNotes.trim(),
+                                    supportEmail = supportEmail.trim(),
+                                    githubRepoUrl = githubRepoUrl.trim(),
+                                    privacyPolicyUrl = privacyPolicyUrl.trim(),
+                                    featured = featured,
+                                    editorsChoice = editorsChoice,
+                                    essential = essential,
+                                    published = published,
+                                    offlineCapable = offlineCapable
+                                )
+                                onSave(newApp)
+                            }
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                    ) {
+                        Icon(Icons.Default.Publish, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Publish", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                item {
+                    Surface(
+                        color = cs.primaryContainer.copy(alpha = 0.25f),
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.5.dp, cs.primary.copy(alpha = 0.45f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Surface(
+                                    color = cs.primary,
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Star,
+                                        contentDescription = null,
+                                        tint = cs.onPrimary,
+                                        modifier = Modifier
+                                            .padding(6.dp)
+                                            .size(16.dp)
+                                    )
+                                }
+                                Text(
+                                    text = "Smart GitHub Auto-Detect & Extraction",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = cs.primary
+                                )
+                            }
+                            OutlinedTextField(
+                                value = githubRepoUrl,
+                                onValueChange = { githubRepoUrl = it },
+                                label = { Text("GitHub Repo or Release URL") },
+                                placeholder = { Text("https://github.com/owner/repo") },
+                                singleLine = true,
+                                leadingIcon = { Icon(Icons.Default.Code, contentDescription = null, tint = cs.primary) },
+                                shape = RoundedCornerShape(12.dp),
+                                trailingIcon = {
+                                    Button(
+                                        onClick = {
+                                            val url = githubRepoUrl.trim()
+                                            if (url.isBlank()) {
+                                                validationError = "Please enter a GitHub repo or release URL first."
+                                            } else {
+                                                isFetching = true
+                                                validationError = null
+                                                scope.launch {
+                                                    val resolved = packageController.resolveLatestGitHubReleaseAsset(url)
+                                                    isFetching = false
+                                                    if (resolved != null) {
+                                                        if (appName.isBlank()) {
+                                                            val inferredName = resolved.repo.replace("-", " ").split(" ").joinToString(" ") { it.replaceFirstChar { ch -> ch.uppercase() } }
+                                                            appName = inferredName
+                                                            if (!appIdManuallyEdited) {
+                                                                appId = resolved.repo.lowercase()
+                                                            }
+                                                        }
+                                                        if (!packageManuallyEdited) {
+                                                            if (resolved.packageName.isNotBlank()) {
+                                                                packageName = resolved.packageName
+                                                            } else {
+                                                                val cleanRepo = resolved.repo.removePrefix("zayaan-").removePrefix("zayaan_").removePrefix("zayaan")
+                                                                val pkgSuffix = cleanRepo.replace(Regex("[^a-z0-9]"), "").ifBlank { resolved.repo.replace(Regex("[^a-z0-9]"), "") }
+                                                                packageName = if (resolved.repo.equals("zayaan-apps", ignoreCase = true)) {
+                                                                    "com.zayaanapps.store"
+                                                                } else {
+                                                                    "com.zayaanapps.$pkgSuffix"
+                                                                }
+                                                            }
+                                                        }
+                                                        versionName = resolved.tagName
+                                                        versionCodeText = resolved.versionCode.toString()
+                                                        apkDownloadUrl = resolved.browserDownloadUrl
+                                                        if (resolved.fileSizeFormatted.isNotBlank()) {
+                                                            apkFileSize = resolved.fileSizeFormatted
+                                                        }
+                                                        if (resolved.sha256Checksum.isNotBlank()) {
+                                                            sha256Checksum = resolved.sha256Checksum
+                                                        }
+                                                        if (resolved.iconUrl.isNotBlank()) {
+                                                            iconUrl = resolved.iconUrl
+                                                        }
+                                                        if (resolved.releaseNotes.isNotBlank()) {
+                                                            releaseNotes = resolved.releaseNotes
+                                                            if (description.isBlank()) {
+                                                                description = resolved.releaseNotes.take(140)
+                                                            }
+                                                        }
+                                                        if (!githubRepoUrl.contains("github.com/")) {
+                                                            githubRepoUrl = "https://github.com/${resolved.owner}/${resolved.repo}"
+                                                        }
+                                                        validationError = "Successfully extracted v${resolved.tagName}, package '${packageName}', icon & release info!"
+                                                    } else {
+                                                        validationError = "Failed to resolve release from $url. Ensure repository has a public release with an .apk asset."
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        enabled = !isFetching,
+                                        shape = RoundedCornerShape(10.dp),
+                                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
+                                    ) {
+                                        if (isFetching) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(16.dp),
+                                                color = cs.onPrimary,
+                                                strokeWidth = 2.dp
+                                            )
+                                        } else {
+                                            Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(14.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("Fetch", fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Text(
+                                text = "Paste GitHub repo URL to auto-extract package name, version, download URL, icon & changelog.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = cs.onSurfaceVariant
+                            )
+                            if (validationError != null) {
+                                Surface(
+                                    color = if (validationError!!.contains("successfully", ignoreCase = true)) cs.primaryContainer else cs.errorContainer,
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        text = validationError!!,
+                                        color = if (validationError!!.contains("successfully", ignoreCase = true)) cs.onPrimaryContainer else cs.onErrorContainer,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        modifier = Modifier.padding(10.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                item {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .border(1.dp, cs.outline.copy(alpha = 0.25f), RoundedCornerShape(16.dp))
+                            .background(cs.surface, RoundedCornerShape(16.dp))
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            text = "Essential Application Information",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = cs.primary
+                        )
+
+                        OutlinedTextField(
+                            value = appName,
+                            onValueChange = { next ->
+                                appName = next
+                                validationError = null
+                                val slug = next.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-')
+                                if (!appIdManuallyEdited) {
+                                    appId = slug
+                                }
+                                if (!packageManuallyEdited) {
+                                    val pkgSuffix = slug.replace("-", "")
+                                    packageName = if (pkgSuffix.isNotEmpty()) "com.zayaanapps.$pkgSuffix" else ""
+                                }
+                            },
+                            label = { Text("App Name *") },
+                            placeholder = { Text("e.g. Zayaan Notes") },
+                            singleLine = true,
+                            leadingIcon = { Icon(Icons.Default.Apps, contentDescription = null, tint = cs.primary) },
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        OutlinedTextField(
+                            value = packageName,
+                            onValueChange = {
+                                packageName = it
+                                packageManuallyEdited = true
+                            },
+                            label = { Text("Android Package Name *") },
+                            placeholder = { Text("com.zayaanapps.myapp") },
+                            singleLine = true,
+                            leadingIcon = { Icon(Icons.Default.Code, contentDescription = null, tint = cs.primary) },
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                text = "Category *",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = cs.onSurfaceVariant
+                            )
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                items(STORE_CATEGORIES) { cat ->
+                                    FilterChip(
+                                        selected = category == cat,
+                                        onClick = { category = cat },
+                                        label = { Text(cat, fontSize = 11.5.sp) }
+                                    )
+                                }
+                            }
+                        }
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(
+                                value = versionName,
+                                onValueChange = { versionName = it },
+                                label = { Text("Version") },
+                                placeholder = { Text("1.0.0.1") },
+                                singleLine = true,
+                                leadingIcon = { Icon(Icons.Default.NewReleases, contentDescription = null, tint = cs.primary, modifier = Modifier.size(18.dp)) },
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.weight(1f)
+                            )
+                            OutlinedTextField(
+                                value = apkFileSize,
+                                onValueChange = { apkFileSize = it },
+                                label = { Text("APK Size") },
+                                placeholder = { Text("15.0 MB") },
+                                singleLine = true,
+                                leadingIcon = { Icon(Icons.Default.Storage, contentDescription = null, tint = cs.primary, modifier = Modifier.size(18.dp)) },
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        OutlinedTextField(
+                            value = apkDownloadUrl,
+                            onValueChange = {
+                                apkDownloadUrl = it
+                                validationError = null
+                            },
+                            label = { Text("APK Download URL *") },
+                            placeholder = { Text("https://github.com/.../releases/download/v1.0/app.apk") },
+                            singleLine = true,
+                            leadingIcon = { Icon(Icons.Default.Link, contentDescription = null, tint = cs.primary) },
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        OutlinedTextField(
+                            value = description,
+                            onValueChange = { description = it },
+                            label = { Text("Short Description") },
+                            placeholder = { Text("What does this application do?") },
+                            minLines = 2,
+                            maxLines = 4,
+                            leadingIcon = { Icon(Icons.Default.Description, contentDescription = null, tint = cs.primary) },
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Surface(
+                            color = cs.surfaceVariant.copy(alpha = 0.35f),
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, cs.outline.copy(alpha = 0.22f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { published = !published }
+                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Publish Live in Store",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        text = if (published) "Visible to all users immediately" else "Saved as hidden draft",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = cs.onSurfaceVariant
+                                    )
+                                }
+                                Switch(
+                                    checked = published,
+                                    onCheckedChange = { published = it }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                item {
+                    Surface(
+                        color = cs.surface,
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.dp, cs.outline.copy(alpha = 0.25f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { showOptionalDetails = !showOptionalDetails }
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Advanced Metadata & Badges (Optional)",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = cs.primary
+                                    )
+                                    Text(
+                                        text = "Release notes, icon URL, screenshots, SHA-256 & storefront badges",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = cs.onSurfaceVariant
+                                    )
+                                }
+                                Icon(
+                                    imageVector = if (showOptionalDetails) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                    contentDescription = null,
+                                    tint = cs.primary
+                                )
+                            }
+
+                            AnimatedVisibility(visible = showOptionalDetails) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    HorizontalDivider(color = cs.outline.copy(alpha = 0.18f))
+
+                                    OutlinedTextField(
+                                        value = releaseNotes,
+                                        onValueChange = { releaseNotes = it },
+                                        label = { Text("What's New / Release Notes") },
+                                        minLines = 2,
+                                        leadingIcon = { Icon(Icons.Default.Note, contentDescription = null, tint = cs.primary) },
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        OutlinedTextField(
+                                            value = appId,
+                                            onValueChange = { appId = it },
+                                            label = { Text("App ID (slug)") },
+                                            singleLine = true,
+                                            leadingIcon = { Icon(Icons.Default.Tag, contentDescription = null, tint = cs.primary, modifier = Modifier.size(16.dp)) },
+                                            shape = RoundedCornerShape(12.dp),
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        OutlinedTextField(
+                                            value = versionCodeText,
+                                            onValueChange = { versionCodeText = it.filter { ch -> ch.isDigit() } },
+                                            label = { Text("Version Code") },
+                                            singleLine = true,
+                                            leadingIcon = { Icon(Icons.Default.Numbers, contentDescription = null, tint = cs.primary, modifier = Modifier.size(16.dp)) },
+                                            shape = RoundedCornerShape(12.dp),
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                    }
+
+                                    OutlinedTextField(
+                                        value = developerName,
+                                        onValueChange = { developerName = it },
+                                        label = { Text("Developer / Studio") },
+                                        singleLine = true,
+                                        leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = cs.primary) },
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    OutlinedTextField(
+                                        value = shortDescription,
+                                        onValueChange = { shortDescription = it },
+                                        label = { Text("Short Tagline") },
+                                        singleLine = true,
+                                        leadingIcon = { Icon(Icons.Default.ShortText, contentDescription = null, tint = cs.primary) },
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    OutlinedTextField(
+                                        value = iconUrl,
+                                        onValueChange = { iconUrl = it },
+                                        label = { Text("App Icon Image URL") },
+                                        singleLine = true,
+                                        leadingIcon = { Icon(Icons.Default.Image, contentDescription = null, tint = cs.primary) },
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    OutlinedTextField(
+                                        value = screenshotsText,
+                                        onValueChange = { screenshotsText = it },
+                                        label = { Text("Screenshot URLs (comma-separated)") },
+                                        leadingIcon = { Icon(Icons.Default.PhotoLibrary, contentDescription = null, tint = cs.primary) },
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    OutlinedTextField(
+                                        value = sha256Checksum,
+                                        onValueChange = { sha256Checksum = it.trim() },
+                                        label = { Text("APK SHA-256 Checksum") },
+                                        singleLine = true,
+                                        leadingIcon = { Icon(Icons.Default.Security, contentDescription = null, tint = cs.primary) },
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        OutlinedTextField(
+                                            value = supportEmail,
+                                            onValueChange = { supportEmail = it },
+                                            label = { Text("Support Email") },
+                                            singleLine = true,
+                                            leadingIcon = { Icon(Icons.Default.Email, contentDescription = null, tint = cs.primary, modifier = Modifier.size(16.dp)) },
+                                            shape = RoundedCornerShape(12.dp),
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        OutlinedTextField(
+                                            value = githubRepoUrl,
+                                            onValueChange = { githubRepoUrl = it },
+                                            label = { Text("GitHub Repo URL") },
+                                            singleLine = true,
+                                            leadingIcon = { Icon(Icons.Default.Code, contentDescription = null, tint = cs.primary, modifier = Modifier.size(16.dp)) },
+                                            shape = RoundedCornerShape(12.dp),
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                    }
+
+                                    OutlinedTextField(
+                                        value = privacyPolicyUrl,
+                                        onValueChange = { privacyPolicyUrl = it },
+                                        label = { Text("Privacy Policy URL") },
+                                        singleLine = true,
+                                        leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = cs.primary) },
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    Text(
+                                        text = "Storefront Badges",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = cs.onSurfaceVariant
+                                    )
+                                    FlowRow(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        FilterChip(
+                                            selected = featured,
+                                            onClick = { featured = !featured },
+                                            label = { Text("Featured") }
+                                        )
+                                        FilterChip(
+                                            selected = editorsChoice,
+                                            onClick = { editorsChoice = !editorsChoice },
+                                            label = { Text("Editor's Choice") }
+                                        )
+                                        FilterChip(
+                                            selected = essential,
+                                            onClick = { essential = !essential },
+                                            label = { Text("Essential") }
+                                        )
+                                        FilterChip(
+                                            selected = offlineCapable,
+                                            onClick = { offlineCapable = !offlineCapable },
+                                            label = { Text("Offline Ready") }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
