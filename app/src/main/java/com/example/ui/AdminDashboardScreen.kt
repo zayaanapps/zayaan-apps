@@ -1061,12 +1061,16 @@ private fun AppEditorDialog(
                                                             appId = resolved.repo.lowercase()
                                                         }
                                                         if (!packageManuallyEdited) {
-                                                            val cleanRepo = resolved.repo.removePrefix("zayaan-").removePrefix("zayaan_").removePrefix("zayaan")
-                                                            val pkgSuffix = cleanRepo.replace(Regex("[^a-z0-9]"), "").ifBlank { resolved.repo.replace(Regex("[^a-z0-9]"), "") }
-                                                            packageName = if (resolved.repo.equals("zayaan-apps", ignoreCase = true)) {
-                                                                "com.zayaanapps.store"
+                                                            if (resolved.packageName.isNotBlank()) {
+                                                                packageName = resolved.packageName
                                                             } else {
-                                                                "com.zayaanapps.$pkgSuffix"
+                                                                val cleanRepo = resolved.repo.removePrefix("zayaan-").removePrefix("zayaan_").removePrefix("zayaan")
+                                                                val pkgSuffix = cleanRepo.replace(Regex("[^a-z0-9]"), "").ifBlank { resolved.repo.replace(Regex("[^a-z0-9]"), "") }
+                                                                packageName = if (resolved.repo.equals("zayaan-apps", ignoreCase = true)) {
+                                                                    "com.zayaanapps.store"
+                                                                } else {
+                                                                    "com.zayaanapps.$pkgSuffix"
+                                                                }
                                                             }
                                                         }
                                                     }
@@ -1078,6 +1082,9 @@ private fun AppEditorDialog(
                                                     }
                                                     if (resolved.sha256Checksum.isNotBlank()) {
                                                         sha256Checksum = resolved.sha256Checksum
+                                                    }
+                                                    if (resolved.iconUrl.isNotBlank()) {
+                                                        iconUrl = resolved.iconUrl
                                                     }
                                                     if (resolved.releaseNotes.isNotBlank()) {
                                                         releaseNotes = resolved.releaseNotes

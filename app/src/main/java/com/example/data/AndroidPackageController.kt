@@ -1032,6 +1032,9 @@ class AndroidPackageController(private val context: Context) {
                     "16.8 MB"
                 }
 
+                val exactPkg = resolveExactPackageNameFromGitHubRepo(owner, repo) ?: ""
+                val exactIcon = resolveExactAppIconUrlFromGitHubRepo(owner, repo) ?: ""
+
                 ResolvedGitHubReleaseAsset(
                     owner = owner,
                     repo = repo,
@@ -1042,12 +1045,87 @@ class AndroidPackageController(private val context: Context) {
                     fileSizeFormatted = formattedSize,
                     releaseNotes = releaseNotes,
                     releaseHtmlUrl = htmlUrl,
-                    sha256Checksum = parsedSha256
+                    sha256Checksum = parsedSha256,
+                    packageName = exactPkg,
+                    iconUrl = exactIcon
                 )
             }
         } catch (_: Exception) {
             null
         }
+    }
+
+    private suspend fun resolveExactPackageNameFromGitHubRepo(owner: String, repo: String): String? = withContext(Dispatchers.IO) {
+        val candidatePaths = listOf(
+            "app/build.gradle.kts",
+            "app/build.gradle",
+            "build.gradle.kts",
+            "build.gradle",
+            "app/src/main/AndroidManifest.xml",
+            "AndroidManifest.xml"
+        )
+        val branches = listOf("main", "master")
+        for (branch in branches) {
+            for (path in candidatePaths) {
+                try {
+                    val contentUrl = "https://raw.githubusercontent.com/$owner/$repo/$branch/$path"
+                    val req = Request.Builder().url(contentUrl).build()
+                    httpClient.newCall(req).execute().use { resp ->
+                        if (resp.isSuccessful) {
+                            val text = resp.body?.string() ?: continue
+                            val nsRegex = Regex("""(?:namespace|applicationId)\s*=\s*["']([^"']+)["']""")
+                            val nsMatch = nsRegex.find(text)
+                            if (nsMatch != null) {
+                                val pkg = nsMatch.groupValues[1].trim()
+                                if (pkg.contains(".")) return@withContext pkg
+                            }
+                            val pkgRegex = Regex("""package\s*=\s*["']([^"']+)["']""")
+                            val pkgMatch = pkgRegex.find(text)
+                            if (pkgMatch != null) {
+                                val pkg = pkgMatch.groupValues[1].trim()
+                                if (pkg.contains(".")) return@withContext pkg
+                            }
+                        }
+                    }
+                } catch (_: Exception) {
+                    // continue
+                }
+            }
+        }
+        null
+    }
+
+    private suspend fun resolveExactAppIconUrlFromGitHubRepo(owner: String, repo: String): String? = withContext(Dispatchers.IO) {
+        val candidateIconPaths = listOf(
+            "app/src/main/res/drawable/zayaan_logo_badge.jpg",
+            "app/src/main/res/drawable/zayaan_logo_badge.png",
+            "app/src/main/res/drawable/img_launcher_icon_1795021165006.jpg",
+            "app/src/main/res/drawable/ic_launcher.png",
+            "app/src/main/res/drawable/ic_launcher_foreground.png",
+            "app/src/main/res/drawable/app_icon.png",
+            "app/src/main/res/drawable/logo.png",
+            "assets/icon.png",
+            "assets/logo.png",
+            "icon.png",
+            "logo.png"
+        )
+        val branches = listOf("main", "master")
+        for (branch in branches) {
+            for (path in candidateIconPaths) {
+                try {
+                    val contentUrl = "https://raw.githubusercontent.com/$owner/$repo/$branch/$path"
+                    val req = Request.Builder().url(contentUrl).head().build()
+                    httpClient.newCall(req).execute().use { resp ->
+                        if (resp.isSuccessful) {
+                            return@withContext contentUrl
+                        }
+                    }
+                } catch (_: Exception) {
+                    // continue
+                }
+            }
+        }
+        null
     }
 
     /**
