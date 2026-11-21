@@ -1022,10 +1022,15 @@ class AndroidPackageController(private val context: Context) {
                 if (apkUrl.isBlank()) return@withContext null
 
                 val parts = tagName.split('.')
+                val lastSegment = parts.lastOrNull()?.filter { it.isDigit() }?.toLongOrNull() ?: 1L
                 val major = parts.getOrNull(0)?.filter { it.isDigit() }?.toLongOrNull() ?: 1L
                 val minor = parts.getOrNull(1)?.filter { it.isDigit() }?.toLongOrNull() ?: 0L
-                val patch = parts.getOrNull(2)?.filter { it.isDigit() }?.toLongOrNull() ?: 0L
-                val computedVersionCode = ((major * 10000L) + (minor * 100L) + patch).coerceAtLeast(1L)
+                val computedVersionCode = if (lastSegment > 100L) {
+                    lastSegment
+                } else {
+                    val patch = parts.getOrNull(2)?.filter { it.isDigit() }?.toLongOrNull() ?: 0L
+                    (major * 10000L) + (minor * 100L) + patch
+                }.coerceAtLeast(1L)
                 val formattedSize = if (sizeBytes > 0L) {
                     "%.1f MB".format(sizeBytes.toDouble() / (1024.0 * 1024.0))
                 } else {

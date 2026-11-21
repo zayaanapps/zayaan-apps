@@ -53,6 +53,19 @@ import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.NewReleases
+import androidx.compose.material.icons.filled.Note
+import androidx.compose.material.icons.filled.Numbers
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.ShortText
+import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material.icons.filled.WorkspacePremium
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
@@ -1168,6 +1181,8 @@ private fun AppEditorDialog(
                     label = { Text("App Name *") },
                     placeholder = { Text("e.g. Zayaan Notes") },
                     singleLine = true,
+                    leadingIcon = { Icon(Icons.Default.Apps, contentDescription = null, tint = cs.primary) },
+                    shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("editor_app_name_input")
@@ -1182,6 +1197,8 @@ private fun AppEditorDialog(
                     label = { Text("Android Package Name *") },
                     placeholder = { Text("com.zayaanapps.myapp") },
                     singleLine = true,
+                    leadingIcon = { Icon(Icons.Default.Code, contentDescription = null, tint = cs.primary) },
+                    shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -1209,6 +1226,8 @@ private fun AppEditorDialog(
                         label = { Text("Version") },
                         placeholder = { Text("1.0.0.1") },
                         singleLine = true,
+                        leadingIcon = { Icon(Icons.Default.NewReleases, contentDescription = null, tint = cs.primary, modifier = Modifier.size(18.dp)) },
+                        shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.weight(1f)
                     )
                     OutlinedTextField(
@@ -1217,6 +1236,8 @@ private fun AppEditorDialog(
                         label = { Text("APK Size") },
                         placeholder = { Text("12.0 MB") },
                         singleLine = true,
+                        leadingIcon = { Icon(Icons.Default.Storage, contentDescription = null, tint = cs.primary, modifier = Modifier.size(18.dp)) },
+                        shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -1230,6 +1251,8 @@ private fun AppEditorDialog(
                     label = { Text("APK Download URL *") },
                     placeholder = { Text("https://github.com/.../releases/download/v1.0/app.apk") },
                     singleLine = true,
+                    leadingIcon = { Icon(Icons.Default.Link, contentDescription = null, tint = cs.primary) },
+                    shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -1240,6 +1263,8 @@ private fun AppEditorDialog(
                     placeholder = { Text("What does this app do?") },
                     minLines = 2,
                     maxLines = 4,
+                    leadingIcon = { Icon(Icons.Default.Description, contentDescription = null, tint = cs.primary) },
+                    shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -1328,6 +1353,8 @@ private fun AppEditorDialog(
                                     onValueChange = { releaseNotes = it },
                                     label = { Text("What's New / Release Notes") },
                                     minLines = 2,
+                                    leadingIcon = { Icon(Icons.Default.Note, contentDescription = null, tint = cs.primary) },
+                                    shape = RoundedCornerShape(12.dp),
                                     modifier = Modifier.fillMaxWidth()
                                 )
 
@@ -1343,6 +1370,8 @@ private fun AppEditorDialog(
                                         enabled = isNew,
                                         label = { Text("App ID (slug)") },
                                         singleLine = true,
+                                        leadingIcon = { Icon(Icons.Default.Tag, contentDescription = null, tint = cs.primary, modifier = Modifier.size(16.dp)) },
+                                        shape = RoundedCornerShape(12.dp),
                                         modifier = Modifier.weight(1f)
                                     )
                                     OutlinedTextField(
@@ -1350,6 +1379,8 @@ private fun AppEditorDialog(
                                         onValueChange = { versionCodeText = it.filter { ch -> ch.isDigit() } },
                                         label = { Text("Version Code") },
                                         singleLine = true,
+                                        leadingIcon = { Icon(Icons.Default.Numbers, contentDescription = null, tint = cs.primary, modifier = Modifier.size(16.dp)) },
+                                        shape = RoundedCornerShape(12.dp),
                                         modifier = Modifier.weight(1f)
                                     )
                                 }
@@ -1359,6 +1390,8 @@ private fun AppEditorDialog(
                                     onValueChange = { developerName = it },
                                     label = { Text("Developer / Studio") },
                                     singleLine = true,
+                                    leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = cs.primary) },
+                                    shape = RoundedCornerShape(12.dp),
                                     modifier = Modifier.fillMaxWidth()
                                 )
 
@@ -1367,6 +1400,8 @@ private fun AppEditorDialog(
                                     onValueChange = { shortDescription = it },
                                     label = { Text("Short Tagline (auto from description if blank)") },
                                     singleLine = true,
+                                    leadingIcon = { Icon(Icons.Default.ShortText, contentDescription = null, tint = cs.primary) },
+                                    shape = RoundedCornerShape(12.dp),
                                     modifier = Modifier.fillMaxWidth()
                                 )
 
@@ -1375,6 +1410,8 @@ private fun AppEditorDialog(
                                     onValueChange = { iconUrl = it },
                                     label = { Text("App Icon Image URL") },
                                     singleLine = true,
+                                    leadingIcon = { Icon(Icons.Default.Image, contentDescription = null, tint = cs.primary) },
+                                    shape = RoundedCornerShape(12.dp),
                                     modifier = Modifier.fillMaxWidth()
                                 )
 
@@ -1382,6 +1419,8 @@ private fun AppEditorDialog(
                                     value = screenshotsText,
                                     onValueChange = { screenshotsText = it },
                                     label = { Text("Screenshot URLs (comma-separated)") },
+                                    leadingIcon = { Icon(Icons.Default.PhotoLibrary, contentDescription = null, tint = cs.primary) },
+                                    shape = RoundedCornerShape(12.dp),
                                     modifier = Modifier.fillMaxWidth()
                                 )
 
@@ -1390,6 +1429,8 @@ private fun AppEditorDialog(
                                     onValueChange = { sha256Checksum = it.trim() },
                                     label = { Text("APK SHA-256 Checksum") },
                                     singleLine = true,
+                                    leadingIcon = { Icon(Icons.Default.Security, contentDescription = null, tint = cs.primary) },
+                                    shape = RoundedCornerShape(12.dp),
                                     modifier = Modifier.fillMaxWidth()
                                 )
 
@@ -1399,6 +1440,8 @@ private fun AppEditorDialog(
                                         onValueChange = { supportEmail = it },
                                         label = { Text("Support Email") },
                                         singleLine = true,
+                                        leadingIcon = { Icon(Icons.Default.Email, contentDescription = null, tint = cs.primary, modifier = Modifier.size(16.dp)) },
+                                        shape = RoundedCornerShape(12.dp),
                                         modifier = Modifier.weight(1f)
                                     )
                                     OutlinedTextField(
@@ -1406,6 +1449,8 @@ private fun AppEditorDialog(
                                         onValueChange = { githubRepoUrl = it },
                                         label = { Text("GitHub Repo URL") },
                                         singleLine = true,
+                                        leadingIcon = { Icon(Icons.Default.Code, contentDescription = null, tint = cs.primary, modifier = Modifier.size(16.dp)) },
+                                        shape = RoundedCornerShape(12.dp),
                                         modifier = Modifier.weight(1f)
                                     )
                                 }
@@ -1415,6 +1460,8 @@ private fun AppEditorDialog(
                                     onValueChange = { privacyPolicyUrl = it },
                                     label = { Text("Privacy Policy URL") },
                                     singleLine = true,
+                                    leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = cs.primary) },
+                                    shape = RoundedCornerShape(12.dp),
                                     modifier = Modifier.fillMaxWidth()
                                 )
 
