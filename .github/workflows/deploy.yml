@@ -109,7 +109,7 @@ jobs:
 
       - name: Compile Native Jetpack Compose APK (Exact AI Studio Preview)
         run: |
-          gradle :app:assembleDebug --no-daemon --stacktrace
+          gradle :app:assembleDebug --parallel --configure-on-demand --no-daemon --stacktrace
 
       - name: Package Release Assets & Compute SHA-256 Checksum
         id: apk_assets
