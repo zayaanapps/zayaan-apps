@@ -240,7 +240,13 @@ fun AuthenticatedStoreShell(
     val bannerMessage by viewModel.statusBannerMessage.collectAsStateWithLifecycle()
     val storeSelfUpdateApp by viewModel.storeSelfUpdateApp.collectAsStateWithLifecycle()
     val pendingInstallPermission by viewModel.pendingInstallPermission.collectAsStateWithLifecycle()
-    var selfUpdateDismissed by remember { mutableStateOf(false) }
+    val appContext = LocalContext.current
+    val prefs = remember(appContext) { appContext.getSharedPreferences("zayaan_store_local_cache", Context.MODE_PRIVATE) }
+    var selfUpdateDismissed by remember(storeSelfUpdateApp) {
+        val dismissedVer = prefs.getLong("dismissed_store_version_code", 0L)
+        val remoteVer = storeSelfUpdateApp?.versionCode ?: 0L
+        mutableStateOf(dismissedVer >= remoteVer)
+    }
 
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     val systemInDarkTheme = isSystemInDarkTheme()
