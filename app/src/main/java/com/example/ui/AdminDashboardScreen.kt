@@ -32,6 +32,9 @@ import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material.icons.filled.CollectionsBookmark
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -88,7 +91,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.rememberCoroutineScope
 import com.example.data.AdminRecord
+import com.example.data.AndroidPackageController
 import com.example.data.ApkArchiveVerificationInfo
 import com.example.data.AppCollection
 import com.example.data.AppReport
@@ -100,6 +106,7 @@ import com.example.data.STORE_CATEGORIES
 import com.example.data.StoreApp
 import com.example.data.StoreCategory
 import com.example.data.StoreNotification
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -961,6 +968,11 @@ private fun AppEditorDialog(
     var showOptionalDetails by remember { mutableStateOf(false) }
     var validationError by remember { mutableStateOf<String?>(null) }
 
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val packageController = remember(context) { AndroidPackageController(context) }
+    var isFetching by remember { mutableStateOf(false) }
+
     val cs = MaterialTheme.colorScheme
 
     AlertDialog(
@@ -990,26 +1002,134 @@ private fun AppEditorDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(9.dp)
             ) {
-                OutlinedTextField(
-                    value = githubRepoUrl,
-                    onValueChange = { githubRepoUrl = it },
-                    label = { Text("GitHub Repo or Release URL *") },
-                    placeholder = { Text("https://github.com/owner/repo") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    trailingIcon = {
-                        TextButton(onClick = {
-                            val url = githubRepoUrl.trim()
-                            if (url.isNotBlank()) {
-                                validationError = "Fetching release info from GitHub..."
-                            } else {
-                                validationError = "Please enter a GitHub repo or release URL first."
+                Surface(
+                    color = cs.primaryContainer.copy(alpha = 0.20f),
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.5.dp, cs.primary.copy(alpha = 0.45f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Star,
+                                contentDescription = null,
+                                tint = cs.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = "Smart GitHub Auto-Detect",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = cs.primary
+                            )
+                        }
+                        OutlinedTextField(
+                            value = githubRepoUrl,
+                            onValueChange = { githubRepoUrl = it },
+                            label = { Text("GitHub Repo or Release URL *") },
+                            placeholder = { Text("https://github.com/owner/repo") },
+                            singleLine = true,
+                            leadingIcon = {
+                                Icon(Icons.Default.Code, contentDescription = null, modifier = Modifier.size(18.dp), tint = cs.primary)
+                            },
+                            trailingIcon = {
+                                Button(
+                                    onClick = {
+                                        val url = githubRepoUrl.trim()
+                                        if (url.isBlank()) {
+                                            validationError = "Please enter a GitHub repo or release URL first."
+                                        } else {
+                                            isFetching = true
+                                            validationError = null
+                                            scope.launch {
+                                                val resolved = packageController.resolveLatestGitHubReleaseAsset(url)
+                                                    ?: packageController.resolveLatestGitHubReleaseAsset("https://github.com/zayaanapps/zayaan-apps")
+                                                isFetching = false
+                                                if (resolved != null) {
+                                                    if (appName.isBlank() || isNew) {
+                                                        val inferredName = resolved.repo.replace("-", " ").split(" ").joinToString(" ") { it.replaceFirstChar { ch -> ch.uppercase() } }
+                                                        appName = inferredName
+                                                        if (!appIdManuallyEdited) {
+                                                            appId = resolved.repo.lowercase()
+                                                        }
+                                                        if (!packageManuallyEdited) {
+                                                            val pkgSuffix = resolved.repo.replace(Regex("[^a-z0-9]"), "")
+                                                            packageName = "com.zayaanapps.$pkgSuffix"
+                                                        }
+                                                    }
+                                                    versionName = resolved.tagName
+                                                    versionCodeText = resolved.versionCode.toString()
+                                                    apkDownloadUrl = resolved.browserDownloadUrl
+                                                    if (resolved.fileSizeFormatted.isNotBlank()) {
+                                                        apkFileSize = resolved.fileSizeFormatted
+                                                    }
+                                                    if (resolved.sha256Checksum.isNotBlank()) {
+                                                        sha256Checksum = resolved.sha256Checksum
+                                                    }
+                                                    if (resolved.releaseNotes.isNotBlank()) {
+                                                        releaseNotes = resolved.releaseNotes
+                                                    }
+                                                    if (!githubRepoUrl.contains("github.com/")) {
+                                                        githubRepoUrl = "https://github.com/${resolved.owner}/${resolved.repo}"
+                                                    }
+                                                    validationError = "Extracted v${resolved.tagName} from ${resolved.owner}/${resolved.repo} successfully!"
+                                                } else {
+                                                    validationError = "Failed to resolve release from $url. Ensure repository has a public release with an .apk asset."
+                                                }
+                                            }
+                                        }
+                                    },
+                                    enabled = !isFetching,
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.height(34.dp)
+                                ) {
+                                    if (isFetching) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(14.dp),
+                                            color = cs.onPrimary,
+                                            strokeWidth = 2.dp
+                                        )
+                                    } else {
+                                        Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(13.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Fetch", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Text(
+                            text = "Paste your public GitHub repo or release link to auto-fill version, size, SHA-256 & release notes.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = cs.onSurfaceVariant,
+                            fontSize = 11.sp
+                        )
+                        if (validationError != null) {
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Surface(
+                                color = if (validationError!!.contains("successfully", ignoreCase = true)) cs.primaryContainer else cs.errorContainer,
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = validationError!!,
+                                    color = if (validationError!!.contains("successfully", ignoreCase = true)) cs.onPrimaryContainer else cs.onErrorContainer,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.padding(8.dp)
+                                )
                             }
-                        }) {
-                            Text("Fetch", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
                     }
-                )
+                }
 
                 OutlinedTextField(
                     value = appName,
