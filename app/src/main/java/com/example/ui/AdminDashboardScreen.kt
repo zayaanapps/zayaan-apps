@@ -991,6 +991,27 @@ private fun AppEditorDialog(
                 verticalArrangement = Arrangement.spacedBy(9.dp)
             ) {
                 OutlinedTextField(
+                    value = githubRepoUrl,
+                    onValueChange = { githubRepoUrl = it },
+                    label = { Text("GitHub Repo or Release URL *") },
+                    placeholder = { Text("https://github.com/owner/repo") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    trailingIcon = {
+                        TextButton(onClick = {
+                            val url = githubRepoUrl.trim()
+                            if (url.isNotBlank()) {
+                                validationError = "Fetching release info from GitHub..."
+                            } else {
+                                validationError = "Please enter a GitHub repo or release URL first."
+                            }
+                        }) {
+                            Text("Fetch", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                )
+
+                OutlinedTextField(
                     value = appName,
                     onValueChange = { next ->
                         appName = next
