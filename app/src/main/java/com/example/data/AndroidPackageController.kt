@@ -1021,9 +1021,11 @@ class AndroidPackageController(private val context: Context) {
 
                 if (apkUrl.isBlank()) return@withContext null
 
-                val lastSegment = tagName.substringAfterLast('.', "").filter { it.isDigit() }.toLongOrNull()
-                    ?: tagName.filter { it.isDigit() }.toLongOrNull()
-                    ?: 1L
+                val parts = tagName.split('.')
+                val major = parts.getOrNull(0)?.filter { it.isDigit() }?.toLongOrNull() ?: 1L
+                val minor = parts.getOrNull(1)?.filter { it.isDigit() }?.toLongOrNull() ?: 0L
+                val patch = parts.getOrNull(2)?.filter { it.isDigit() }?.toLongOrNull() ?: 0L
+                val computedVersionCode = ((major * 10000L) + (minor * 100L) + patch).coerceAtLeast(1L)
                 val formattedSize = if (sizeBytes > 0L) {
                     "%.1f MB".format(sizeBytes.toDouble() / (1024.0 * 1024.0))
                 } else {
@@ -1034,7 +1036,7 @@ class AndroidPackageController(private val context: Context) {
                     owner = owner,
                     repo = repo,
                     tagName = tagName.ifBlank { "1.0.0.1" },
-                    versionCode = lastSegment.coerceAtLeast(1L),
+                    versionCode = computedVersionCode,
                     assetName = apkName,
                     browserDownloadUrl = apkUrl,
                     fileSizeFormatted = formattedSize,

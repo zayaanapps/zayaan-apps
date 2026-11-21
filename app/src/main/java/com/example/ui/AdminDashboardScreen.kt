@@ -1061,8 +1061,13 @@ private fun AppEditorDialog(
                                                             appId = resolved.repo.lowercase()
                                                         }
                                                         if (!packageManuallyEdited) {
-                                                            val pkgSuffix = resolved.repo.replace(Regex("[^a-z0-9]"), "")
-                                                            packageName = "com.zayaanapps.$pkgSuffix"
+                                                            val cleanRepo = resolved.repo.removePrefix("zayaan-").removePrefix("zayaan_").removePrefix("zayaan")
+                                                            val pkgSuffix = cleanRepo.replace(Regex("[^a-z0-9]"), "").ifBlank { resolved.repo.replace(Regex("[^a-z0-9]"), "") }
+                                                            packageName = if (resolved.repo.equals("zayaan-apps", ignoreCase = true)) {
+                                                                "com.zayaanapps.store"
+                                                            } else {
+                                                                "com.zayaanapps.$pkgSuffix"
+                                                            }
                                                         }
                                                     }
                                                     versionName = resolved.tagName
